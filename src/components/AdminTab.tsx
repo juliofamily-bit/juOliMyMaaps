@@ -500,21 +500,21 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                         </div>
 
                                         <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                                            {data.transactions.sort((a, b) => (b.createdAt || b.date) - (a.createdAt || a.date)).map((t: any) => (
+                                            {data.transactions.sort((a, b) => new Date(b.created_at || b.date).getTime() - new Date(a.created_at || a.date).getTime()).map((t: any) => (
                                                 <div key={t.id} className="flex justify-between items-center text-[10px] p-2 hover:bg-white/5 rounded-xl border-b border-white/5 last:border-0">
                                                     <div className="flex items-center gap-3">
                                                         <span className={t.type === 'income' ? 'text-green-500' : 'text-red-500'}>
                                                             {t.type === 'income' ? '●' : '●'}
                                                         </span>
                                                         <div className="flex flex-col">
-                                                            <span className="font-bold text-white">{t.clientName || t.description}</span>
+                                                            <span className="font-bold text-white">{t.client_name || t.description}</span>
                                                             <span className="text-slate-600 uppercase text-[7px] font-black">
                                                                 {t.type === 'income' ? 'Venta' : (t.type === 'purchase' ? 'Insumos' : t.type === 'salary' ? 'Nómina' : t.type)}
                                                             </span>
                                                         </div>
                                                     </div>
                                                     <span className={`font-black ${t.type === 'income' ? 'text-green-500' : 'text-white'}`}>
-                                                        {t.type === 'income' ? '+' : '-'}{formatARS(t.totalPrice || t.amount)}
+                                                        {t.type === 'income' ? '+' : '-'}{formatARS(t.total_price || t.amount)}
                                                     </span>
                                                 </div>
                                             ))}

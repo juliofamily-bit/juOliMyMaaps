@@ -2,9 +2,10 @@
 
 import React, { useState } from 'react';
 import { Category, Product, Ingredient, OrderItem } from '@/types/database';
-import { Minus, Plus, Smartphone, Check, ArrowLeft, ShoppingCart, AlertCircle } from 'lucide-react';
+import { Minus, Plus, Smartphone, Check, ArrowLeft, ShoppingCart, AlertCircle, X, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/lib/store';
+import { useOfflineStore } from '@/lib/offlineStore';
 
 interface OrderTabProps {
     products: Product[];
@@ -26,8 +27,10 @@ export default function OrderTab({ products, ingredients, categories }: OrderTab
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
     const [cart, setCart] = useState<Record<string, number>>({});
     const [showSummary, setShowSummary] = useState(false);
+    const [showOfflineQueue, setShowOfflineQueue] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { addNotification } = useNotifications();
+    const { addToQueue, syncQueue, queue } = useOfflineStore();
 
     const checkStock = (productId: string, quantity: number) => {
         const product = products.find(p => p.id === productId);
@@ -64,14 +67,30 @@ export default function OrderTab({ products, ingredients, categories }: OrderTab
         if (!clientName) return alert("Nombre de cliente requerido");
         setIsSubmitting(true);
 
+        const orderData = {
+            client_name: clientName,
+            phone_number: phone,
+            total_price: totalPrice,
+            items: Object.entries(cart).map(([productId, quantity]) => ({
+                product_id: productId,
+                quantity,
+                unit_price: products.find(p => p.id === productId)?.price || 0
+            }))
+        };
+
         try {
+            // Check online status briefly
+            if (!navigator.onLine) {
+                throw new Error("offline");
+            }
+
             // 1. Create order
             const { data: order, error: orderError } = await supabase
                 .from('orders')
                 .insert({
-                    client_name: clientName,
-                    phone_number: phone,
-                    total_price: totalPrice,
+                    client_name: orderData.client_name,
+                    phone_number: orderData.phone_number,
+                    total_price: orderData.total_price,
                     status: 'pending'
                 })
                 .select()
@@ -80,11 +99,11 @@ export default function OrderTab({ products, ingredients, categories }: OrderTab
             if (orderError) throw orderError;
 
             // 2. Create order items
-            const orderItems = Object.entries(cart).map(([productId, quantity]) => ({
+            const orderItems = orderData.items.map(i => ({
                 order_id: order.id,
-                product_id: productId,
-                quantity,
-                unit_price: products.find(p => p.id === productId)?.price || 0
+                product_id: i.product_id,
+                quantity: i.quantity,
+                unit_price: i.unit_price
             }));
 
             const { error: itemsError } = await supabase
@@ -94,18 +113,22 @@ export default function OrderTab({ products, ingredients, categories }: OrderTab
             if (itemsError) throw itemsError;
 
             addNotification(`Nuevo pedido de ${clientName}`, ['kitchen', 'admin'], 'info');
-
-            // Reset
+            alert("¡Pedido enviado a cocina!");
+        } catch (error: any) {
+            console.error(error);
+            if (error.message === "offline" || error.code === "PGRST301") {
+                addToQueue(orderData);
+                alert("Sin conexión. El pedido se guardó localmente y se enviará automáticamente al recuperar el Wi-Fi.");
+            } else {
+                alert("Error al crear el pedido: " + error.message);
+            }
+        } finally {
+            // Reset regardless
             setCart({});
             setClientName('');
             setPhone('');
             setSelectedCategoryId(null);
             setShowSummary(false);
-            alert("¡Pedido enviado a cocina!");
-        } catch (error: any) {
-            console.error(error);
-            alert("Error al crear el pedido: " + error.message);
-        } finally {
             setIsSubmitting(false);
         }
     };
@@ -160,6 +183,18 @@ export default function OrderTab({ products, ingredients, categories }: OrderTab
                     />
                 </div>
             </div>
+
+            {queue.length > 0 && (
+                <div onClick={() => setShowOfflineQueue(true)} className="bg-orange-500/10 border border-orange-500/30 rounded-2xl p-3 flex justify-between items-center cursor-pointer animate-pulse hover:bg-orange-500/20 transition-all">
+                    <span className="text-[10px] font-black uppercase text-orange-500">
+                        {queue.length} pedido(s) pendiente(s) de sincronizar
+                    </span>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-bold text-slate-500">Ver Desglose</span>
+                        <ArrowLeft size={14} className="text-orange-500 rotate-180" />
+                    </div>
+                </div>
+            )}
 
             {!selectedCategoryId ? (
                 <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4">
@@ -227,6 +262,49 @@ export default function OrderTab({ products, ingredients, categories }: OrderTab
                         </div>
                         <span className="text-xl font-black">{formatARS(totalPrice)}</span>
                     </button>
+                </div>
+            )}
+
+            {/* Offline Queue Modal */}
+            {showOfflineQueue && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+                    <div className="glass w-full max-w-sm rounded-[2.5rem] p-6 space-y-4 shadow-2xl border border-white/10 flex flex-col max-h-[80vh]">
+                        <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                            <h3 className="text-lg font-black uppercase italic text-orange-500">Pedidos Offline</h3>
+                            <button onClick={() => setShowOfflineQueue(false)} className="text-slate-500 p-2 hover:text-white transition-all"><X /></button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto space-y-4 pr-1 custom-scrollbar">
+                            {queue.map(order => (
+                                <div key={order.id} className="bg-slate-900/50 rounded-2xl p-4 border border-white/5 space-y-2">
+                                    <div className="flex justify-between items-start">
+                                        <span className="text-sm font-black text-white">{order.client_name}</span>
+                                        <span className="text-[9px] font-bold text-slate-500 uppercase">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                    </div>
+                                    <div className="space-y-1">
+                                        {order.items.map((item, idx) => {
+                                            const p = products.find(prod => prod.id === item.product_id);
+                                            return (
+                                                <div key={idx} className="flex justify-between text-[10px] text-slate-400">
+                                                    <span>{item.quantity}x {p?.name || 'Producto'}</span>
+                                                    <span>{formatARS(item.unit_price * item.quantity)}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="pt-2 border-t border-white/5 flex justify-between items-center">
+                                        <span className="text-[10px] font-black text-orange-500 uppercase">Total</span>
+                                        <span className="text-sm font-black text-white">{formatARS(order.total_price)}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <button
+                            onClick={() => { syncQueue(); setShowOfflineQueue(false); }}
+                            className="w-full py-4 bg-orange-600 text-white font-black rounded-2xl shadow-xl flex items-center justify-center gap-2 uppercase tracking-widest active:scale-95 transition-all"
+                        >
+                            <RefreshCw size={16} /> Reintentar Envío
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

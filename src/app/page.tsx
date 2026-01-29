@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/lib/store';
 import { useRealtimeData } from '@/hooks/useRealtimeData';
+import { useOfflineStore } from '@/lib/offlineStore';
 import { UserRole, Profile } from '@/types/database';
 import { Bell, ShoppingBag, ChefHat, Settings, LogOut, Wifi, WifiOff, X, AlertCircle, CheckCircle, Trash2 } from 'lucide-react';
 
@@ -20,6 +21,7 @@ export default function App() {
   // State and Data
   const { categories, products, ingredients, orders, expenses, productIngredients, notifications } = useRealtimeData();
   const { clearAll, removeNotification, addNotification } = useNotifications();
+  const { syncQueue } = useOfflineStore();
 
   // Notification Filtering
   const filteredNotifications = notifications.filter(n => {
@@ -57,7 +59,10 @@ export default function App() {
   }, [ingredients, notifications]);
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
+    const handleOnline = () => {
+      setIsOnline(true);
+      syncQueue(); // Sincronizar automáticamente al recuperar internet
+    };
     const handleOffline = () => setIsOnline(false);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);

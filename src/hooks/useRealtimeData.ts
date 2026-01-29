@@ -12,21 +12,40 @@ export function useRealtimeData() {
     const [productIngredients, setProductIngredients] = useState<ProductIngredient[]>([])
 
     const fetchData = async () => {
-        const { data: catData } = await supabase.from('categories').select('*')
-        const { data: prodData } = await supabase.from('products').select('*, category:categories(*)')
-        const { data: ingData } = await supabase.from('ingredients').select('*')
-        const { data: ordData } = await supabase.from('orders').select('*, items:order_items(*)').order('created_at', { ascending: false })
-        const { data: expData } = await supabase.from('expenses').select('*').order('date', { ascending: false })
-        const { data: piData } = await supabase.from('product_ingredients').select('*')
-        const { data: notifData } = await supabase.from('app_notifications').select('*').order('created_at', { ascending: false }).limit(50)
+        try {
+            const { data: catData } = await supabase.from('categories').select('*')
+            const { data: prodData } = await supabase.from('products').select('*, category:categories(*)')
+            const { data: ingData } = await supabase.from('ingredients').select('*')
+            const { data: ordData } = await supabase.from('orders').select('*, items:order_items(*)').order('created_at', { ascending: false })
+            const { data: expData } = await supabase.from('expenses').select('*').order('date', { ascending: false })
+            const { data: piData } = await supabase.from('product_ingredients').select('*')
+            const { data: notifData } = await supabase.from('app_notifications').select('*').order('created_at', { ascending: false }).limit(50)
 
-        if (catData) setCategories(catData)
-        if (prodData) setProducts(prodData)
-        if (ingData) setIngredients(ingData)
-        if (ordData) setOrders(ordData)
-        if (expData) setExpenses(expData)
-        if (piData) setProductIngredients(piData)
-        if (notifData) setNotifications(notifData)
+            if (catData) {
+                setCategories(catData)
+                localStorage.setItem('cache_categories', JSON.stringify(catData))
+            }
+            if (prodData) {
+                setProducts(prodData)
+                localStorage.setItem('cache_products', JSON.stringify(prodData))
+            }
+            if (ingData) {
+                setIngredients(ingData)
+                localStorage.setItem('cache_ingredients', JSON.stringify(ingData))
+            }
+            if (ordData) setOrders(ordData)
+            if (expData) setExpenses(expData)
+            if (piData) setProductIngredients(piData)
+            if (notifData) setNotifications(notifData)
+        } catch (err) {
+            console.log('Using offline cache...');
+            const cCat = localStorage.getItem('cache_categories')
+            const cProd = localStorage.getItem('cache_products')
+            const cIng = localStorage.getItem('cache_ingredients')
+            if (cCat) setCategories(JSON.parse(cCat))
+            if (cProd) setProducts(JSON.parse(cProd))
+            if (cIng) setIngredients(JSON.parse(cIng))
+        }
     }
 
     useEffect(() => {

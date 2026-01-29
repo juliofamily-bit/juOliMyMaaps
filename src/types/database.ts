@@ -45,7 +45,7 @@ export type OrderStatus = 'pending' | 'completed' | 'delivered';
 export interface Order {
     id: string;
     client_name: string;
-    client_phone: string;
+    phone_number: string;
     status: OrderStatus;
     total_price: number;
     created_at: string;
