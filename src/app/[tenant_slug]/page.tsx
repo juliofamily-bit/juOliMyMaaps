@@ -274,8 +274,12 @@ export default function TenantApp({ params }: TenantPageProps) {
   const themeMode = tenant?.theme_colors?.mode || 'dark';
   const isLight = themeMode === 'light';
 
-  // Array de roles activos filtrados según las características del plan SaaS contratado
-  const baseRoles = tenant?.enabled_roles || ['admin', 'staff', 'kitchen', 'bartender', 'delivery', 'waiter'];
+  // Array de roles activos calculado dinámicamente según los empleados existentes
+  const baseRoles: UserRole[] = ['admin', 'staff'];
+  if (employees.some(e => e.role === 'kitchen')) baseRoles.push('kitchen');
+  if (employees.some(e => e.role === 'bartender')) baseRoles.push('bartender');
+  if (employees.some(e => e.role === 'delivery')) baseRoles.push('delivery');
+  if (employees.some(e => e.role === 'waiter')) baseRoles.push('waiter');
   const availableRoles = baseRoles.filter((role: string) => {
     if (loadingTenant) return true;
     
