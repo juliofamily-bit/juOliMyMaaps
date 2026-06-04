@@ -555,6 +555,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
     // Brand and Roles configuration State
     const isInitializedRef = useRef<string | null>(null);
+    const [cfgName, setCfgName] = useState('');
     const [cfgPrimary, setCfgPrimary] = useState('#f97316');
     const [cfgSecondary, setCfgSecondary] = useState('#1e293b');
     const [cfgMode, setCfgMode] = useState<'light' | 'dark'>('dark');
@@ -725,6 +726,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
     useEffect(() => {
         if (tenant && (!isInitializedRef.current || isInitializedRef.current !== tenant.id)) {
+            setCfgName(tenant.name || '');
             setCfgPrimary(tenant.theme_colors?.primary || '#f97316');
             setCfgSecondary(tenant.theme_colors?.secondary || '#1e293b');
             setCfgMode(tenant.theme_colors?.mode || 'dark');
@@ -1299,6 +1301,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                 const result = await supabase
                     .from('tenants')
                     .update({
+                        name: cfgName,
                         theme_colors: updatedColors,
                         enabled_roles: updatedRoles,
                         staff_password: cfgStaffPassword,
@@ -1341,6 +1344,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                     const fallbackResult = await supabase
                         .from('tenants')
                         .update({
+                            name: cfgName,
                             theme_colors: updatedColors,
                             enabled_roles: updatedRoles,
                             staff_password: cfgStaffPassword,
@@ -1368,6 +1372,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                 const fallbackResult = await supabase
                     .from('tenants')
                     .update({
+                        name: cfgName,
                         theme_colors: updatedColors,
                         enabled_roles: updatedRoles,
                         staff_password: cfgStaffPassword,
