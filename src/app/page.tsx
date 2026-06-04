@@ -1,253 +1,795 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useNotifications } from '@/lib/store';
-import { useRealtimeData } from '@/hooks/useRealtimeData';
-import { useOfflineStore } from '@/lib/offlineStore';
-import { UserRole, Profile } from '@/types/database';
-import { Bell, ShoppingBag, ChefHat, Settings, LogOut, Wifi, WifiOff, X, AlertCircle, CheckCircle, Trash2 } from 'lucide-react';
+import { ChevronRight, LayoutGrid, MapPin, Store, Loader2, ArrowLeft, Paintbrush, Shield, ShoppingBag, ChefHat, Check, UserPlus, LogIn, Search, AlertCircle, Mail, Sun, Moon, Navigation } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
-// Components
-import OrderTab from '@/components/OrderTab';
-import KitchenTab from '@/components/KitchenTab';
-import AdminTab from '@/components/AdminTab';
+const PRESET_COLORS = [
+  { name: 'Naranja Sunset', primary: '#f97316', secondary: '#1e293b' },
+  { name: 'Púrpura Neón', primary: '#a855f7', secondary: '#1e1b4b' },
+  { name: 'Verde Esmeralda', primary: '#10b981', secondary: '#064e3b' },
+  { name: 'Rojo Rubí', primary: '#ef4444', secondary: '#451a03' },
+  { name: 'Azul Eléctrico', primary: '#3b82f6', secondary: '#172554' },
+  { name: 'Oro Ámbar', primary: '#f59e0b', secondary: '#451a03' },
+  { name: 'Rosa Fucsia', primary: '#ec4899', secondary: '#4d0727' },
+];
 
-export default function App() {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [activeTab, setActiveTab] = useState<'orders' | 'kitchen' | 'admin'>('orders');
-  const [isOnline, setIsOnline] = useState(true);
-  const [showNotificationOverlay, setShowNotificationOverlay] = useState(false);
-  // State and Data
-  const { categories, products, ingredients, orders, expenses, productIngredients, notifications } = useRealtimeData();
-  const { clearAll, removeNotification, addNotification } = useNotifications();
-  const { syncQueue } = useOfflineStore();
+export default function WelcomePage() {
+  const router = useRouter();
+  
+  // App Modes: 'welcome' | 'select' | 'register'
+  const [mode, setMode] = useState<'welcome' | 'select' | 'register'>('welcome');
 
-  // Notification Filtering
-  const filteredNotifications = notifications.filter(n => {
-    if (!profile) return false;
-
-    // ADMIN: Ve todo SIEMPRE en su campana principal
-    if (profile.role === 'admin') {
-      return true;
-    }
-
-    // COCINA: Solo ve notificaciones para 'kitchen' (Nuevos pedidos)
-    if (profile.role === 'kitchen') {
-      return n.target_roles.includes('kitchen');
-    }
-
-    // STAFF (Ventas): Solo ve notificaciones para 'staff' (Pedidos listos y stock)
-    if (profile.role === 'staff') {
-      return n.target_roles.includes('staff');
-    }
-
-    return false;
-  });
-
-  // Stock Alert logic
-  useEffect(() => {
-    ingredients.forEach(ing => {
-      if (ing.stock_level <= ing.min_stock_alert) {
-        // Only add if not already notified (basic check by message)
-        const msg = `STOCK BAJO: ${ing.name} (${ing.stock_level} ${ing.unit})`;
-        if (!(notifications as any[]).some(n => n.message === msg)) {
-          addNotification(msg, ['staff', 'admin'], 'alert');
-        }
-      }
-    });
-  }, [ingredients, notifications]);
-
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      syncQueue(); // Sincronizar automáticamente al recuperar internet
-    };
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  // Notification Sound logic
-  const lastNotifCount = useRef(0);
-  useEffect(() => {
-    const playSound = () => {
-      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      audio.play().catch(e => console.log('Sound blocked by browser:', e));
-    };
-
-    if (filteredNotifications.length > lastNotifCount.current) {
-      playSound();
-    }
-    lastNotifCount.current = filteredNotifications.length;
-  }, [filteredNotifications.length]);
-
-  const fetchProfile = async (userId: string) => {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    if (data) setProfile(data);
-  };
-
-  const [password, setPassword] = useState('');
+  // List Tenants State
+  const [tenants, setTenants] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const adminPass = process.env.NEXT_PUBLIC_ADMIN_PASSWORD;
-    const staffPass = process.env.NEXT_PUBLIC_STAFF_PASSWORD;
-    const kitchenPass = "cocina2026";
+  // Register Tenant Form State
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [slug, setSlug] = useState('');
+  const [primaryColor, setPrimaryColor] = useState('#f97316');
+  const [secondaryColor, setSecondaryColor] = useState('#1e293b');
+  const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [staffPassword, setStaffPassword] = useState('');
+  const [kitchenPassword, setKitchenPassword] = useState('');
+  const [deliveryPassword, setDeliveryPassword] = useState('');
+  const [enabledRoles, setEnabledRoles] = useState<string[]>(['staff', 'kitchen', 'delivery']);
+  const [registering, setRegistering] = useState(false);
+  const [registerError, setRegisterError] = useState('');
+  const [registerSuccess, setRegisterSuccess] = useState(false);
 
-    if (password === adminPass) {
-      setProfile({ id: 'admin', full_name: 'Administrador', role: 'admin' });
-      setActiveTab('admin');
-      setError('');
-    } else if (password === kitchenPass) {
-      setProfile({ id: 'kitchen', full_name: 'Cocinero', role: 'kitchen' });
-      setActiveTab('kitchen');
-      setError('');
-    } else if (password === staffPass) {
-      setProfile({ id: 'staff', full_name: 'Vendedor', role: 'staff' });
-      setActiveTab('orders');
-      setError('');
-    } else {
-      setError('Clave incorrecta');
-      setPassword('');
+  // Cargar locales de la base de datos
+  useEffect(() => {
+    async function fetchTenants() {
+      try {
+        setLoading(true);
+        const { data, error: sbError } = await supabase
+          .from('tenants')
+          .select('id, name, slug, theme_colors, enabled_roles')
+          .order('name', { ascending: true });
+
+        if (sbError) {
+          setError('No se pudieron cargar los locales activos.');
+        } else {
+          setTenants(data || []);
+        }
+      } catch (err) {
+        setError('Error al conectar con la base de datos.');
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchTenants();
+  }, [mode]);
+
+  // Generar slug automáticamente desde el nombre
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newName = e.target.value;
+    setName(newName);
+    // Convertir a slug amigable (letras, números y guiones)
+    const generatedSlug = newName
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, '') // Eliminar caracteres especiales
+      .replace(/[\s_]+/g, '-') // Reemplazar espacios por guiones
+      .replace(/^-+|-+$/g, ''); // Limpiar guiones iniciales/finales
+    setSlug(generatedSlug);
+  };
+
+  // Enviar registro del nuevo local
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegisterError('');
+    
+    // Validaciones básicas
+    if (!name.trim() || !slug.trim()) {
+      setRegisterError('El nombre y el enlace del local son obligatorios.');
+      return;
+    }
+    if (!email.trim() || !email.includes('@')) {
+      setRegisterError('Por favor, ingresa un correo electrónico de registro válido.');
+      return;
+    }
+    if (slug.length < 3) {
+      setRegisterError('El enlace del local debe tener al menos 3 caracteres.');
+      return;
+    }
+    if (!adminPassword) {
+      setRegisterError('Debes configurar la contraseña de Administrador.');
+      return;
+    }
+    if (enabledRoles.includes('staff') && !staffPassword) {
+      setRegisterError('Debes configurar la contraseña para el rol de Caja (Ventas).');
+      return;
+    }
+    if (enabledRoles.includes('kitchen') && !kitchenPassword) {
+      setRegisterError('Debes configurar la contraseña para el rol de Cocina.');
+      return;
+    }
+    if (enabledRoles.includes('delivery') && !deliveryPassword) {
+      setRegisterError('Debes configurar la contraseña para el rol de Despacho (Envíos).');
+      return;
+    }
+
+    setRegistering(true);
+
+    try {
+      // 1. Validar si el Nombre del Local ya existe (Búsqueda exacta e insensible a mayúsculas/minúsculas)
+      const { data: existingName } = await supabase
+        .from('tenants')
+        .select('id')
+        .ilike('name', name.trim())
+        .maybeSingle();
+
+      if (existingName) {
+        setRegisterError('El nombre de este local ya está registrado exactamente igual. Por favor, utiliza una variación (ej: agregando tu calle o ciudad).');
+        setRegistering(false);
+        return;
+      }
+
+      // 2. Validar si el slug ya existe
+      const { data: existingSlug } = await supabase
+        .from('tenants')
+        .select('id')
+        .ilike('slug', slug)
+        .maybeSingle();
+
+      if (existingSlug) {
+        setRegisterError('Esta dirección de enlace ya está en uso por otro local.');
+        setRegistering(false);
+        return;
+      }
+
+      // 3. Crear el Tenant en la Base de Datos
+      const { data: newTenant, error: insertError } = await supabase
+        .from('tenants')
+        .insert([{
+          name: name.trim(),
+          slug: slug.trim(),
+          email: email.trim().toLowerCase(),
+          theme_colors: { primary: primaryColor, secondary: secondaryColor, mode: themeMode },
+          enabled_roles: ['admin', ...enabledRoles],
+          admin_password: adminPassword,
+          staff_password: enabledRoles.includes('staff') ? staffPassword : '',
+          kitchen_password: enabledRoles.includes('kitchen') ? kitchenPassword : '',
+          delivery_password: enabledRoles.includes('delivery') ? deliveryPassword : ''
+        }])
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('Insert Error:', insertError);
+        setRegisterError('No se pudo registrar el local en la base de datos.');
+        setRegistering(false);
+        return;
+      }
+
+      setRegisterSuccess(true);
+      setTimeout(() => {
+        // Redirigir al local recién creado de inmediato
+        router.push(`/${newTenant.slug}`);
+      }, 1500);
+
+    } catch (err) {
+      setRegisterError('Hubo un error inesperado al registrar el local.');
+    } finally {
+      setRegistering(false);
     }
   };
 
-  if (!profile) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-slate-950">
-        <div className="glass p-10 rounded-[2.5rem] w-full max-w-md flex flex-col items-center space-y-8 shadow-2xl border border-white/5">
-          <div className="bg-orange-500 p-5 rounded-3xl neon-glow text-5xl">🦁</div>
-          <div className="text-center">
-            <h1 className="text-4xl font-black italic text-orange-500">MyMapps</h1>
-            <p className="text-slate-400 font-medium tracking-widest uppercase text-[10px] mt-2">Acceso al Sistema</p>
-          </div>
-          <form onSubmit={handleLogin} className="w-full space-y-4 pt-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Ingresa tu clave</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-bold outline-none text-center tracking-widest"
-                placeholder="****"
-              />
-            </div>
-            {error && <p className="text-red-500 text-[10px] font-bold text-center uppercase tracking-wider">{error}</p>}
-            <button type="submit" className="w-full py-5 bg-orange-600 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest active:scale-95 transition-all">
-              Entrar
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
+  const filteredTenants = tenants.filter(t => 
+    t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.slug.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
-    <div className="pb-32 pt-6 px-4 max-w-md mx-auto min-h-screen relative overflow-x-hidden">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">{profile.role} • {profile.full_name}</h2>
-          <div className="flex items-center gap-2">
-            <span className="text-xl">🦁</span>
-            <h1 className="text-2xl font-black text-white italic">MyMapps</h1>
+    <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-slate-950 text-white selection:bg-orange-500/30 relative overflow-hidden">
+      {/* Fondo de Gradiente Premium */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-orange-500/10 via-slate-950 to-slate-950 pointer-events-none" />
+
+      {/* PANTALLA 1: BIENVENIDA / PREGUNTA INICIAL */}
+      {mode === 'welcome' && (
+        <div className="glass p-10 rounded-[2.5rem] w-full max-w-md flex flex-col items-center space-y-10 shadow-2xl border border-white/5 relative z-10 animate-in fade-in zoom-in duration-300">
+          
+          {/* Isotipo MyMozo Premium */}
+          <div className="hover:scale-105 transition-transform duration-300 w-32 h-32 flex items-center justify-center">
+            <img src="/logo.png" alt="MyMozo" className="w-full h-full object-cover rounded-full drop-shadow-[0_0_20px_rgba(249,115,22,0.3)]" />
+          </div>
+
+          {/* Títulos */}
+          <div className="text-center space-y-2">
+            <h1 className="text-4xl font-black italic text-orange-500 leading-none">MyMapps</h1>
+            <p className="text-slate-400 font-bold tracking-[0.2em] uppercase text-[9px]">
+              Plataforma SaaS Multi-Tenant
+            </p>
+          </div>
+
+          <div className="text-center space-y-3">
+            <h2 className="text-xl font-black text-white">¿Cómo deseas ingresar?</h2>
+            <p className="text-slate-400 text-xs px-2 leading-relaxed">
+              Inicia sesión en un negocio registrado o crea una nueva cuenta de local para comenzar a gestionar ventas, cocina e ingredientes de forma completamente personalizada.
+            </p>
+          </div>
+
+          {/* Botones de Selección */}
+          <div className="w-full flex flex-col gap-4">
+            <button
+              onClick={() => setMode('select')}
+              className="w-full py-5 bg-orange-500 hover:bg-orange-600 text-white font-black rounded-2xl shadow-xl shadow-orange-500/10 uppercase tracking-widest active:scale-95 transition-all text-xs flex items-center justify-center gap-2 group"
+            >
+              <LogIn size={14} className="group-hover:translate-x-0.5 transition-transform" />
+              Ingresar a mi Local
+            </button>
+
+            <button
+              onClick={() => setMode('register')}
+              className="w-full py-5 bg-slate-900 border border-slate-800 hover:border-white/10 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest active:scale-95 transition-all text-xs flex items-center justify-center gap-2 group"
+            >
+              <UserPlus size={14} className="text-orange-500 group-hover:scale-110 transition-transform" />
+              Crear Cuenta de Local
+            </button>
+
+            <Link href="/franchise" className="w-full mt-2">
+              <button
+                type="button"
+                className="w-full py-4 bg-slate-950 border border-slate-800/50 hover:border-orange-500/30 text-slate-400 hover:text-white font-black rounded-2xl shadow-lg uppercase tracking-widest active:scale-95 transition-all text-[10px] flex items-center justify-center gap-2 group"
+              >
+                <Store size={14} className="text-slate-500 group-hover:text-orange-500 transition-colors" />
+                Acceso Franquicias
+              </button>
+            </Link>
+          </div>
+
+          <p className="text-[8px] font-black uppercase text-slate-600 tracking-widest">
+            © 2026 MyMapps Inc. Todos los derechos reservados
+          </p>
+        </div>
+      )}
+
+      {/* PANTALLA 2: SELECCIÓN DE LOCALES ACTIVOS */}
+      {mode === 'select' && (
+        <div className="glass p-10 rounded-[2.5rem] w-full max-w-md flex flex-col items-center space-y-6 shadow-2xl border border-white/5 relative z-10 animate-in fade-in slide-in-from-right-8 duration-300">
+          
+          <div className="w-full flex justify-between items-center pb-2 border-b border-white/5">
+            <button onClick={() => setMode('welcome')} className="text-slate-400 hover:text-white p-2 bg-slate-900/50 rounded-xl transition-colors">
+              <ArrowLeft size={16} />
+            </button>
+            <h1 className="text-xl font-black italic text-orange-500">Mis Locales</h1>
+            <div className="w-9" />
+          </div>
+
+          <div className="w-full space-y-4">
+            <p className="text-xs text-slate-400 text-center leading-relaxed">
+              Selecciona tu local para acceder a las pantallas de pedidos, cocina y administración.
+            </p>
+
+            {/* Buscador Dinámico */}
+            <div className="relative w-full">
+              <Search className="absolute left-4 top-3.5 text-slate-500" size={16} />
+              <input
+                type="text"
+                placeholder="Buscar local por nombre o URL..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-900/50 border border-slate-800 focus:border-orange-500/30 rounded-2xl p-3.5 pl-11 text-white text-xs outline-none transition-colors"
+              />
+            </div>
+
+            {loading ? (
+              <div className="py-12 flex flex-col items-center justify-center space-y-3">
+                <Loader2 size={32} className="text-orange-500 animate-spin" />
+                <p className="text-slate-600 font-bold uppercase text-[9px] tracking-wider">Cargando catálogo...</p>
+              </div>
+            ) : error ? (
+              <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-3xl text-center">
+                <p className="text-red-500 text-xs font-bold uppercase tracking-wide">{error}</p>
+              </div>
+            ) : filteredTenants.length === 0 ? (
+              <div className="p-8 bg-slate-900/50 border border-slate-800 rounded-3xl text-center space-y-2">
+                <Store size={24} className="text-slate-600 mx-auto" />
+                <p className="text-slate-500 text-xs font-bold uppercase tracking-wide">No se encontraron locales</p>
+                <p className="text-[10px] text-slate-600">¿Deseas registrar un nuevo negocio?</p>
+                <button
+                  onClick={() => setMode('register')}
+                  className="mt-2 text-xs font-bold text-orange-500 hover:underline"
+                >
+                  Registrar Local Nuevo
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+                {filteredTenants.map((t) => {
+                  const accentColor = t.theme_colors?.primary || '#f97316';
+                  return (
+                    <Link
+                      key={t.id}
+                      href={`/${t.slug}`}
+                      className="w-full bg-slate-900/30 hover:bg-slate-900/80 border border-white/5 hover:border-white/10 p-4 rounded-3xl transition-all duration-300 flex items-center justify-between group cursor-pointer hover:scale-[1.02] active:scale-98"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div
+                          className="w-9 h-9 rounded-2xl flex items-center justify-center text-lg animate-pulse"
+                          style={{ backgroundColor: `${accentColor}15`, color: accentColor }}
+                        >
+                          <Store size={16} />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-sm font-black text-white group-hover:text-orange-500 transition-colors">{t.name}</p>
+                          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1 mt-0.5">
+                            <MapPin size={9} style={{ color: accentColor }} /> /{t.slug}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight size={16} className="text-slate-600 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
-        <div className="flex gap-3 items-center">
-          <button
-            onClick={() => setShowNotificationOverlay(true)}
-            className="relative text-slate-500 hover:text-white bg-slate-900/50 p-2 rounded-xl transition-all active:scale-90"
-          >
-            <Bell size={18} />
-            {filteredNotifications.length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-bounce">
-                {filteredNotifications.length}
-              </span>
-            )}
-          </button>
-          {isOnline ? <Wifi size={16} className="text-green-500" /> : <WifiOff size={16} className="text-red-500" />}
-          <button onClick={() => setProfile(null)} className="text-slate-500 hover:text-white bg-slate-900/50 p-2 rounded-xl transition-all">
-            <LogOut size={18} />
-          </button>
-        </div>
-      </div>
+      )}
 
-      <main className="animate-in fade-in duration-500">
-        {activeTab === 'orders' && <OrderTab products={products} ingredients={ingredients} categories={categories} />}
-        {activeTab === 'kitchen' && <KitchenTab orders={orders} products={products} />}
-        {activeTab === 'admin' && (
-          <AdminTab
-            products={products}
-            categories={categories}
-            ingredients={ingredients}
-            orders={orders}
-            expenses={expenses}
-            productIngredients={productIngredients}
-          />
-        )}
-      </main>
-
-      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] glass rounded-[2.5rem] p-2 flex justify-between shadow-2xl z-50 border border-white/10">
-        <button onClick={() => setActiveTab('orders')} className={`flex-1 flex flex-col items-center py-3 rounded-[2rem] transition-all ${activeTab === 'orders' ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500'}`}>
-          <ShoppingBag size={20} /><span className="text-[9px] font-black uppercase">Pedidos</span>
-        </button>
-        <button onClick={() => setActiveTab('kitchen')} className={`flex-1 flex flex-col items-center py-3 rounded-[2rem] transition-all ${activeTab === 'kitchen' ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500'}`}>
-          <ChefHat size={20} /><span className="text-[9px] font-black uppercase">Cocina</span>
-        </button>
-        {profile.role === 'admin' && (
-          <button onClick={() => setActiveTab('admin')} className={`flex-1 flex flex-col items-center py-3 rounded-[2rem] transition-all ${activeTab === 'admin' ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500'}`}>
-            <Settings size={20} /><span className="text-[9px] font-black uppercase">Admin</span>
-          </button>
-        )}
-      </nav>
-
-      {/* Notifications Overlay */}
-      {showNotificationOverlay && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-          <div className="glass w-full max-w-sm rounded-[2.5rem] p-6 space-y-4 shadow-2xl border border-white/10 flex flex-col max-h-[80vh]">
-            <div className="flex justify-between items-center pb-2 border-b border-white/5">
-              <h3 className="text-lg font-black uppercase italic text-orange-500">Notificaciones</h3>
-              <button onClick={() => setShowNotificationOverlay(false)} className="text-slate-500 p-2"><X /></button>
+      {/* PANTALLA 3: CREAR NUEVA CUENTA / REGISTRAR LOCAL */}
+      {mode === 'register' && (
+        <div className="glass p-8 rounded-[2.5rem] w-full max-w-4xl flex flex-col md:flex-row gap-8 shadow-2xl border border-white/5 relative z-10 animate-in fade-in slide-in-from-right-8 duration-300">
+          
+          {/* Columna Izquierda: Formulario de Registro */}
+          <div className="flex-1 flex flex-col space-y-6">
+            <div className="w-full flex justify-between items-center pb-2 border-b border-white/5">
+              <button type="button" onClick={() => setMode('welcome')} className="text-slate-400 hover:text-white p-2 bg-slate-900/50 rounded-xl transition-colors">
+                <ArrowLeft size={16} />
+              </button>
+              <h1 className="text-xl font-black italic text-orange-500">Crear Cuenta SaaS</h1>
+              <div className="w-9" />
             </div>
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
-              {filteredNotifications.length === 0 ? (
-                <div className="py-12 text-center text-slate-600 font-bold uppercase text-[10px] tracking-widest">
-                  No hay notificaciones
+
+            {registerSuccess ? (
+              <div className="w-full py-16 flex flex-col items-center justify-center space-y-4 animate-in zoom-in duration-300">
+                <div className="w-16 h-16 bg-green-500/10 border border-green-500/30 rounded-3xl flex items-center justify-center text-green-500 text-3xl shadow-lg">
+                  ✓
                 </div>
-              ) : (
-                filteredNotifications.map(n => (
-                  <div key={n.id} className={`p-4 rounded-3xl border relative group ${n.type === 'alert' ? 'bg-red-500/10 border-red-500/30' : n.type === 'success' ? 'bg-green-500/10 border-green-500/30' : 'bg-orange-500/10 border-orange-500/30'}`}>
-                    <div className="flex gap-3">
-                      {n.type === 'alert' && <AlertCircle className="text-red-500 flex-shrink-0" size={18} />}
-                      {n.type === 'success' && <CheckCircle className="text-green-500 flex-shrink-0" size={18} />}
-                      {n.type === 'info' && <Bell className="text-orange-500 flex-shrink-0" size={18} />}
-                      <div className="pr-6">
-                        <p className="text-xs font-bold text-white leading-tight mb-1">{n.message}</p>
-                        <p className="text-[8px] font-black uppercase text-slate-500">{new Date(n.created_at).toLocaleTimeString()}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => removeNotification(n.id)}
-                      className="absolute top-4 right-4 text-slate-600 hover:text-white transition-all opacity-0 group-hover:opacity-100"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                <h2 className="text-xl font-black text-green-500 italic">¡Cuenta Registrada!</h2>
+                <p className="text-slate-400 text-xs text-center px-4 leading-relaxed">
+                  El local y tu cuenta han sido creados correctamente. Te estamos redirigiendo a tu nuevo panel de trabajo de inmediato...
+                </p>
+                <Loader2 size={24} className="text-green-500 animate-spin mt-4" />
+              </div>
+            ) : (
+              <form onSubmit={handleRegister} className="space-y-4 max-h-[62vh] overflow-y-auto pr-2 custom-scrollbar">
+                
+                {/* Bloque 1: Datos de Identidad y Contacto */}
+                <div className="space-y-3 bg-slate-900/40 p-5 rounded-3xl border border-white/5">
+                  <p className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1">
+                    <Store size={12} className="text-orange-500" /> Datos de Identidad
+                  </p>
+
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold uppercase text-slate-500 ml-1">Nombre del Local (Debe ser único)</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ej: Pizzería Don Mario"
+                      value={name}
+                      onChange={handleNameChange}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-white/20 rounded-xl p-3 text-white text-xs outline-none font-medium"
+                    />
                   </div>
-                ))
-              )}
+
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold uppercase text-slate-500 ml-1 flex items-center gap-1">
+                        <Mail size={10} className="text-orange-500" /> Correo Electrónico de Registro
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        placeholder="Ej: gerencia@donmario.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-white/20 rounded-xl p-3 text-white text-xs outline-none font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold uppercase text-slate-500 ml-1">Dirección de Enlace (URL Slug)</label>
+                    <div className="flex items-center bg-slate-950 border border-slate-800 focus-within:border-white/20 rounded-xl px-3 py-1">
+                      <span className="text-[10px] text-slate-600 font-bold tracking-tight select-none">mymapps.com/</span>
+                      <input
+                        type="text"
+                        required
+                        placeholder="don-mario"
+                        value={slug}
+                        onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                        className="w-full bg-transparent p-2 text-white text-xs outline-none font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bloque 2: Personalización de Colores & Modo Claro/Oscuro */}
+                <div className="space-y-4 bg-slate-900/40 p-5 rounded-3xl border border-white/5">
+                  <p className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1">
+                    <Paintbrush size={12} className="text-orange-500" /> Identidad Visual & Tema
+                  </p>
+                  
+                  {/* Presets Rápidos */}
+                  <div className="space-y-1.5">
+                    <span className="text-[9px] font-bold uppercase text-slate-500 ml-1">Presets de Paleta Premium</span>
+                    <div className="flex flex-wrap gap-2">
+                      {PRESET_COLORS.map(c => (
+                        <button
+                          key={c.primary}
+                          type="button"
+                          onClick={() => { setPrimaryColor(c.primary); setSecondaryColor(c.secondary); }}
+                          className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center transition-all duration-300 hover:scale-110 shadow-md relative"
+                          style={{ backgroundColor: c.primary }}
+                          title={c.name}
+                        >
+                          {primaryColor === c.primary && secondaryColor === c.secondary && (
+                            <Check size={12} className="text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Selección de Colores Custom mediante Inputs */}
+                  <div className="grid grid-cols-2 gap-4 pt-1">
+                    <div className="space-y-1 bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-black uppercase text-slate-500">Color Principal</span>
+                        <span className="text-[10px] font-mono font-bold uppercase text-white">{primaryColor}</span>
+                      </div>
+                      <input
+                        type="color"
+                        value={primaryColor}
+                        onChange={(e) => setPrimaryColor(e.target.value)}
+                        className="w-10 h-10 border-0 rounded-lg cursor-pointer bg-transparent"
+                      />
+                    </div>
+
+                    <div className="space-y-1 bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-black uppercase text-slate-500">Color Contraste</span>
+                        <span className="text-[10px] font-mono font-bold uppercase text-white">{secondaryColor}</span>
+                      </div>
+                      <input
+                        type="color"
+                        value={secondaryColor}
+                        onChange={(e) => setSecondaryColor(e.target.value)}
+                        className="w-10 h-10 border-0 rounded-lg cursor-pointer bg-transparent"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Selección del Modo del Tema: Claro u Oscuro */}
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold uppercase text-slate-500 ml-1">Modo de Interfaz (Esquema de Colores)</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setThemeMode('dark')}
+                        className={`py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                          themeMode === 'dark'
+                            ? 'bg-slate-950 border-orange-500/50 text-white shadow-lg'
+                            : 'bg-slate-900/30 border-slate-800 text-slate-400 hover:text-slate-300'
+                        }`}
+                      >
+                        <Moon size={14} className={themeMode === 'dark' ? 'text-orange-500' : ''} />
+                        Tema Oscuro
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setThemeMode('light')}
+                        className={`py-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                          themeMode === 'light'
+                            ? 'bg-slate-950 border-orange-500/50 text-white shadow-lg'
+                            : 'bg-slate-900/30 border-slate-800 text-slate-400 hover:text-slate-300'
+                        }`}
+                      >
+                        <Sun size={14} className={themeMode === 'light' ? 'text-orange-500 animate-spin-slow' : ''} />
+                        Tema Claro
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bloque: Habilitar Roles */}
+                <div className="space-y-3 bg-slate-900/40 p-5 rounded-3xl border border-white/5">
+                  <p className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1">
+                    <LayoutGrid size={12} className="text-orange-500" /> Roles Activos en tu Local
+                  </p>
+                  <p className="text-slate-400 text-[10px] leading-relaxed">
+                    Selecciona cuáles de estos roles de trabajo estarán habilitados en tu negocio. Los roles desmarcados no aparecerán como opción al iniciar sesión en tu portal.
+                  </p>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                    {/* Caja */}
+                    <label className={`p-4 rounded-2xl border cursor-pointer flex items-center gap-3 transition-all ${
+                      enabledRoles.includes('staff') 
+                        ? 'bg-orange-500/10 border-orange-500/40 text-white' 
+                        : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'
+                    }`}>
+                      <input
+                        type="checkbox"
+                        checked={enabledRoles.includes('staff')}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setEnabledRoles([...enabledRoles, 'staff']);
+                          } else {
+                            setEnabledRoles(enabledRoles.filter(r => r !== 'staff'));
+                          }
+                        }}
+                        className="hidden"
+                      />
+                      <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
+                        enabledRoles.includes('staff') ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-700'
+                      }`}>
+                        {enabledRoles.includes('staff') && <Check size={10} />}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-black">Caja (Ventas)</span>
+                        <span className="text-[8px] opacity-60">Registrar pedidos</span>
+                      </div>
+                    </label>
+
+                    {/* Cocina */}
+                    <label className={`p-4 rounded-2xl border cursor-pointer flex items-center gap-3 transition-all ${
+                      enabledRoles.includes('kitchen') 
+                        ? 'bg-orange-500/10 border-orange-500/40 text-white' 
+                        : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'
+                    }`}>
+                      <input
+                        type="checkbox"
+                        checked={enabledRoles.includes('kitchen')}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setEnabledRoles([...enabledRoles, 'kitchen']);
+                          } else {
+                            setEnabledRoles(enabledRoles.filter(r => r !== 'kitchen'));
+                          }
+                        }}
+                        className="hidden"
+                      />
+                      <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
+                        enabledRoles.includes('kitchen') ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-700'
+                      }`}>
+                        {enabledRoles.includes('kitchen') && <Check size={10} />}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-black">Cocina</span>
+                        <span className="text-[8px] opacity-60">Preparar comandas</span>
+                      </div>
+                    </label>
+
+                    {/* Despacho */}
+                    <label className={`p-4 rounded-2xl border cursor-pointer flex items-center gap-3 transition-all ${
+                      enabledRoles.includes('delivery') 
+                        ? 'bg-orange-500/10 border-orange-500/40 text-white' 
+                        : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'
+                    }`}>
+                      <input
+                        type="checkbox"
+                        checked={enabledRoles.includes('delivery')}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setEnabledRoles([...enabledRoles, 'delivery']);
+                          } else {
+                            setEnabledRoles(enabledRoles.filter(r => r !== 'delivery'));
+                          }
+                        }}
+                        className="hidden"
+                      />
+                      <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
+                        enabledRoles.includes('delivery') ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-700'
+                      }`}>
+                        {enabledRoles.includes('delivery') && <Check size={10} />}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-black">Despacho / Envíos</span>
+                        <span className="text-[8px] opacity-60">Entregar pedidos</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Bloque 3: Claves de Roles */}
+                <div className="space-y-3 bg-slate-900/40 p-5 rounded-3xl border border-white/5">
+                  <p className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1">
+                    <Shield size={12} className="text-orange-500" /> Contraseñas de Seguridad por Rol
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold uppercase text-slate-500 ml-1 flex items-center gap-1">
+                        <Shield size={10} className="text-orange-500" /> Clave Administrador (Siempre Requerido)
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ej: admin123"
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-white/20 rounded-xl p-3 text-white text-xs outline-none font-bold"
+                      />
+                    </div>
+
+                    {enabledRoles.includes('staff') && (
+                      <div className="space-y-1 animate-in zoom-in duration-200">
+                        <label className="text-[9px] font-bold uppercase text-slate-500 ml-1 flex items-center gap-1">
+                          <ShoppingBag size={10} className="text-orange-500" /> Clave Caja (Ventas)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ej: ventas123"
+                          value={staffPassword}
+                          onChange={(e) => setStaffPassword(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-white/20 rounded-xl p-3 text-white text-xs outline-none font-bold"
+                        />
+                      </div>
+                    )}
+
+                    {enabledRoles.includes('kitchen') && (
+                      <div className="space-y-1 animate-in zoom-in duration-200">
+                        <label className="text-[9px] font-bold uppercase text-slate-500 ml-1 flex items-center gap-1">
+                          <ChefHat size={10} className="text-orange-500" /> Clave Cocina (Comandas)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ej: cocina123"
+                          value={kitchenPassword}
+                          onChange={(e) => setKitchenPassword(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-white/20 rounded-xl p-3 text-white text-xs outline-none font-bold"
+                        />
+                      </div>
+                    )}
+
+                    {enabledRoles.includes('delivery') && (
+                      <div className="space-y-1 animate-in zoom-in duration-200">
+                        <label className="text-[9px] font-bold uppercase text-slate-500 ml-1 flex items-center gap-1">
+                          <Navigation size={10} className="text-orange-500" /> Clave Despacho (Envíos)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ej: envios123"
+                          value={deliveryPassword}
+                          onChange={(e) => setDeliveryPassword(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-white/20 rounded-xl p-3 text-white text-xs outline-none font-bold"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {registerError && (
+                  <div className="flex items-center gap-2 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl">
+                    <AlertCircle size={16} className="text-red-500 flex-shrink-0" />
+                    <p className="text-red-500 text-[10px] font-bold uppercase tracking-wide leading-tight">{registerError}</p>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={registering}
+                  className="w-full py-5 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest active:scale-95 transition-all text-xs flex items-center justify-center gap-2"
+                  style={{ backgroundColor: primaryColor }}
+                >
+                  {registering ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <>
+                      <UserPlus size={14} />
+                      Registrar Local y Lanzar SaaS
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+          </div>
+
+          {/* Columna Derecha: Vista Previa Premium en Tiempo Real del Local */}
+          <div className="hidden md:flex flex-col w-[340px] bg-slate-900/20 p-6 rounded-[2rem] border border-white/5 items-center justify-center relative self-stretch">
+            <div className="absolute top-4 left-6">
+              <span className="text-[9px] font-black uppercase text-slate-500 tracking-wider">Vista Previa de Marca</span>
             </div>
-            <button
-              onClick={() => { clearAll(); setShowNotificationOverlay(false); }}
-              className="w-full py-3 bg-slate-800 text-slate-400 text-[10px] font-black uppercase rounded-2xl hover:bg-slate-700"
+            
+            {/* Tarjeta de Dispositivo Virtual */}
+            <div
+              className={`w-[260px] h-[480px] rounded-[2.5rem] p-5 shadow-2xl flex flex-col justify-between border relative overflow-hidden transition-all duration-500 ${
+                themeMode === 'light'
+                  ? 'bg-slate-50 text-slate-900 border-slate-200'
+                  : 'bg-slate-950 text-white border-white/5'
+              }`}
             >
-              Limpiar Todo
-            </button>
+              {/* Sombra / Brillo del color primario */}
+              <div
+                className="absolute -top-24 -left-24 w-48 h-48 rounded-full opacity-10 pointer-events-none blur-3xl"
+                style={{ backgroundColor: primaryColor }}
+              />
+
+              {/* Barra superior de Estado */}
+              <div className="flex justify-between items-center z-10">
+                <div>
+                  <h3
+                    className="text-[7px] font-black uppercase tracking-[0.2em]"
+                    style={{ color: primaryColor }}
+                  >
+                    {name.trim() || 'Tu Negocio'} • Caja
+                  </h3>
+                  <div className="flex items-center gap-1">
+                    <img src="/logo.png" alt="Logo" className="w-4 h-4 object-contain" />
+                    <h1 className="text-sm font-black italic">MyMapps</h1>
+                  </div>
+                </div>
+                <div className="flex gap-1.5 items-center">
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: primaryColor }} />
+                  <span className="text-[7px] font-bold opacity-40">100% ONLINE</span>
+                </div>
+              </div>
+
+              {/* Contenido / Simulación de Login */}
+              <div className="my-auto flex flex-col items-center space-y-4 z-10">
+                <div
+                  className="w-16 h-16 flex items-center justify-center transition-transform duration-500 animate-bounce"
+                >
+                  <img src="/logo.png" alt="Logo" className="w-full h-full object-cover rounded-full drop-shadow-md" />
+                </div>
+                
+                <div className="text-center">
+                  <h2 className="text-md font-black leading-tight italic">{name.trim() || 'Mi Local Premium'}</h2>
+                  <p className="text-[7px] tracking-widest uppercase opacity-50 mt-1">/{slug || 'enlace-web'}</p>
+                </div>
+
+                <div className="w-full space-y-2">
+                  <div className="w-full h-8 rounded-xl border opacity-50 flex items-center justify-center text-[8px] font-bold"
+                    style={{ borderColor: themeMode === 'light' ? '#cbd5e1' : '#1e293b' }}
+                  >
+                    ••••••
+                  </div>
+                  <button
+                    type="button"
+                    className="w-full h-8 rounded-xl text-[8px] font-black uppercase tracking-wider flex items-center justify-center"
+                    style={{ backgroundColor: primaryColor, color: '#fff' }}
+                  >
+                    Iniciar Sesión
+                  </button>
+                </div>
+              </div>
+
+              {/* Menú de Navegación del Dispositivo */}
+              <div
+                className="w-full rounded-2xl p-1 flex justify-between border z-10 transition-all duration-500"
+                style={{
+                  backgroundColor: themeMode === 'light' ? 'rgba(255,255,255,0.8)' : 'rgba(15,23,42,0.4)',
+                  borderColor: themeMode === 'light' ? '#e2e8f0' : 'rgba(255,255,255,0.05)'
+                }}
+              >
+                <div className="flex-1 py-1 px-1 rounded-xl flex flex-col items-center gap-0.5" style={{ backgroundColor: primaryColor, color: '#fff' }}>
+                  <ShoppingBag size={10} />
+                  <span className="text-[6px] font-black uppercase">Caja</span>
+                </div>
+                <div className="flex-1 py-1 px-1 flex flex-col items-center gap-0.5 opacity-40">
+                  <ChefHat size={10} />
+                  <span className="text-[6px] font-black uppercase">Cocina</span>
+                </div>
+                <div className="flex-1 py-1 px-1 flex flex-col items-center gap-0.5 opacity-40">
+                  <Shield size={10} />
+                  <span className="text-[6px] font-black uppercase">Admin</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

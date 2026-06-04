@@ -1,13 +1,19 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase } from './supabase';
-import { UserRole } from '@/types/database';
 
 interface OfflineOrder {
     id: string;
     client_name: string;
     phone_number: string;
     total_price: number;
+    table_number?: string | null;
+    waiter_name?: string | null;
+    payment_method?: string;
+    payment_status?: string;
+    is_approved_for_production?: boolean;
+    delivery_type?: string;
+    tenant_id?: string;
     items: {
         product_id: string;
         quantity: number;
@@ -62,19 +68,29 @@ export const useOfflineStore = create<OfflineStore>()(
                                 phone_number: order.phone_number,
                                 total_price: order.total_price,
                                 status: 'pending',
-                                created_at: order.created_at
+                                created_at: order.created_at,
+                                table_number: order.table_number,
+                                waiter_name: order.waiter_name,
+                                payment_method: order.payment_method || 'efectivo',
+                                payment_status: order.payment_status || 'pagado',
+                                is_approved_for_production: order.is_approved_for_production ?? true,
+                                delivery_type: order.delivery_type || 'local',
+                                tenant_id: order.tenant_id
                             })
                             .select()
                             .single();
 
                         if (orderError) throw orderError;
 
-                        // 2. Create items
+                        // 2. Create items (simplificado)
                         const items = order.items.map(i => ({
                             order_id: remoteOrder.id,
                             product_id: i.product_id,
                             quantity: i.quantity,
-                            unit_price: i.unit_price
+                            unit_price: i.unit_price,
+                            tenant_id: order.tenant_id,
+                            status: 'pending',
+                            target_departments: ['kitchen'] // Por defecto
                         }));
 
                         const { error: itemsError } = await supabase
@@ -83,11 +99,12 @@ export const useOfflineStore = create<OfflineStore>()(
 
                         if (itemsError) throw itemsError;
 
-                        // 3. Notification (direct to supabase)
+                        // 3. Notification
                         await supabase.from('app_notifications').insert([{
-                            message: `Nuevo pedido de ${order.client_name} (Sincronizado)`,
+                            message: `Nuevo pedido de ${order.client_name} #${remoteOrder.order_number} (Sincronizado Offline)`,
                             type: 'info',
-                            target_roles: ['kitchen', 'admin']
+                            target_roles: ['kitchen', 'admin'],
+                            tenant_id: order.tenant_id
                         }]);
 
                         removeFromQueue(order.id);

@@ -22,6 +22,27 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* PWA Native App Feel */
+    user-select: none;
+    -webkit-user-select: none;
+    overscroll-behavior-y: none;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100vw;
+    height: 100vh;
+    background-image: url('/logo.png');
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: min(60%, 500px);
+    opacity: 0.03;
+    pointer-events: none;
+    z-index: -999;
   }
 }
 
@@ -51,5 +72,14 @@
   .custom-scrollbar::-webkit-scrollbar-thumb {
     background-color: #1e293b;
     border-radius: 9999px;
+  }
+
+  @keyframes pulse-offer {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.03); }
+  }
+
+  .animate-offer {
+    animation: pulse-offer 2s infinite ease-in-out;
   }
 }

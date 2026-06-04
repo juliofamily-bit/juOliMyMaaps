@@ -1,6 +1,79 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+const clientsCache: Record<string, SupabaseClient> = {};
+let activeTenantId: string | null = null;
+
+function getClient(): SupabaseClient {
+  const key = activeTenantId || 'default';
+  if (!clientsCache[key]) {
+    clientsCache[key] = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: activeTenantId ? { 'x-tenant-id': activeTenantId } : {}
+      }
+    });
+  }
+  return clientsCache[key];
+}
+
+// Exportamos supabase como un Proxy para que actúe dinámicamente según el tenant activo,
+// manteniendo la compatibilidad exacta con todas las importaciones existentes.
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(target, prop) {
+    const client = getClient();
+    const value = (client as any)[prop];
+    if (typeof value === 'function') {
+      return value.bind(client);
+    }
+    return value;
+  }
+});
+
+// Cliente completamente anónimo y limpio de cabeceras para operaciones públicas y transversales
+// (como resolver el slug de un local a su ID).
+export const supabaseAnon = new Proxy({} as SupabaseClient, {
+  get(target, prop) {
+    const client = clientsCache['default'] || (clientsCache['default'] = createClient(supabaseUrl, supabaseAnonKey));
+    const value = (client as any)[prop];
+    if (typeof value === 'function') {
+      return value.bind(client);
+    }
+    return value;
+  }
+});
+
+export function setSupabaseTenant(tenantId: string | null) {
+  activeTenantId = tenantId;
+}
+
+
+export function broadcastTenantChange(tenantId: string | null) {
+  if (!tenantId) return;
+  const client = getClient();
+  const channel = client.channel(`tenant-room-${tenantId}`, {
+    config: {
+      broadcast: { self: true } // Permitir broadcast al mismo cliente si fuese necesario
+    }
+  });
+  
+  channel.subscribe((status) => {
+    if (status === 'SUBSCRIBED') {
+      channel.send({
+        type: 'broadcast',
+        event: 'schema-update',
+        payload: { timestamp: Date.now() }
+      }).then(() => {
+        // Remover el canal después de 1.5 segundos para no dejar conexiones huérfanas
+        setTimeout(() => {
+          try {
+            client.removeChannel(channel);
+          } catch (e) {
+            console.error('Error removing realtime channel:', e);
+          }
+        }, 1500);
+      });
+    }
+  });
+}
