@@ -4671,8 +4671,20 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             <div className="space-y-4 bg-slate-950/40 p-4 rounded-2xl border border-white/5 text-left">
                                 <span className="text-[9px] font-bold uppercase text-slate-400 block mb-1">Identidad Visual & Redes</span>
                                 
-                                {/* Descripción del Local */}
+                                {/* Nombre del Local */}
                                 <div className="space-y-1">
+                                    <label className="text-[8px] font-bold uppercase text-slate-500 block ml-1">Nombre Público del Local</label>
+                                    <input
+                                        type="text"
+                                        value={cfgName}
+                                        onChange={(e) => setCfgName(e.target.value)}
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white text-xs outline-none focus:border-orange-500/50"
+                                        placeholder="Ej. Mi Restaurante - Sucursal Norte"
+                                    />
+                                </div>
+                                
+                                {/* Descripción del Local */}
+                                <div className="space-y-1 mt-3">
                                     <div className="flex justify-between items-center ml-1">
                                         <label className="text-[8px] font-bold uppercase text-slate-500 block">Descripción del Local</label>
                                         <span className="text-[7.5px] font-bold text-slate-400 uppercase tracking-widest">{cfgDescription.length} / 500 caract.</span>
