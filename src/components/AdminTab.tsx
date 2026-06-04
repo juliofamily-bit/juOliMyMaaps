@@ -1288,6 +1288,13 @@ const AdminTab: React.FC<AdminTabProps> = ({
             let data = null;
             let error = null;
 
+            // Generar nuevo slug a partir del nombre
+            const newSlug = cfgName
+                .toLowerCase()
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // quitar acentos
+                .replace(/[^a-z0-9]+/g, '-') // espacios y otros a guiones
+                .replace(/(^-|-$)/g, ''); // quitar guiones a los lados
+
             try {
                 // 1. INTENTO PREMIUM: Con todas las columnas extendidas
                 const links = {
@@ -1302,6 +1309,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                     .from('tenants')
                     .update({
                         name: cfgName,
+                        slug: newSlug,
                         theme_colors: updatedColors,
                         enabled_roles: updatedRoles,
                         staff_password: cfgStaffPassword,
@@ -1345,6 +1353,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                         .from('tenants')
                         .update({
                             name: cfgName,
+                            slug: newSlug,
                             theme_colors: updatedColors,
                             enabled_roles: updatedRoles,
                             staff_password: cfgStaffPassword,
@@ -1373,6 +1382,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                     .from('tenants')
                     .update({
                         name: cfgName,
+                        slug: newSlug,
                         theme_colors: updatedColors,
                         enabled_roles: updatedRoles,
                         staff_password: cfgStaffPassword,
@@ -1392,11 +1402,24 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
             if (error) {
                 console.error('Error saving config:', error);
-                setConfigError('No se pudo guardar la configuración: ' + error.message);
+                
+                // Mostrar error amigable si el nombre/slug ya existe (restricción UNIQUE)
+                if (error.code === '23505' || error.message?.includes('duplicate key value')) {
+                    setConfigError('Ese nombre de local ya está registrado o en uso. Por favor, elige otro ligeramente distinto.');
+                } else {
+                    setConfigError('No se pudo guardar la configuración: ' + error.message);
+                }
             } else if (data) {
                 setConfigSuccess(true);
                 isInitializedRef.current = data.id;
                 onTenantUpdate(data);
+                
+                if (data.slug && data.slug !== tenant.slug) {
+                    alert('El nombre y el enlace de tu local han cambiado. Serás redirigido a la nueva dirección web.');
+                    window.location.href = '/' + data.slug;
+                    return;
+                }
+                
                 setTimeout(() => setConfigSuccess(false), 3000);
             }
         } catch (err) {

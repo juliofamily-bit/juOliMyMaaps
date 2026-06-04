@@ -143,6 +143,11 @@ export default function TenantApp({ params }: TenantPageProps) {
       } else {
         setTenant(data);
         setSupabaseTenant(data.id);
+        
+        // Actualizar el título de la pestaña dinámicamente con el nombre del local
+        if (data.name) {
+            document.title = `${data.name} | MyMozo`;
+        }
 
         // Usar supabase (con cabecera de tenant) en lugar de supabaseAnon para pasar la política RLS
         const { data: subData } = await supabase

@@ -34,6 +34,10 @@ export default function MenuPage({ params }: MenuPageProps) {
         // ¡Súper importante! Esto le dice a Supabase que actúe en nombre de este tenant para RLS
         setSupabaseTenant(data.id);
         setTenant(data);
+        
+        if (data.name) {
+            document.title = `${data.name} | Menú Digital`;
+        }
       } catch (err) {
         setError('Error al cargar el local');
       } finally {
