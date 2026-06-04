@@ -2146,9 +2146,17 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             )}
           </section>
         )}
-        {/* Powered by MAXES - Footer del Menú */}
-        <div className="pt-10 pb-24 flex justify-center">
-            <MaxesLogo appName="MyMapps" scale={0.6} showPoweredBy={true} />
+        {/* Powered by MyMozo - Footer del Menú */}
+        <div className="pt-10 pb-24 flex flex-col items-center justify-center gap-2 select-none pointer-events-none">
+          <div className="flex items-center gap-2 opacity-60 hover:opacity-100 transition-opacity duration-300">
+            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Powered by</span>
+            <div className="flex items-center gap-1.5">
+              <img src="/logo.png" alt="MyMozo Logo" className="w-5 h-5 object-cover rounded-full drop-shadow-md" />
+              <span className="text-xs font-black text-white tracking-wider uppercase">
+                My<span className="text-orange-500">Mozo</span>
+              </span>
+            </div>
+          </div>
         </div>
       </main>
 

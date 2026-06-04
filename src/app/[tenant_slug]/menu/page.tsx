@@ -67,7 +67,14 @@ export default function MenuPage({ params }: MenuPageProps) {
       <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-slate-950 text-white text-center relative overflow-hidden">
         <MaxesWatermark />
         <div className="glass p-10 rounded-[2.5rem] w-full max-w-md flex flex-col items-center space-y-6 shadow-2xl border border-red-500/20 relative z-10">
-          <MaxesLogo appName="MyMapps" scale={1} className="mb-4" />
+          <div className="w-24 h-24 flex items-center justify-center">
+            <img src="/logo.png" alt="MyMozo" className="w-full h-full object-cover rounded-full drop-shadow-[0_0_20px_rgba(249,115,22,0.3)]" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xl font-black text-white tracking-wider uppercase">
+              My<span className="text-orange-500">Mozo</span>
+            </span>
+          </div>
           <div className="bg-red-500/10 p-4 rounded-3xl text-red-500 border border-red-500/30">
             <Lock size={48} />
           </div>

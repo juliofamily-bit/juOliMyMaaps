@@ -24,8 +24,9 @@ export default function WelcomePage() {
 
   // List Tenants State
   const [tenants, setTenants] = useState<any[]>([]);
+  const [recentTenants, setRecentTenants] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   // Register Tenant Form State
@@ -44,29 +45,51 @@ export default function WelcomePage() {
   const [registerError, setRegisterError] = useState('');
   const [registerSuccess, setRegisterSuccess] = useState(false);
 
-  // Cargar locales de la base de datos
+  // Cargar locales recientes
   useEffect(() => {
-    async function fetchTenants() {
+    if (mode === 'select') {
       try {
-        setLoading(true);
-        const { data, error: sbError } = await supabase
-          .from('tenants')
-          .select('id, name, slug, theme_colors, enabled_roles')
-          .order('name', { ascending: true });
-
-        if (sbError) {
-          setError('No se pudieron cargar los locales activos.');
-        } else {
-          setTenants(data || []);
+        const stored = localStorage.getItem('recent_tenants');
+        if (stored) {
+          setRecentTenants(JSON.parse(stored));
         }
-      } catch (err) {
-        setError('Error al conectar con la base de datos.');
-      } finally {
-        setLoading(false);
+      } catch (e) {
+        console.error('Error parsing recent tenants', e);
       }
     }
-    fetchTenants();
   }, [mode]);
+
+  // Buscar local por nombre o correo
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    
+    setLoading(true);
+    setError('');
+    
+    try {
+      // Buscar por coincidencia de nombre o correo
+      const { data, error: sbError } = await supabase
+        .from('tenants')
+        .select('id, name, slug, theme_colors, enabled_roles')
+        .or(`name.ilike.%${searchQuery.trim()}%,email.ilike.%${searchQuery.trim()}%`)
+        .order('name', { ascending: true })
+        .limit(5);
+
+      if (sbError) {
+        setError('No se pudieron buscar los locales.');
+      } else if (!data || data.length === 0) {
+        setError('No se encontró ningún local con ese nombre o correo.');
+        setTenants([]);
+      } else {
+        setTenants(data);
+      }
+    } catch (err) {
+      setError('Error al conectar con la base de datos.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Generar slug automáticamente desde el nombre
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -146,7 +169,20 @@ export default function WelcomePage() {
         return;
       }
 
-      // 3. Crear el Tenant en la Base de Datos
+      // 3. Crear usuario en Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password: adminPassword,
+      });
+
+      if (authError) {
+        // If user already exists in auth, we can still proceed to link the tenant if we want, 
+        // but typically we should show an error or just proceed if they already have an account.
+        // For now, we just log it. If they exist, Supabase Auth might throw "User already registered".
+        console.warn('Auth SignUp Note:', authError.message);
+      }
+
+      // 4. Crear el Tenant en la Base de Datos
       const { data: newTenant, error: insertError } = await supabase
         .from('tenants')
         .insert([{
@@ -183,10 +219,16 @@ export default function WelcomePage() {
     }
   };
 
-  const filteredTenants = tenants.filter(t => 
-    t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.slug.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const recordRecentTenant = (t: any) => {
+    try {
+      const stored = localStorage.getItem('recent_tenants');
+      let recents = stored ? JSON.parse(stored) : [];
+      recents = recents.filter((r: any) => r.id !== t.id);
+      recents.unshift({ id: t.id, name: t.name, slug: t.slug, theme_colors: t.theme_colors });
+      if (recents.length > 3) recents = recents.slice(0, 3);
+      localStorage.setItem('recent_tenants', JSON.stringify(recents));
+    } catch (e) {}
+  };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-slate-950 text-white selection:bg-orange-500/30 relative overflow-hidden">
@@ -270,46 +312,43 @@ export default function WelcomePage() {
             </p>
 
             {/* Buscador Dinámico */}
-            <div className="relative w-full">
-              <Search className="absolute left-4 top-3.5 text-slate-500" size={16} />
-              <input
-                type="text"
-                placeholder="Buscar local por nombre o URL..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-900/50 border border-slate-800 focus:border-orange-500/30 rounded-2xl p-3.5 pl-11 text-white text-xs outline-none transition-colors"
-              />
-            </div>
+            <form onSubmit={handleSearch} className="relative w-full flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-3.5 text-slate-500" size={16} />
+                <input
+                  type="text"
+                  placeholder="Correo o Nombre exacto..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-900/50 border border-slate-800 focus:border-orange-500/30 rounded-2xl p-3.5 pl-11 text-white text-xs outline-none transition-colors"
+                />
+              </div>
+              <button 
+                type="submit" 
+                className="bg-orange-500 hover:bg-orange-600 text-white p-3.5 rounded-2xl font-bold transition-colors"
+                disabled={loading}
+              >
+                {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+              </button>
+            </form>
 
-            {loading ? (
-              <div className="py-12 flex flex-col items-center justify-center space-y-3">
-                <Loader2 size={32} className="text-orange-500 animate-spin" />
-                <p className="text-slate-600 font-bold uppercase text-[9px] tracking-wider">Cargando catálogo...</p>
+            {error && (
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-center">
+                <p className="text-red-500 text-[10px] font-bold uppercase tracking-wide">{error}</p>
               </div>
-            ) : error ? (
-              <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-3xl text-center">
-                <p className="text-red-500 text-xs font-bold uppercase tracking-wide">{error}</p>
-              </div>
-            ) : filteredTenants.length === 0 ? (
-              <div className="p-8 bg-slate-900/50 border border-slate-800 rounded-3xl text-center space-y-2">
-                <Store size={24} className="text-slate-600 mx-auto" />
-                <p className="text-slate-500 text-xs font-bold uppercase tracking-wide">No se encontraron locales</p>
-                <p className="text-[10px] text-slate-600">¿Deseas registrar un nuevo negocio?</p>
-                <button
-                  onClick={() => setMode('register')}
-                  className="mt-2 text-xs font-bold text-orange-500 hover:underline"
-                >
-                  Registrar Local Nuevo
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
-                {filteredTenants.map((t) => {
+            )}
+
+            {/* Resultados de Búsqueda */}
+            {tenants.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider text-center mt-4">Resultados</p>
+                {tenants.map((t) => {
                   const accentColor = t.theme_colors?.primary || '#f97316';
                   return (
                     <Link
                       key={t.id}
                       href={`/${t.slug}`}
+                      onClick={() => recordRecentTenant(t)}
                       className="w-full bg-slate-900/30 hover:bg-slate-900/80 border border-white/5 hover:border-white/10 p-4 rounded-3xl transition-all duration-300 flex items-center justify-between group cursor-pointer hover:scale-[1.02] active:scale-98"
                     >
                       <div className="flex items-center gap-4">
@@ -330,6 +369,57 @@ export default function WelcomePage() {
                     </Link>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Locales Recientes */}
+            {!loading && tenants.length === 0 && recentTenants.length > 0 && (
+              <div className="space-y-3 mt-4 pt-4 border-t border-white/5">
+                <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider text-center flex items-center justify-center gap-2">
+                  <MapPin size={10} /> Locales Recientes
+                </p>
+                {recentTenants.map((t) => {
+                  const accentColor = t.theme_colors?.primary || '#f97316';
+                  return (
+                    <Link
+                      key={t.id}
+                      href={`/${t.slug}`}
+                      onClick={() => recordRecentTenant(t)}
+                      className="w-full bg-slate-900/30 hover:bg-slate-900/80 border border-white/5 hover:border-white/10 p-4 rounded-3xl transition-all duration-300 flex items-center justify-between group cursor-pointer hover:scale-[1.02] active:scale-98"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div
+                          className="w-9 h-9 rounded-2xl flex items-center justify-center text-lg"
+                          style={{ backgroundColor: `${accentColor}15`, color: accentColor }}
+                        >
+                          <Store size={16} />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-sm font-black text-white group-hover:text-orange-500 transition-colors">{t.name}</p>
+                          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1 mt-0.5">
+                            <MapPin size={9} style={{ color: accentColor }} /> /{t.slug}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight size={16} className="text-slate-600 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Empty State inicial */}
+            {!loading && tenants.length === 0 && recentTenants.length === 0 && !error && (
+              <div className="p-8 bg-slate-900/50 border border-slate-800 rounded-3xl text-center space-y-2 mt-4">
+                <Store size={24} className="text-slate-600 mx-auto" />
+                <p className="text-slate-500 text-xs font-bold uppercase tracking-wide">Busca tu local</p>
+                <p className="text-[10px] text-slate-600">Ingresa tu correo para encontrarlo</p>
+                <button
+                  onClick={() => setMode('register')}
+                  className="mt-2 text-xs font-bold text-orange-500 hover:underline block mx-auto"
+                >
+                  ¿No tienes uno? Regístrate
+                </button>
               </div>
             )}
           </div>

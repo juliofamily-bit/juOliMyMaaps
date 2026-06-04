@@ -39,6 +39,9 @@ export default function TenantApp({ params }: TenantPageProps) {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const [error, setError] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
 
   // App General State
   const [activeTab, setActiveTab] = useState<'orders' | 'kitchen' | 'bartender' | 'admin' | 'delivery' | 'waiter'>('orders');
@@ -454,30 +457,47 @@ export default function TenantApp({ params }: TenantPageProps) {
 
     try {
       if (selectedRole === 'admin') {
-        const { data, error: rpcError } = await supabase.rpc('check_tenant_credential', {
-          p_slug: tenant_slug,
-          p_role: selectedRole,
-          p_password: password
-        });
-
-        if (rpcError) {
-          console.error("RPC Error:", rpcError);
-          setError('Error al iniciar sesión');
-          setPassword('');
+        if (!tenant?.email) {
+          setError('El local no tiene un correo configurado.');
+          setLoggingIn(false);
           return;
         }
 
-        if (data && data.success) {
+        // Login using Supabase Auth
+        const { data, error: authError } = await supabase.auth.signInWithPassword({
+          email: tenant.email,
+          password: password,
+        });
+
+        if (authError) {
+          console.error("Auth Error:", authError);
+          // Fallback legacy (por si aún no se migró el usuario a auth.users en la DB)
+          const { data: legacyData, error: rpcError } = await supabase.rpc('check_tenant_credential', {
+            p_slug: tenant_slug,
+            p_role: selectedRole,
+            p_password: password
+          });
+
+          if (!rpcError && legacyData?.success) {
+            setProfile({
+              id: legacyData.tenant_id,
+              full_name: 'Administrador',
+              role: 'admin'
+            });
+            setSupabaseTenant(legacyData.tenant_id);
+            setActiveTab('admin');
+          } else {
+            setError('Credenciales incorrectas');
+            setPassword('');
+          }
+        } else if (data.session) {
           setProfile({
-            id: data.tenant_id,
+            id: tenant.id,
             full_name: 'Administrador',
             role: 'admin'
           });
-          setSupabaseTenant(data.tenant_id);
+          setSupabaseTenant(tenant.id);
           setActiveTab('admin');
-        } else {
-          setError(data?.error || 'Clave incorrecta');
-          setPassword('');
         }
       } else {
         if (!selectedEmployeeId) {
@@ -583,6 +603,32 @@ export default function TenantApp({ params }: TenantPageProps) {
     }
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!resetEmail) {
+      setError('Por favor, ingresa tu correo electrónico.');
+      return;
+    }
+
+    setLoggingIn(true);
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: window.location.origin + `/${tenant_slug}`,
+      });
+      if (resetError) {
+        setError('Error al enviar el correo: ' + resetError.message);
+      } else {
+        setResetSuccess(true);
+      }
+    } catch (err) {
+      setError('Error de conexión.');
+    } finally {
+      setLoggingIn(false);
+    }
+  };
+
   // Cargar pantalla de loading
   if (loadingTenant) {
     return (
@@ -647,7 +693,53 @@ export default function TenantApp({ params }: TenantPageProps) {
             </p>
           </div>
 
-          {/* Selector de Roles Dinámico Filtrado por la Base de Datos */}
+          {showResetPassword ? (
+            <div className="w-full flex flex-col items-center space-y-4 animate-in slide-in-from-right-4 duration-300">
+              <h2 className="text-lg font-black uppercase text-center w-full mb-2">Recuperar Contraseña</h2>
+              {resetSuccess ? (
+                <div className="w-full bg-green-500/10 border border-green-500/20 p-4 rounded-2xl text-center">
+                  <CheckCircle size={24} className="text-green-500 mx-auto mb-2" />
+                  <p className="text-green-500 text-xs font-bold">¡Correo enviado con éxito!</p>
+                  <p className="text-[10px] text-slate-400 mt-2">Revisa tu bandeja de entrada o spam y sigue las instrucciones del correo.</p>
+                  <button onClick={() => { setShowResetPassword(false); setResetSuccess(false); }} className="mt-4 text-xs font-bold underline" style={{ color: primaryColor }}>Volver a Inicio de Sesión</button>
+                </div>
+              ) : (
+                <form onSubmit={handleResetPassword} className="w-full space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-1 justify-center">
+                      Correo del Administrador
+                    </label>
+                    <input
+                      type="email"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      className={`w-full rounded-2xl p-4 font-bold outline-none text-center tracking-widest border transition-all ${
+                        isLight ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-slate-500' : 'bg-slate-900 border-slate-800 text-white focus:border-white/20'
+                      }`}
+                      placeholder="ejemplo@correo.com"
+                      required
+                      disabled={loggingIn}
+                    />
+                  </div>
+                  {error && <p className="text-red-500 text-[10px] font-bold text-center uppercase tracking-wider animate-shake">{error}</p>}
+                  
+                  <button
+                    type="submit"
+                    disabled={loggingIn}
+                    className="w-full py-4.5 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2 text-xs"
+                    style={{ backgroundColor: primaryColor }}
+                  >
+                    {loggingIn ? <Loader2 size={16} className="animate-spin" /> : 'Enviar Correo de Recuperación'}
+                  </button>
+                  <div className="w-full text-center">
+                    <button type="button" onClick={() => setShowResetPassword(false)} className="text-[10px] uppercase font-bold text-slate-400 hover:text-white transition-colors">Cancelar</button>
+                  </div>
+                </form>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Selector de Roles Dinámico Filtrado por la Base de Datos */}
           <div className={`w-full p-1.5 rounded-2xl border flex flex-wrap justify-between gap-1 transition-colors ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-900/50 border-slate-800'}`}>
             {availableRoles.map((r) => (
               <button
@@ -732,9 +824,21 @@ export default function TenantApp({ params }: TenantPageProps) {
             </button>
           </form>
 
+          {selectedRole === 'admin' && (
+            <button
+              type="button"
+              onClick={() => { setShowResetPassword(true); setResetEmail(tenant?.email || ''); setError(''); }}
+              className="text-[10px] uppercase font-bold text-slate-400 hover:text-white transition-colors underline -mt-2"
+            >
+              Olvidé mi contraseña
+            </button>
+          )}
+
           <Link href="/" className={`text-[8px] uppercase font-black tracking-widest transition-colors ${isLight ? 'text-slate-500 hover:text-slate-900' : 'text-slate-500 hover:text-white'}`}>
             ← Cambiar de Local
           </Link>
+          </>
+          )}
           
           <div className="flex flex-col items-center gap-1.5 opacity-40 hover:opacity-100 transition-opacity pt-2">
              <img src="/maxes-clan-logo.jpg" alt="Maxes Clan Logo" className="h-5 object-contain rounded opacity-80" style={{ filter: isLight ? 'invert(1)' : 'none' }} />
