@@ -448,6 +448,37 @@ export default function TenantApp({ params }: TenantPageProps) {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [profile]);
+
+  // Wake Lock: Evitar que la pantalla se apague mientras usan el sistema
+  useEffect(() => {
+    if (!profile) return;
+    
+    let wakeLock: any = null;
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+          console.log('Wake Lock Activo: Pantalla no se apagará');
+        }
+      } catch (err: any) {
+        console.error('Wake Lock falló:', err.message);
+      }
+    };
+
+    requestWakeLock();
+
+    const handleVisibilityChange = () => {
+      if (wakeLock !== null && document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      if (wakeLock !== null) wakeLock.release().then(() => { wakeLock = null; });
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [profile]);
   // Escuchar revocación de dispositivos en tiempo real
   useEffect(() => {
     if (!profile || profile.role === 'admin' || !tenant?.id) return;
