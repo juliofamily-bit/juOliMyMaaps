@@ -149,6 +149,20 @@ export default function OrderTab({ products, ingredients, categories, orders = [
         window.addEventListener('online', handleOnline);
         return () => window.removeEventListener('online', handleOnline);
     }, [syncQueue, refetchData, tenant?.id, addNotification]);
+
+    // Listener para el botón ATRÁS del celular (PWA Global Back Button)
+    React.useEffect(() => {
+        const handleGoBack = () => {
+            if (showOfflineQueue) setShowOfflineQueue(false);
+            else if (orderToPrint) setOrderToPrint(null);
+            else if (crossPaymentOrder) setCrossPaymentOrder(null);
+            else if (showSummary) setShowSummary(false);
+            else if (subTab === 'deliveries') setSubTab('new_order');
+        };
+        window.addEventListener('app-go-back', handleGoBack);
+        return () => window.removeEventListener('app-go-back', handleGoBack);
+    }, [showOfflineQueue, orderToPrint, crossPaymentOrder, showSummary, subTab]);
+
     const printComponentRef = useRef<HTMLDivElement>(null);
     const handlePrint = useReactToPrint({
         contentRef: printComponentRef,

@@ -431,6 +431,23 @@ export default function TenantApp({ params }: TenantPageProps) {
     lastNotifCount.current = filteredNotifications.length;
   }, [filteredNotifications.length, profile]);
 
+  // Intercepción del botón Atrás del celular/PWA
+  useEffect(() => {
+    if (!profile) return;
+    
+    // Inyectamos un estado inicial en el historial para "atrapar" el popstate
+    window.history.pushState({ appActive: true }, '', window.location.href);
+
+    const handlePopState = (event: PopStateEvent) => {
+      // Al intentar salir con "Atrás", volvemos a poner el estado
+      window.history.pushState({ appActive: true }, '', window.location.href);
+      // Disparamos un evento custom para que los componentes (OrderTab, AdminTab) cierren sus modales
+      window.dispatchEvent(new Event('app-go-back'));
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [profile]);
   // Escuchar revocación de dispositivos en tiempo real
   useEffect(() => {
     if (!profile || profile.role === 'admin' || !tenant?.id) return;
