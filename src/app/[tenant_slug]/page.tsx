@@ -886,14 +886,7 @@ export default function TenantApp({ params }: TenantPageProps) {
             onClick={async () => {
               const success = await subscribeToPush();
               if (success) {
-                // El useEffect se encarga de ocultarlo porque isSubscribed pasa a true
-                const banner = document.getElementById('push-success-banner');
-                if (banner) {
-                  banner.style.display = 'flex';
-                  setTimeout(() => {
-                    if (banner) banner.style.display = 'none';
-                  }, 5000);
-                }
+                alert('¡Excelente! Las notificaciones se han activado con éxito en este dispositivo.');
               } else {
                 alert('Hubo un problema al activar las notificaciones. Verifica los permisos de tu navegador.');
               }
@@ -912,13 +905,7 @@ export default function TenantApp({ params }: TenantPageProps) {
             onClick={async () => {
               const success = await subscribeToPush();
               if (success) {
-                const banner = document.getElementById('push-success-banner');
-                if (banner) {
-                  banner.style.display = 'flex';
-                  setTimeout(() => {
-                    if (banner) banner.style.display = 'none';
-                  }, 5000);
-                }
+                alert('¡Excelente! Las alertas de stock se activaron con éxito en este dispositivo.');
               } else {
                 alert('Hubo un problema al activar las notificaciones. Verifica los permisos de tu navegador.');
               }
