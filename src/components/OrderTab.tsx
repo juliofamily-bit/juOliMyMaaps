@@ -157,11 +157,12 @@ export default function OrderTab({ products, ingredients, categories, orders = [
             else if (orderToPrint) setOrderToPrint(null);
             else if (crossPaymentOrder) setCrossPaymentOrder(null);
             else if (showSummary) setShowSummary(false);
+            else if (selectedCategoryId) setSelectedCategoryId(null);
             else if (subTab === 'deliveries') setSubTab('new_order');
         };
         window.addEventListener('app-go-back', handleGoBack);
         return () => window.removeEventListener('app-go-back', handleGoBack);
-    }, [showOfflineQueue, orderToPrint, crossPaymentOrder, showSummary, subTab]);
+    }, [showOfflineQueue, orderToPrint, crossPaymentOrder, showSummary, selectedCategoryId, subTab]);
 
     const printComponentRef = useRef<HTMLDivElement>(null);
     const handlePrint = useReactToPrint({
@@ -1263,6 +1264,22 @@ export default function OrderTab({ products, ingredients, categories, orders = [
                                 <span className="text-[9px] font-bold text-slate-500">Ver Desglose</span>
                                 <ArrowLeft size={14} className="text-orange-500 rotate-180" />
                             </div>
+                        </div>
+                    )}
+
+                    {selectedCategoryId && (
+                        <div className="flex items-center gap-3 mb-4 animate-in slide-in-from-left-4">
+                            <button
+                                onClick={() => setSelectedCategoryId(null)}
+                                className={`w-10 h-10 shrink-0 rounded-2xl flex items-center justify-center active:scale-95 transition-all shadow-md ${
+                                    isLight ? 'bg-white text-slate-900 border border-slate-200' : 'bg-slate-900 text-white border border-slate-800'
+                                }`}
+                            >
+                                <ArrowLeft size={18} />
+                            </button>
+                            <h3 className="text-xs font-black uppercase" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
+                                Volver a Categorías
+                            </h3>
                         </div>
                     )}
 
