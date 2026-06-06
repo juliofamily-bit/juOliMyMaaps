@@ -4899,8 +4899,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                 <div className="space-y-2">
                                                     <label className="text-[8px] font-bold uppercase text-slate-500 block ml-1">Horarios de Atención para Apps</label>
                                                     <div className="grid gap-2">
-                                                        {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => {
-                                                            const translateDay = { monday: 'Lunes', tuesday: 'Martes', wednesday: 'Miércoles', thursday: 'Jueves', friday: 'Viernes', saturday: 'Sábado', sunday: 'Domingo' }[day as keyof typeof cfgDeliveryAppsSchedule];
+                                                        {(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const).map((day) => {
+                                                            const translateDay = { monday: 'Lunes', tuesday: 'Martes', wednesday: 'Miércoles', thursday: 'Jueves', friday: 'Viernes', saturday: 'Sábado', sunday: 'Domingo' }[day];
                                                             return (
                                                                 <div key={day} className="flex items-center gap-2 bg-slate-900/50 p-2 rounded-lg border border-slate-800">
                                                                     <span className="text-[9px] font-bold uppercase w-16 text-slate-400">{translateDay}</span>
