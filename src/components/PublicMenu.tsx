@@ -2432,7 +2432,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                 
                 {/* Scroll horizontal de productos */}
                 <AutoCarousel gapClass="gap-4">
-                  {categories.flatMap(c => c.products || []).filter(p => p.is_active !== false).slice(0, 6).map((product) => (
+                  {products.filter(p => p.is_active !== false).slice(0, 6).map((product) => (
                     <div key={product.id} className="min-w-[260px] md:min-w-[300px] snap-center bg-neutral-900/60 border border-white/5 rounded-3xl overflow-hidden shadow-xl hover:border-white/20 transition-all duration-300 flex flex-col cursor-pointer" onClick={goToMenu}>
                       <div className="h-48 w-full bg-neutral-800 relative overflow-hidden">
                         {product.image_url ? (
