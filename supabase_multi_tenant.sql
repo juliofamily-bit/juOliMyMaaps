@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.tenants (
     slug TEXT NOT NULL UNIQUE,
     email TEXT NOT NULL, -- Correo electrónico obligatorio
     theme_colors JSONB DEFAULT '{"primary": "#f97316", "secondary": "#1e293b", "mode": "dark"}'::jsonb,
-    enabled_roles TEXT[] DEFAULT ARRAY['admin', 'staff', 'kitchen', 'delivery', 'bartender', 'waiter']::TEXT[], -- Roles habilitados
+    enabled_roles TEXT[] DEFAULT ARRAY['admin', 'staff', 'kitchen', 'delivery', 'bartender', 'waiter', 'animador']::TEXT[], -- Roles habilitados
     location_lat FLOAT8,
     location_lng FLOAT8,
     admin_password TEXT NOT NULL,
@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS public.tenants (
     delivery_password TEXT NOT NULL DEFAULT '',
     bartender_password TEXT NOT NULL DEFAULT '',
     waiter_password TEXT NOT NULL DEFAULT '',
+    animador_password TEXT NOT NULL DEFAULT '',
     tables JSONB DEFAULT '[]'::jsonb,
     waiters JSONB DEFAULT '[]'::jsonb,
     mercadopago_public_key TEXT DEFAULT '',
@@ -30,6 +31,7 @@ CREATE TABLE IF NOT EXISTS public.tenants (
     banner_url TEXT DEFAULT '',
     social_links JSONB DEFAULT '{"instagram": "", "facebook": "", "whatsapp": ""}'::jsonb,
     reviews_enabled BOOLEAN DEFAULT TRUE,
+    landing_config JSONB DEFAULT '{"enabled": false, "hero_style": "modern", "events": [], "promos": [], "videos": []}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -43,6 +45,7 @@ ALTER TABLE public.tenants ALTER COLUMN email SET NOT NULL;
 ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS delivery_password TEXT DEFAULT '';
 ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS bartender_password TEXT DEFAULT '';
 ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS waiter_password TEXT DEFAULT '';
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS animador_password TEXT DEFAULT '';
 ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS tables JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS waiters JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS mercadopago_public_key TEXT DEFAULT '';
@@ -53,7 +56,8 @@ ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS profile_picture_url TEXT DEF
 ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS banner_url TEXT DEFAULT '';
 ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS social_links JSONB DEFAULT '{"instagram": "", "facebook": "", "whatsapp": ""}'::jsonb;
 ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS reviews_enabled BOOLEAN DEFAULT TRUE;
-ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS enabled_roles TEXT[] DEFAULT ARRAY['admin', 'staff', 'kitchen', 'delivery', 'bartender', 'waiter']::TEXT[];
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS landing_config JSONB DEFAULT '{"enabled": false, "hero_style": "modern", "events": [], "promos": [], "videos": []}'::jsonb;
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS enabled_roles TEXT[] DEFAULT ARRAY['admin', 'staff', 'kitchen', 'delivery', 'bartender', 'waiter', 'animador']::TEXT[];
 ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';
 ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS last_online_ping TIMESTAMPTZ DEFAULT now();
 
@@ -136,6 +140,10 @@ WHERE delivery_password IS NULL;
 UPDATE public.tenants 
 SET bartender_password = '' 
 WHERE bartender_password IS NULL;
+
+UPDATE public.tenants 
+SET animador_password = '' 
+WHERE animador_password IS NULL;
 
 -- Migración para soportar múltiples departamentos por categoría
 ALTER TABLE public.categories ADD COLUMN IF NOT EXISTS target_departments TEXT[] DEFAULT ARRAY['kitchen']::TEXT[];
@@ -251,6 +259,8 @@ BEGIN
   ELSIF p_role = 'bartender' AND 'bartender' = ANY(v_tenant.enabled_roles) AND v_tenant.bartender_password = p_password THEN
     v_success := TRUE;
   ELSIF p_role = 'waiter' AND 'waiter' = ANY(v_tenant.enabled_roles) AND v_tenant.waiter_password = p_password THEN
+    v_success := TRUE;
+  ELSIF p_role = 'animador' AND 'animador' = ANY(v_tenant.enabled_roles) AND v_tenant.animador_password = p_password THEN
     v_success := TRUE;
   END IF;
   
@@ -567,6 +577,37 @@ CREATE POLICY "Lectura pública de reseñas" ON public.reviews FOR SELECT USING 
 DROP POLICY IF EXISTS "Inserción pública de reseñas" ON public.reviews;
 CREATE POLICY "Inserción pública de reseñas" ON public.reviews FOR INSERT WITH CHECK (true);
 
+-- 12.6. Tabla de Interacciones Sociales (Rockola / Social Dining)
+CREATE TABLE IF NOT EXISTS public.social_interactions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE,
+    interaction_type TEXT NOT NULL, -- 'music_request', 'announcement', 'table_invite'
+    from_table TEXT,
+    to_table TEXT,
+    is_anonymous BOOLEAN DEFAULT FALSE,
+    message TEXT,
+    status TEXT DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Habilitar RLS
+ALTER TABLE public.social_interactions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Lectura publica de interacciones (con filtros)" ON public.social_interactions;
+CREATE POLICY "Lectura publica de interacciones (con filtros)" ON public.social_interactions 
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Insercion publica de interacciones" ON public.social_interactions;
+CREATE POLICY "Insercion publica de interacciones" ON public.social_interactions 
+    FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Update publico interacciones (staff)" ON public.social_interactions;
+CREATE POLICY "Update publico interacciones (staff)" ON public.social_interactions 
+    FOR UPDATE USING (tenant_id = public.get_tenant_id_header());
+
+-- Asignar default tenant_id
+ALTER TABLE public.social_interactions ALTER COLUMN tenant_id SET DEFAULT public.get_tenant_id_header();
+
 
 -- 13. Habilitar Replicación en Tiempo Real para todas las tablas necesarias
 -- En Supabase, para que los eventos en tiempo real se propaguen, las tablas deben estar en la publicación supabase_realtime.
@@ -633,6 +674,11 @@ BEGIN
 
     BEGIN
         ALTER PUBLICATION supabase_realtime ADD TABLE public.reviews;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+
+    BEGIN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public.social_interactions;
     EXCEPTION WHEN OTHERS THEN NULL;
     END;
 END $$;

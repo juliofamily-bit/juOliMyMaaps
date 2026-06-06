@@ -3,7 +3,7 @@ import { supabase as rawSupabase, broadcastTenantChange } from '@/lib/supabase';
 import { Product, Ingredient, Order, Expense, OrderStatus, Category, ProductIngredient, IngredientBatch, ProductOffer } from '@/types/database';
 import { PRESET_IMAGES, NEON_ICONS } from '@/lib/constants';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, ReferenceLine } from 'recharts';
-import { Plus, Trash2, Edit, TrendingUp, DollarSign, Package, Layers, History, ChevronRight, X, Save, Check, Upload, Image as ImageIcon, Wallet, Receipt, ArrowUpCircle, ArrowDownCircle, Calendar, FilterX, Star, StarOff, PieChart, Paintbrush, LayoutGrid, Sun, Moon, CheckCircle, AlertCircle, Loader2, Share2, AlertTriangle, CalendarRange, Trophy, Smartphone, Instagram, Facebook, Phone, Printer, Download, Award, Coins, Search, MessageCircle, Gift, RefreshCw, Settings } from 'lucide-react';
+import { Plus, Trash2, Edit, TrendingUp, DollarSign, Package, Layers, History, ChevronRight, X, Save, Check, Upload, Image as ImageIcon, Wallet, Receipt, ArrowUpCircle, ArrowDownCircle, Calendar, FilterX, Star, StarOff, PieChart, Paintbrush, LayoutGrid, Sun, Moon, CheckCircle, AlertCircle, Loader2, Share2, AlertTriangle, CalendarRange, Trophy, Smartphone, Instagram, Facebook, Phone, Printer, Download, Award, Coins, Search, MessageCircle, Gift, RefreshCw, Settings, ChevronUp, ChevronDown, Users, Truck, Map as MapIcon, Utensils } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { PrintableQRPoster } from './PrintableQRPoster';
 import { AdminEmployeeTab } from './AdminEmployeeTab';
@@ -129,6 +129,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
     const [view, setView] = useState<'dashboard' | 'stock' | 'products' | 'balance' | 'sales' | 'config' | 'tables' | 'fiscal' | 'reports' | 'loyalty' | 'employees' | 'subscription'>('dashboard');
     const [lockedFeatureModal, setLockedFeatureModal] = useState<string | null>(null);
+    const [expandedConfigSection, setExpandedConfigSection] = useState<string | null>(null);
 
     const isViewLocked = (v: string): boolean => {
         if (!planFeatures || planFeatures.length === 0) return false;
@@ -620,6 +621,19 @@ const AdminTab: React.FC<AdminTabProps> = ({
         sunday: { open: '', close: '' }
     });
 
+    // Landing Config State
+    const [cfgLandingConfig, setCfgLandingConfig] = useState<any>({
+        enabled: false,
+        hero_style: 'modern',
+        interactive_wall_enabled: false,
+        hero_video_url: '',
+        hero_image_url: '',
+        promos: [],
+        events: [],
+        custom_carousel: []
+    });
+
+
     // Product Offer Form State
     const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
     
@@ -664,6 +678,68 @@ const AdminTab: React.FC<AdminTabProps> = ({
         }
         const { data } = supabase.storage.from('products').getPublicUrl(filePath);
         setCfgBannerUrl(data.publicUrl);
+    };
+
+    const handleLandingImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const fileExt = file.name.split('.').pop();
+        const fileName = `landing_hero_${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
+        const { error: uploadError } = await supabase.storage.from('products').upload(filePath, file);
+        if (uploadError) {
+            console.error('Error uploading landing image:', uploadError);
+            alert('Error al subir la imagen');
+            return;
+        }
+        const { data } = supabase.storage.from('products').getPublicUrl(filePath);
+        setCfgLandingConfig({ ...cfgLandingConfig, hero_image_url: data.publicUrl });
+    };
+
+    const handleCarouselImageUpload = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const fileExt = file.name.split('.').pop();
+        const fileName = `carousel_${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
+        const { error: uploadError } = await supabase.storage.from('products').upload(filePath, file);
+        if (uploadError) {
+            console.error('Error uploading carousel image:', uploadError);
+            alert('Error al subir la imagen del carrusel');
+            return;
+        }
+        const { data } = supabase.storage.from('products').getPublicUrl(filePath);
+        
+        const newCarousel = [...(cfgLandingConfig.custom_carousel || [])];
+        newCarousel[index].image_url = data.publicUrl;
+        setCfgLandingConfig({ ...cfgLandingConfig, custom_carousel: newCarousel });
+    };
+
+    const handleAddCarouselSlide = () => {
+        const current = cfgLandingConfig.custom_carousel || [];
+        if (current.length >= 10) {
+            alert('Límite máximo de 10 diapositivas alcanzado.');
+            return;
+        }
+        const newSlide = {
+            id: Date.now().toString(),
+            image_url: '',
+            title: 'Nuevo Título',
+            description: 'Descripción breve para atraer a tus clientes...',
+            badge_text: ''
+        };
+        setCfgLandingConfig({ ...cfgLandingConfig, custom_carousel: [...current, newSlide] });
+    };
+
+    const handleRemoveCarouselSlide = (id: string) => {
+        const current = cfgLandingConfig.custom_carousel || [];
+        setCfgLandingConfig({ ...cfgLandingConfig, custom_carousel: current.filter((s: any) => s.id !== id) });
+    };
+
+    const handleUpdateCarouselSlide = (index: number, field: string, value: string) => {
+        const current = [...(cfgLandingConfig.custom_carousel || [])];
+        current[index] = { ...current[index], [field]: value };
+        setCfgLandingConfig({ ...cfgLandingConfig, custom_carousel: current });
     };
 
     const handleCategoryIconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -778,6 +854,20 @@ const AdminTab: React.FC<AdminTabProps> = ({
             setCfgDeliveryAppsPanicActive((tenant as any).is_delivery_apps_panic_active || false);
             if ((tenant as any).delivery_apps_schedule) {
                 setCfgDeliveryAppsSchedule((tenant as any).delivery_apps_schedule);
+            }
+
+            // Cargar configuración de Landing Page
+            if ((tenant as any).landing_config) {
+                setCfgLandingConfig({
+                    enabled: (tenant as any).landing_config.enabled || false,
+                    hero_style: (tenant as any).landing_config.hero_style || 'modern',
+                    interactive_wall_enabled: (tenant as any).landing_config.interactive_wall_enabled || false,
+                    hero_video_url: (tenant as any).landing_config.hero_video_url || '',
+                    hero_image_url: (tenant as any).landing_config.hero_image_url || '',
+                    promos: (tenant as any).landing_config.promos || [],
+                    events: (tenant as any).landing_config.events || [],
+                    custom_carousel: (tenant as any).landing_config.custom_carousel || []
+                });
             }
 
             // Cargar configuraciones de Fidelización (Micro-CRM)
@@ -1335,7 +1425,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
                         delivery_apps_token: cfgDeliveryAppsToken,
                         delivery_apps_markup: cfgDeliveryAppsMarkup,
                         is_delivery_apps_panic_active: cfgDeliveryAppsPanicActive,
-                        delivery_apps_schedule: cfgDeliveryAppsSchedule
+                        delivery_apps_schedule: cfgDeliveryAppsSchedule,
+                        landing_config: cfgLandingConfig
                     })
                     .eq('id', tenant.id)
                     .select()
@@ -2264,7 +2355,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
     return (
         <div className="space-y-6 pb-4 max-w-5xl mx-auto px-2">
             <div className="flex gap-2 bg-slate-900/50 p-1 rounded-2xl border border-slate-800 overflow-x-auto scrollbar-hide">
-                {(['dashboard', 'stock', 'products', 'balance', 'sales', 'reports', 'tables', 'fiscal', 'loyalty', 'employees', 'config', 'subscription'] as const).map(v => {
+                {(['dashboard', 'products', 'stock', 'sales', 'balance', 'config'] as const).map(v => {
                     const locked = isViewLocked(v);
                     return (
                         <button
@@ -2273,7 +2364,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 if (locked) {
                                     setLockedFeatureModal(v);
                                 } else {
-                                    setView(v);
+                                    setView(v as any);
+                                    if (v === 'config') setExpandedConfigSection(null);
                                 }
                             }}
                             className={`flex-1 py-3 px-4 rounded-xl text-[9px] font-black uppercase transition-all whitespace-nowrap ${
@@ -2282,16 +2374,11 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             style={view === v ? { backgroundColor: tenant?.theme_colors?.primary || '#f97316' } : {}}
                         >
                             {v === 'dashboard' ? <TrendingUp size={14} className="mx-auto" /> :
-                                v === 'stock' ? (locked ? 'Stock 🔒' : 'Stock') :
-                                    v === 'products' ? (locked ? 'Menú 🔒' : 'Menú') :
-                                        v === 'balance' ? (locked ? 'Balance 🔒' : 'Balance') :
-                                            v === 'sales' ? (locked ? 'Ventas 🔒' : 'Ventas') :
-                                                v === 'reports' ? (locked ? 'Reportes 🔒' : 'Reportes') :
-                                                    v === 'tables' ? (locked ? 'Mesas 🔒' : 'Mesas') : 
-                                                        v === 'fiscal' ? (locked ? 'Fiscal 🔒' : 'Fiscal') :
-                                                            v === 'loyalty' ? (locked ? 'Club Clientes 🔒' : 'Club Clientes') :
-                                                                v === 'employees' ? (locked ? 'Personal 🔒' : 'Personal') : 
-                                                                    v === 'subscription' ? 'Suscripción' : 'Ajustes'}
+                            v === 'stock' ? 'Stock' :
+                            v === 'products' ? 'Menu' :
+                            v === 'balance' ? 'Balance' :
+                            v === 'sales' ? (locked ? 'Ventas 🔒' : 'Ventas') :
+                            v === 'config' ? 'Ajustes' : v}
                         </button>
                     );
                 })}
@@ -4237,18 +4324,37 @@ const AdminTab: React.FC<AdminTabProps> = ({
                 );
             })()}
 
-            {view === 'employees' && (
-                <AdminEmployeeTab tenant={tenant} />
-            )}
-
             {view === 'config' && (
                 <div className="space-y-6 animate-in slide-in-from-bottom-4">
-                    <div className="px-2">
-                        <h3 className="font-black uppercase italic text-sm">Configuración de Marca y Roles</h3>
-                        <p className="text-slate-500 text-[10px] uppercase font-bold mt-1">Ajusta los colores y define los procesos activos de tu negocio</p>
+                    <div className="px-2 mb-6">
+                        <h3 className="font-black uppercase italic text-lg" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>Ajustes y Configuración</h3>
+                        <p className="text-slate-500 text-[10px] uppercase font-bold mt-1">Configura todos los aspectos de tu restaurante de forma centralizada</p>
                     </div>
 
-                    <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5">
+                    <div className="space-y-4">
+
+                        {/* Accordion: Identidad de Color */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => setExpandedConfigSection(prev => prev === 'identidad' ? null : 'identidad')}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                    true 
+                                      ? (expandedConfigSection === 'identidad' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400')
+                                      : (expandedConfigSection === 'identidad' ? 'bg-slate-800 border-slate-600 text-white' : 'bg-slate-950 border-slate-800 text-slate-500 opacity-80')
+                                }`}
+                                style={{
+                                    borderColor: true ? (expandedConfigSection === 'identidad' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                    color: true ? (expandedConfigSection === 'identidad' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                }}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Paintbrush className="w-5 h-5" />
+                                    <span className="font-bold uppercase text-sm tracking-wider">✅ Identidad de Color</span>
+                                </div>
+                                {expandedConfigSection === 'identidad' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                            {expandedConfigSection === 'identidad' && (
+                                <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 animate-in slide-in-from-top-2">
                         {/* 1. Tema de Colores */}
                         <div className="space-y-3">
                             <label className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
@@ -4342,6 +4448,59 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             </div>
                         </div>
 
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Accordion: Personal y Roles */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => setExpandedConfigSection(prev => prev === 'personal' ? null : 'personal')}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                    true 
+                                      ? (expandedConfigSection === 'personal' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400')
+                                      : (expandedConfigSection === 'personal' ? 'bg-slate-800 border-slate-600 text-white' : 'bg-slate-950 border-slate-800 text-slate-500 opacity-80')
+                                }`}
+                                style={{
+                                    borderColor: true ? (expandedConfigSection === 'personal' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                    color: true ? (expandedConfigSection === 'personal' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                }}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Users className="w-5 h-5" />
+                                    <span className="font-bold uppercase text-sm tracking-wider">✅ Personal y Roles</span>
+                                </div>
+                                {expandedConfigSection === 'personal' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                            {expandedConfigSection === 'personal' && (
+                                <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 animate-in slide-in-from-top-2">
+                                    <AdminEmployeeTab tenant={tenant} />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Accordion: Módulo de Envíos Propios */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => setExpandedConfigSection(prev => prev === 'envios' ? null : 'envios')}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                    cfgHasDelivery 
+                                      ? (expandedConfigSection === 'envios' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400')
+                                      : (expandedConfigSection === 'envios' ? 'bg-slate-800 border-slate-600 text-white' : 'bg-slate-950 border-slate-800 text-slate-500 opacity-80')
+                                }`}
+                                style={{
+                                    borderColor: cfgHasDelivery ? (expandedConfigSection === 'envios' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                    color: cfgHasDelivery ? (expandedConfigSection === 'envios' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                }}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Truck className="w-5 h-5" />
+                                    <span className="font-bold uppercase text-sm tracking-wider">{cfgHasDelivery ? '✅ ' : ''}Módulo de Envíos Propios</span>
+                                </div>
+                                {expandedConfigSection === 'envios' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                            {expandedConfigSection === 'envios' && (
+                                <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 animate-in slide-in-from-top-2">
                         {/* 2. Módulo de Envíos */}
                         <div className="space-y-3 pt-3 border-t border-white/5">
                             <label className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
@@ -4390,6 +4549,32 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             </label>
                         </div>
 
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Accordion: Zonas de Envío */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => setExpandedConfigSection(prev => prev === 'zonas' ? null : 'zonas')}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                    cfgHasDelivery 
+                                      ? (expandedConfigSection === 'zonas' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400')
+                                      : (expandedConfigSection === 'zonas' ? 'bg-slate-800 border-slate-600 text-white' : 'bg-slate-950 border-slate-800 text-slate-500 opacity-80')
+                                }`}
+                                style={{
+                                    borderColor: cfgHasDelivery ? (expandedConfigSection === 'zonas' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                    color: cfgHasDelivery ? (expandedConfigSection === 'zonas' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                }}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <MapIcon className="w-5 h-5" />
+                                    <span className="font-bold uppercase text-sm tracking-wider">{cfgHasDelivery ? '✅ ' : ''}Zonas de Envío</span>
+                                </div>
+                                {expandedConfigSection === 'zonas' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                            {expandedConfigSection === 'zonas' && (
+                                <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 animate-in slide-in-from-top-2">
                         {/* 2.5 Configuración de Zonas de Envío */}
                         {cfgHasDelivery && (
                             <div className="space-y-4 pt-3 border-t border-white/5 animate-in slide-in-from-top-2 duration-300">
@@ -4530,6 +4715,32 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             </div>
                         )}
                         
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Accordion: Cobros por Mercado Pago */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => setExpandedConfigSection(prev => prev === 'mp' ? null : 'mp')}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                    !!cfgMercadopagoAccessToken 
+                                      ? (expandedConfigSection === 'mp' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400')
+                                      : (expandedConfigSection === 'mp' ? 'bg-slate-800 border-slate-600 text-white' : 'bg-slate-950 border-slate-800 text-slate-500 opacity-80')
+                                }`}
+                                style={{
+                                    borderColor: !!cfgMercadopagoAccessToken ? (expandedConfigSection === 'mp' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                    color: !!cfgMercadopagoAccessToken ? (expandedConfigSection === 'mp' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                }}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Wallet className="w-5 h-5" />
+                                    <span className="font-bold uppercase text-sm tracking-wider">{!!cfgMercadopagoAccessToken ? '✅ ' : ''}Cobros por Mercado Pago</span>
+                                </div>
+                                {expandedConfigSection === 'mp' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                            {expandedConfigSection === 'mp' && (
+                                <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 animate-in slide-in-from-top-2">
                         {/* 3. Mercado Pago */}
                         <div className="space-y-4 pt-3 border-t border-white/5">
                             <label className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1.5" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
@@ -4564,132 +4775,184 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             </div>
                         </div>
 
-                        {/* Módulo de Integración de Apps de Delivery */}
-                        <div className="space-y-4 pt-3 border-t border-white/5">
-                            <div className="flex items-center justify-between">
-                                <label className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1.5" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
-                                    🎒 Plataformas de Delivery (Rappi & PedidosYa)
-                                </label>
-                                <button
-                                    type="button"
-                                    onClick={() => setCfgDeliveryAppsEnabled(!cfgDeliveryAppsEnabled)}
-                                    className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                        cfgDeliveryAppsEnabled ? 'bg-orange-500' : 'bg-slate-800'
-                                    }`}
-                                >
-                                    <span
-                                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                            cfgDeliveryAppsEnabled ? 'translate-x-5' : 'translate-x-0'
-                                        }`}
-                                    />
-                                </button>
-                            </div>
 
-                            {cfgDeliveryAppsEnabled && (
-                                <div className="space-y-3 bg-slate-950/40 p-4 rounded-2xl border border-white/5 text-left animate-in slide-in-from-top-2 duration-200">
-                                    <span className="text-[9px] font-bold uppercase text-slate-400 block mb-1">Credenciales y Tiendas del Partner</span>
-                                    
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="space-y-1">
-                                            <label className="text-[8px] font-bold uppercase text-slate-500 block ml-1">ID Tienda Rappi</label>
-                                            <input
-                                                type="text"
-                                                value={cfgRappiStoreId}
-                                                onChange={(e) => setCfgRappiStoreId(e.target.value)}
-                                                placeholder="Ej: rappi_store_123"
-                                                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white text-xs outline-none focus:border-orange-500/50"
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[8px] font-bold uppercase text-slate-500 block ml-1">ID Tienda PedidosYa</label>
-                                            <input
-                                                type="text"
-                                                value={cfgPedidosyaStoreId}
-                                                onChange={(e) => setCfgPedidosyaStoreId(e.target.value)}
-                                                placeholder="Ej: py_store_456"
-                                                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white text-xs outline-none focus:border-orange-500/50"
-                                            />
-                                        </div>
-                                    </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="space-y-1">
-                                            <label className="text-[8px] font-bold uppercase text-slate-550 block ml-1">📈 Recargo de Precios en Apps (%)</label>
-                                            <input
-                                                type="number"
-                                                value={cfgDeliveryAppsMarkup}
-                                                onChange={(e) => setCfgDeliveryAppsMarkup(Math.max(0, parseInt(e.target.value) || 0))}
-                                                placeholder="Ej: 20"
-                                                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-orange-500/50"
-                                            />
-                                            <span className="text-[7px] text-slate-500 uppercase block font-semibold ml-1">Recargo automático para el catálogo de Rappi y PedidosYa</span>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[8px] font-bold uppercase text-slate-500 block ml-1">Token de Webhook API Seguro</label>
-                                            <input
-                                                type="password"
-                                                value={cfgDeliveryAppsToken}
-                                                onChange={(e) => setCfgDeliveryAppsToken(e.target.value)}
-                                                placeholder="••••••••••••••••••••••••••••••••"
-                                                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white text-xs outline-none focus:border-orange-500/50"
-                                            />
-                                            <span className="text-[7px] text-slate-550 uppercase block font-semibold ml-1">Clave de autenticación para recibir comanda externa</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Botón de pánico y Horarios */}
-                                    <div className="space-y-3 pt-3 border-t border-white/5">
-                                        <div className="flex items-center justify-between p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
-                                            <div>
-                                                <h4 className="text-red-400 font-bold text-[10px] uppercase">Botón de Pánico (Cerrar Persiana)</h4>
-                                                <p className="text-slate-400 text-[8px]">Al activarlo, se dejarán de recibir pedidos de apps inmediatamente sin importar el horario.</p>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => setCfgDeliveryAppsPanicActive(!cfgDeliveryAppsPanicActive)}
-                                                className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                                    cfgDeliveryAppsPanicActive ? 'bg-red-500' : 'bg-slate-800'
-                                                }`}
-                                            >
-                                                <span
-                                                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                                        cfgDeliveryAppsPanicActive ? 'translate-x-5' : 'translate-x-0'
-                                                    }`}
-                                                />
-                                            </button>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <label className="text-[8px] font-bold uppercase text-slate-500 block ml-1">Horarios de Atención para Apps</label>
-                                            <div className="grid gap-2">
-                                                {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => {
-                                                    const translateDay = { monday: 'Lunes', tuesday: 'Martes', wednesday: 'Miércoles', thursday: 'Jueves', friday: 'Viernes', saturday: 'Sábado', sunday: 'Domingo' }[day];
-                                                    return (
-                                                        <div key={day} className="flex items-center gap-2 bg-slate-900/50 p-2 rounded-lg border border-slate-800">
-                                                            <span className="text-[9px] font-bold uppercase w-16 text-slate-400">{translateDay}</span>
-                                                            <input
-                                                                type="time"
-                                                                value={cfgDeliveryAppsSchedule[day]?.open || ''}
-                                                                onChange={(e) => setCfgDeliveryAppsSchedule({ ...cfgDeliveryAppsSchedule, [day]: { ...cfgDeliveryAppsSchedule[day], open: e.target.value } })}
-                                                                className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white outline-none focus:border-orange-500 flex-1"
-                                                            />
-                                                            <span className="text-slate-500 text-xs">-</span>
-                                                            <input
-                                                                type="time"
-                                                                value={cfgDeliveryAppsSchedule[day]?.close || ''}
-                                                                onChange={(e) => setCfgDeliveryAppsSchedule({ ...cfgDeliveryAppsSchedule, [day]: { ...cfgDeliveryAppsSchedule[day], close: e.target.value } })}
-                                                                className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white outline-none focus:border-orange-500 flex-1"
-                                                            />
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
                             )}
                         </div>
 
+                        {/* Accordion: Integración Delivery Apps */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => setExpandedConfigSection(prev => prev === 'apps' ? null : 'apps')}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                    cfgDeliveryAppsEnabled 
+                                      ? (expandedConfigSection === 'apps' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400')
+                                      : (expandedConfigSection === 'apps' ? 'bg-slate-800 border-slate-600 text-white' : 'bg-slate-950 border-slate-800 text-slate-500 opacity-80')
+                                }`}
+                                style={{
+                                    borderColor: cfgDeliveryAppsEnabled ? (expandedConfigSection === 'apps' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                    color: cfgDeliveryAppsEnabled ? (expandedConfigSection === 'apps' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                }}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Smartphone className="w-5 h-5" />
+                                    <span className="font-bold uppercase text-sm tracking-wider">{cfgDeliveryAppsEnabled ? '✅ ' : ''}Integración Delivery Apps</span>
+                                </div>
+                                {expandedConfigSection === 'apps' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                            {expandedConfigSection === 'apps' && (
+                                <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 animate-in slide-in-from-top-2">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1.5" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
+                                            🎒 Plataformas de Delivery (Rappi & PedidosYa)
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCfgDeliveryAppsEnabled(!cfgDeliveryAppsEnabled)}
+                                            className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                                cfgDeliveryAppsEnabled ? 'bg-orange-500' : 'bg-slate-800'
+                                            }`}
+                                        >
+                                            <span
+                                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                                    cfgDeliveryAppsEnabled ? 'translate-x-5' : 'translate-x-0'
+                                                }`}
+                                            />
+                                        </button>
+                                    </div>
+
+                                    {cfgDeliveryAppsEnabled ? (
+                                        <div className="space-y-3 bg-slate-950/40 p-4 rounded-2xl border border-white/5 text-left animate-in slide-in-from-top-2 duration-200">
+                                            <span className="text-[9px] font-bold uppercase text-slate-400 block mb-1">Credenciales y Tiendas del Partner</span>
+                                            
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] font-bold uppercase text-slate-500 block ml-1">ID Tienda Rappi</label>
+                                                    <input
+                                                        type="text"
+                                                        value={cfgRappiStoreId}
+                                                        onChange={(e) => setCfgRappiStoreId(e.target.value)}
+                                                        placeholder="Ej: rappi_store_123"
+                                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white text-xs outline-none focus:border-orange-500/50"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] font-bold uppercase text-slate-500 block ml-1">ID Tienda PedidosYa</label>
+                                                    <input
+                                                        type="text"
+                                                        value={cfgPedidosyaStoreId}
+                                                        onChange={(e) => setCfgPedidosyaStoreId(e.target.value)}
+                                                        placeholder="Ej: py_store_456"
+                                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white text-xs outline-none focus:border-orange-500/50"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] font-bold uppercase text-slate-550 block ml-1">📈 Recargo de Precios en Apps (%)</label>
+                                                    <input
+                                                        type="number"
+                                                        value={cfgDeliveryAppsMarkup}
+                                                        onChange={(e) => setCfgDeliveryAppsMarkup(Math.max(0, parseInt(e.target.value) || 0))}
+                                                        placeholder="Ej: 20"
+                                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-orange-500/50"
+                                                    />
+                                                    <span className="text-[7px] text-slate-500 uppercase block font-semibold ml-1">Recargo automático para el catálogo de Rappi y PedidosYa</span>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[8px] font-bold uppercase text-slate-500 block ml-1">Token de Webhook API Seguro</label>
+                                                    <input
+                                                        type="password"
+                                                        value={cfgDeliveryAppsToken}
+                                                        onChange={(e) => setCfgDeliveryAppsToken(e.target.value)}
+                                                        placeholder="••••••••••••••••••••••••••••••••"
+                                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white text-xs outline-none focus:border-orange-500/50"
+                                                    />
+                                                    <span className="text-[7px] text-slate-550 uppercase block font-semibold ml-1">Clave de autenticación para recibir comanda externa</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Botón de pánico y Horarios */}
+                                            <div className="space-y-3 pt-3 border-t border-white/5">
+                                                <div className="flex items-center justify-between p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                                                    <div>
+                                                        <h4 className="text-red-400 font-bold text-[10px] uppercase">Botón de Pánico (Cerrar Persiana)</h4>
+                                                        <p className="text-slate-400 text-[8px]">Al activarlo, se dejarán de recibir pedidos de apps inmediatamente sin importar el horario.</p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setCfgDeliveryAppsPanicActive(!cfgDeliveryAppsPanicActive)}
+                                                        className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                                            cfgDeliveryAppsPanicActive ? 'bg-red-500' : 'bg-slate-800'
+                                                        }`}
+                                                    >
+                                                        <span
+                                                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                                                cfgDeliveryAppsPanicActive ? 'translate-x-5' : 'translate-x-0'
+                                                            }`}
+                                                        />
+                                                    </button>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <label className="text-[8px] font-bold uppercase text-slate-500 block ml-1">Horarios de Atención para Apps</label>
+                                                    <div className="grid gap-2">
+                                                        {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => {
+                                                            const translateDay = { monday: 'Lunes', tuesday: 'Martes', wednesday: 'Miércoles', thursday: 'Jueves', friday: 'Viernes', saturday: 'Sábado', sunday: 'Domingo' }[day as keyof typeof cfgDeliveryAppsSchedule];
+                                                            return (
+                                                                <div key={day} className="flex items-center gap-2 bg-slate-900/50 p-2 rounded-lg border border-slate-800">
+                                                                    <span className="text-[9px] font-bold uppercase w-16 text-slate-400">{translateDay}</span>
+                                                                    <input
+                                                                        type="time"
+                                                                        value={cfgDeliveryAppsSchedule[day as keyof typeof cfgDeliveryAppsSchedule]?.open || ''}
+                                                                        onChange={(e) => setCfgDeliveryAppsSchedule({ ...cfgDeliveryAppsSchedule, [day]: { ...cfgDeliveryAppsSchedule[day as keyof typeof cfgDeliveryAppsSchedule], open: e.target.value } })}
+                                                                        className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white outline-none focus:border-orange-500 flex-1"
+                                                                    />
+                                                                    <span className="text-slate-500 text-xs">-</span>
+                                                                    <input
+                                                                        type="time"
+                                                                        value={cfgDeliveryAppsSchedule[day as keyof typeof cfgDeliveryAppsSchedule]?.close || ''}
+                                                                        onChange={(e) => setCfgDeliveryAppsSchedule({ ...cfgDeliveryAppsSchedule, [day]: { ...cfgDeliveryAppsSchedule[day as keyof typeof cfgDeliveryAppsSchedule], close: e.target.value } })}
+                                                                        className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white outline-none focus:border-orange-500 flex-1"
+                                                                    />
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="text-[10px] text-slate-500 font-bold uppercase italic mt-4">La integración está deshabilitada.</p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Accordion: Perfil y Redes Sociales */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => setExpandedConfigSection(prev => prev === 'social' ? null : 'social')}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                    true 
+                                      ? (expandedConfigSection === 'social' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400')
+                                      : (expandedConfigSection === 'social' ? 'bg-slate-800 border-slate-600 text-white' : 'bg-slate-950 border-slate-800 text-slate-500 opacity-80')
+                                }`}
+                                style={{
+                                    borderColor: true ? (expandedConfigSection === 'social' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                    color: true ? (expandedConfigSection === 'social' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                }}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Share2 className="w-5 h-5" />
+                                    <span className="font-bold uppercase text-sm tracking-wider">✅ Perfil y Redes Sociales</span>
+                                </div>
+                                {expandedConfigSection === 'social' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                            {expandedConfigSection === 'social' && (
+                                <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 animate-in slide-in-from-top-2">
                         {/* 4. Perfil Público y Redes Sociales */}
                         <div className="space-y-4 pt-3 border-t border-white/5">
                             <label className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1.5" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
@@ -5055,7 +5318,332 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 </div>
                             </div>
                         )}
+                                </div>
+                            )}
+                        </div>
 
+                        {/* Accordion: Módulo de Reservas */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => setExpandedConfigSection(prev => prev === 'reservas' ? null : 'reservas')}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                    cfgReservationsEnabled 
+                                      ? (expandedConfigSection === 'reservas' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400')
+                                      : (expandedConfigSection === 'reservas' ? 'bg-slate-800 border-slate-600 text-white' : 'bg-slate-950 border-slate-800 text-slate-500 opacity-80')
+                                }`}
+                                style={{
+                                    borderColor: cfgReservationsEnabled ? (expandedConfigSection === 'reservas' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                    color: cfgReservationsEnabled ? (expandedConfigSection === 'reservas' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                }}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Calendar className="w-5 h-5" />
+                                    <span className="font-bold uppercase text-sm tracking-wider">{cfgReservationsEnabled ? '✅ ' : ''}Módulo de Reservas</span>
+                                </div>
+                                {expandedConfigSection === 'reservas' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                            {expandedConfigSection === 'reservas' && (
+                                <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 animate-in slide-in-from-top-2">
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase italic">Módulo de reservas activo.</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Accordion: Landing Page y Portal */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => setExpandedConfigSection(prev => prev === 'landing' ? null : 'landing')}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                    cfgLandingConfig.enabled 
+                                      ? (expandedConfigSection === 'landing' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400')
+                                      : (expandedConfigSection === 'landing' ? 'bg-slate-800 border-slate-600 text-white' : 'bg-slate-950 border-slate-800 text-slate-500 opacity-80')
+                                }`}
+                                style={{
+                                    borderColor: cfgLandingConfig.enabled ? (expandedConfigSection === 'landing' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                    color: cfgLandingConfig.enabled ? (expandedConfigSection === 'landing' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                }}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <LayoutGrid className="w-5 h-5" />
+                                    <span className="font-bold uppercase text-sm tracking-wider">{cfgLandingConfig.enabled ? '✅ ' : ''}Landing Page y Portal</span>
+                                </div>
+                                {expandedConfigSection === 'landing' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                            {expandedConfigSection === 'landing' && (
+                                <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 animate-in slide-in-from-top-2">
+                                    {/* Enable Landing Page */}
+                                    <div className="space-y-4 pt-3">
+                                        <label className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1.5" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
+                                            <LayoutGrid size={12} /> Estado de Landing Page
+                                        </label>
+                                        <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-2xl border border-white/5">
+                                            <div>
+                                                <h4 className="text-white text-xs font-bold uppercase tracking-wider">Landing Pública</h4>
+                                                <p className="text-[9px] text-slate-400 mt-1 uppercase">Muestra una página de inicio antes del menú.</p>
+                                            </div>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="sr-only peer"
+                                                    checked={cfgLandingConfig.enabled}
+                                                    onChange={(e) => setCfgLandingConfig({ ...cfgLandingConfig, enabled: e.target.checked })}
+                                                />
+                                                <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all" style={{ backgroundColor: cfgLandingConfig.enabled ? (tenant?.theme_colors?.primary || '#f97316') : undefined }}></div>
+                                            </label>
+                                        </div>
+
+                                        <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-2xl border border-white/5">
+                                            <div>
+                                                <h4 className="text-white text-xs font-bold uppercase tracking-wider">Muro Interactivo</h4>
+                                                <p className="text-[9px] text-slate-400 mt-1 uppercase">Permite ver el chat y música en la landing.</p>
+                                            </div>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="sr-only peer"
+                                                    checked={cfgLandingConfig.interactive_wall_enabled}
+                                                    onChange={(e) => setCfgLandingConfig({ ...cfgLandingConfig, interactive_wall_enabled: e.target.checked })}
+                                                />
+                                                <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all" style={{ backgroundColor: cfgLandingConfig.interactive_wall_enabled ? (tenant?.theme_colors?.primary || '#f97316') : undefined }}></div>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    {/* Hero Configuration */}
+                                    <div className="space-y-4 pt-3 border-t border-white/5">
+                                        <label className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1.5" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
+                                            <ImageIcon size={12} /> Imagen de Ambiente (Fondo Principal)
+                                        </label>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Estilo de Portada</label>
+                                            <select 
+                                                value={cfgLandingConfig.hero_style || 'gradient'}
+                                                onChange={(e) => setCfgLandingConfig({ ...cfgLandingConfig, hero_style: e.target.value })}
+                                                className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white text-xs focus:outline-none focus:border-orange-500 transition-colors"
+                                            >
+                                                <option value="gradient">Solo Degradado Oscuro</option>
+                                                <option value="image">Imagen Fotográfica</option>
+                                                <option value="video">Video (URL)</option>
+                                            </select>
+                                        </div>
+
+                                        {cfgLandingConfig.hero_style === 'video' && (
+                                            <div className="space-y-2 animate-in fade-in zoom-in-95">
+                                                <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Video de Fondo (YouTube/MP4 URL)</label>
+                                                <input 
+                                                    type="text" 
+                                                    value={cfgLandingConfig.hero_video_url || ''}
+                                                    onChange={(e) => setCfgLandingConfig({ ...cfgLandingConfig, hero_video_url: e.target.value })}
+                                                    className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white text-xs focus:outline-none focus:border-orange-500 transition-colors"
+                                                    placeholder="Ej: https://..."
+                                                />
+                                            </div>
+                                        )}
+
+                                        {cfgLandingConfig.hero_style === 'image' && (
+                                            <div className="space-y-4 animate-in fade-in zoom-in-95">
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Subir Imagen de Portada</label>
+                                                    <div className="flex gap-2">
+                                                        <input 
+                                                            type="text" 
+                                                            value={cfgLandingConfig.hero_image_url || ''}
+                                                            onChange={(e) => setCfgLandingConfig({ ...cfgLandingConfig, hero_image_url: e.target.value })}
+                                                            className="flex-1 bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white text-xs focus:outline-none focus:border-orange-500 transition-colors"
+                                                            placeholder="Sube una imagen o pega la URL"
+                                                        />
+                                                        <label className="flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-white rounded-xl px-4 cursor-pointer transition-colors border border-white/10">
+                                                            <Upload size={16} />
+                                                            <input 
+                                                                type="file" 
+                                                                accept="image/*" 
+                                                                onChange={async (e) => {
+                                                                    await handleLandingImageUpload(e);
+                                                                    setCfgLandingConfig(prev => ({ ...prev, hero_style: 'image' }));
+                                                                }} 
+                                                                className="hidden" 
+                                                            />
+                                                        </label>
+                                                    </div>
+                                                </div>
+
+                                                {/* Alineación/Encuadre de la Imagen */}
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Encuadre (Alineación de la imagen)</label>
+                                                    <select 
+                                                        value={cfgLandingConfig.hero_position || 'center'}
+                                                        onChange={(e) => setCfgLandingConfig({ ...cfgLandingConfig, hero_position: e.target.value })}
+                                                        className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white text-xs focus:outline-none focus:border-orange-500 transition-colors"
+                                                    >
+                                                        <option value="center">Centro (Recomendado)</option>
+                                                        <option value="top">Arriba</option>
+                                                        <option value="bottom">Abajo</option>
+                                                        <option value="left">Izquierda</option>
+                                                        <option value="right">Derecha</option>
+                                                    </select>
+                                                    <p className="text-[9px] text-slate-500 pl-1">Ajusta esto si la parte importante de la foto se corta en el celular.</p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Preview box */}
+                                        <div className="mt-4 relative w-full h-40 rounded-2xl overflow-hidden border border-white/10 bg-slate-900 flex items-center justify-center">
+                                            {cfgLandingConfig.hero_style === 'image' && cfgLandingConfig.hero_image_url ? (
+                                                <img 
+                                                    src={cfgLandingConfig.hero_image_url} 
+                                                    alt="Hero Preview" 
+                                                    className="w-full h-full object-cover opacity-60" 
+                                                    style={{ objectPosition: cfgLandingConfig.hero_position || 'center' }}
+                                                />
+                                            ) : (
+                                                <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${tenant?.theme_colors?.primary || '#f97316'}40, #000000)` }} />
+                                            )}
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                <h3 className="text-white text-2xl font-black drop-shadow-md tracking-tight uppercase">Ambiente</h3>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Módulos de Venta Profesionales */}
+                                    <div className="space-y-4 pt-3 border-t border-white/5">
+                                        <label className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1.5" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
+                                            <Star size={12} /> Módulos Profesionales
+                                        </label>
+
+                                        {/* Nuestra Esencia */}
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Nuestra Esencia (Historia/Filosofía)</label>
+                                            <textarea 
+                                                value={cfgLandingConfig.about_text || ''}
+                                                onChange={(e) => setCfgLandingConfig({ ...cfgLandingConfig, about_text: e.target.value })}
+                                                className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white text-xs focus:outline-none focus:border-orange-500 transition-colors min-h-[80px]"
+                                                placeholder="Cuenta a tus clientes quiénes son, qué los hace especiales o la historia de tu cocina..."
+                                            />
+                                            <p className="text-[9px] text-slate-500 pl-1">Se mostrará como un bloque de texto premium en la landing.</p>
+                                        </div>
+
+                                        {/* Carrusel Destacados */}
+                                        <div className="flex items-center justify-between p-4 bg-slate-900/50 rounded-2xl border border-white/5 mt-4">
+                                            <div>
+                                                <h4 className="text-white text-xs font-bold uppercase tracking-wider flex items-center gap-2"><Utensils size={14} /> Carrusel de Destacados</h4>
+                                                <p className="text-[9px] text-slate-400 mt-1">Muestra dinámicamente platos del menú para tentar al cliente.</p>
+                                            </div>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="sr-only peer"
+                                                    checked={cfgLandingConfig.featured_products_enabled !== false}
+                                                    onChange={(e) => setCfgLandingConfig({ ...cfgLandingConfig, featured_products_enabled: e.target.checked })}
+                                                />
+                                                <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all" style={{ backgroundColor: cfgLandingConfig.featured_products_enabled !== false ? (tenant?.theme_colors?.primary || '#f97316') : undefined }}></div>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                        {/* GESTOR DE CARRUSEL DINÁMICO */}
+                                        <div className="space-y-4 pt-4 border-t border-white/5">
+                                            <div className="flex justify-between items-center">
+                                                <label className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1.5" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
+                                                    <ImageIcon size={12} /> Carrusel Dinámico (Slides)
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAddCarouselSlide}
+                                                    className="bg-white/10 hover:bg-white/20 text-[9px] text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors"
+                                                >
+                                                    <Plus size={12} /> Añadir Slide ({(cfgLandingConfig.custom_carousel || []).length}/10)
+                                                </button>
+                                            </div>
+                                            
+                                            <div className="space-y-4">
+                                                {(cfgLandingConfig.custom_carousel || []).map((slide: any, idx: number) => (
+                                                    <div key={slide.id} className="bg-slate-900/50 border border-white/5 rounded-2xl p-4 space-y-3 relative">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveCarouselSlide(slide.id)}
+                                                            className="absolute top-3 right-3 text-red-500 hover:text-red-400 bg-red-500/10 p-1.5 rounded-lg transition-colors"
+                                                            title="Eliminar Slide"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                        
+                                                        <div className="flex flex-col sm:flex-row gap-4">
+                                                            {/* Columna Izquierda: Imagen */}
+                                                            <div className="w-full sm:w-1/3">
+                                                                <div className="aspect-video bg-slate-950 rounded-xl border border-white/10 overflow-hidden relative group flex items-center justify-center">
+                                                                    {slide.image_url ? (
+                                                                        <img src={slide.image_url} alt="Slide" className="w-full h-full object-cover" />
+                                                                    ) : (
+                                                                        <div className="text-slate-600 flex flex-col items-center">
+                                                                            <ImageIcon size={24} />
+                                                                            <span className="text-[9px] mt-1">Sin imagen</span>
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                                                                        <label className="bg-orange-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg cursor-pointer hover:bg-orange-600 transition-colors flex items-center gap-1">
+                                                                            <Upload size={12} /> Subir
+                                                                            <input type="file" accept="image/*" onChange={(e) => handleCarouselImageUpload(idx, e)} className="hidden" />
+                                                                        </label>
+                                                                    </div>
+                                                                </div>
+                                                                <input
+                                                                    type="text"
+                                                                    value={slide.image_url}
+                                                                    onChange={(e) => handleUpdateCarouselSlide(idx, 'image_url', e.target.value)}
+                                                                    placeholder="URL de la imagen..."
+                                                                    className="w-full mt-2 bg-slate-950 border border-white/10 rounded-lg px-2 py-1.5 text-white text-[9px] outline-none"
+                                                                />
+                                                            </div>
+                                                            
+                                                            {/* Columna Derecha: Textos */}
+                                                            <div className="w-full sm:w-2/3 space-y-2 pt-6 sm:pt-0">
+                                                                <div>
+                                                                    <label className="text-[8px] font-bold text-slate-500 uppercase ml-1 block mb-0.5">Título del Slide</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={slide.title}
+                                                                        onChange={(e) => handleUpdateCarouselSlide(idx, 'title', e.target.value)}
+                                                                        className="w-full bg-slate-950 border border-white/10 rounded-lg px-3 py-2 text-white text-[11px] font-bold outline-none focus:border-orange-500"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="text-[8px] font-bold text-slate-500 uppercase ml-1 block mb-0.5">Descripción</label>
+                                                                    <textarea
+                                                                        value={slide.description}
+                                                                        onChange={(e) => handleUpdateCarouselSlide(idx, 'description', e.target.value)}
+                                                                        className="w-full bg-slate-950 border border-white/10 rounded-lg px-3 py-2 text-white text-[10px] outline-none focus:border-orange-500 min-h-[60px]"
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="text-[8px] font-bold text-slate-500 uppercase ml-1 block mb-0.5">Texto Destacado (Opcional, ej: "A 120 personas les gustó")</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={slide.badge_text}
+                                                                        onChange={(e) => handleUpdateCarouselSlide(idx, 'badge_text', e.target.value)}
+                                                                        placeholder='Ej: "A 120 personas les gustó esto"'
+                                                                        className="w-full bg-slate-950 border border-white/10 rounded-lg px-3 py-2 text-white text-[10px] outline-none focus:border-orange-500"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                {(cfgLandingConfig.custom_carousel || []).length === 0 && (
+                                                    <div className="text-center p-6 bg-slate-900/30 rounded-2xl border border-white/5 border-dashed">
+                                                        <ImageIcon className="mx-auto text-slate-600 mb-2" size={24} />
+                                                        <p className="text-[10px] text-slate-500">Aún no has agregado ninguna diapositiva al carrusel.</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                </div>
+                            )}
+                        </div>
+
+                    </div>
+                    
+                    <div className="mt-8 pt-4 border-t border-slate-800 space-y-4">
                         {/* Status Messages */}
                         {configError && (
                             <div className="flex items-center gap-2 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl">
@@ -5063,30 +5651,6 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 <p className="text-red-500 text-[10px] font-bold uppercase tracking-wide leading-tight">{configError}</p>
                             </div>
                         )}
-
-                        {/* Print QR Poster Section */}
-                        <div className="space-y-3 pt-4 border-t border-white/10 mt-4">
-                            <label className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1.5" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
-                                <Share2 size={12} /> Difusión del Menú
-                            </label>
-                            <p className="text-[8px] font-bold text-slate-400 uppercase">
-                                Comparte el menú digital con tus clientes enviando el enlace por WhatsApp o imprime un código QR gigante para el local.
-                            </p>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={handleShareMenuLink}
-                                    className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 border border-indigo-500/20 text-white font-black rounded-xl uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2 text-[10px]"
-                                >
-                                    <Share2 size={14} /> Compartir Enlace
-                                </button>
-                                <button
-                                    onClick={() => handlePrintQR()}
-                                    className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-black rounded-xl uppercase tracking-widest active:scale-95 transition-all flex items-center justify-center gap-2 text-[10px]"
-                                >
-                                    <Printer size={14} /> Imprimir QR
-                                </button>
-                            </div>
-                        </div>
 
                         {configSuccess && (
                             <div className="flex items-center gap-2 p-4 bg-green-500/10 border border-green-500/20 rounded-2xl">

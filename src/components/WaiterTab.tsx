@@ -280,8 +280,8 @@ export default function WaiterTab({
         };
     }, [tenant?.id]);
 
-    // Función para liberar una mesa marcada como ocupada por QR
-    const handleFreeTable = async (tableId: string) => {
+    // Función manual para cambiar estado de ocupación de la mesa
+    const handleToggleOccupancy = async (tableId: string, newOccupiedStatus: boolean) => {
         if (!tenant?.id) return;
         try {
             // JIT Fetch para evitar condición de carrera
@@ -290,7 +290,7 @@ export default function WaiterTab({
             
             const updatedTables = currentTables.map((t: any) => {
                 if (t.id === tableId) {
-                    return { ...t, is_occupied: false };
+                    return { ...t, is_occupied: newOccupiedStatus };
                 }
                 return t;
             });
@@ -306,10 +306,9 @@ export default function WaiterTab({
 
             if (error) throw error;
             broadcastTenantChange(tenant.id);
-            alert("🍽️ Mesa desocupada con éxito.");
         } catch (err) {
-            console.error('Error al desocupar mesa:', err);
-            alert('Error de conexión al liberar la mesa.');
+            console.error('Error al cambiar ocupación de mesa:', err);
+            alert('Error de conexión al actualizar la mesa.');
         }
     };
 
@@ -631,6 +630,17 @@ export default function WaiterTab({
     
     // Mesa seleccionada para el detalle (Modal)
     const [selectedTable, setSelectedTable] = useState<TableInfo | null>(null);
+    const [seenOrders, setSeenOrders] = useState<string[]>([]);
+
+    useEffect(() => {
+        if (selectedTable) {
+            const tableOrders = getTableOrders(selectedTable.id);
+            const newOrderIds = tableOrders.map(g => g.orderId).filter(id => !seenOrders.includes(id));
+            if (newOrderIds.length > 0) {
+                setSeenOrders(prev => [...prev, ...newOrderIds]);
+            }
+        }
+    }, [selectedTable, orders]);
 
     const { removeNotification, addNotification } = useNotifications();
     const primaryColor = tenantColors?.primary || '#f97316';
@@ -994,7 +1004,6 @@ export default function WaiterTab({
         try {
             const activeOrders = ordersRef.current.filter(o => 
                 (o.status === 'pending' || o.status === 'delivered') && 
-                o.payment_status !== 'pagado' &&
                 !o.is_archived &&
                 (
                     (o.table_number && o.table_number.trim() !== '') ||
@@ -1122,6 +1131,9 @@ export default function WaiterTab({
 
         const ordersInTable = getTableOrders(tableId);
         if (ordersInTable.length > 0) {
+            const hasNewOrder = ordersInTable.some(group => !seenOrders.includes(group.orderId));
+            if (hasNewOrder) return 'new_order'; // Naranja latido
+
             const hasReadyToServe = ordersInTable.some(group => 
                 group.items.some(item => item.status === 'delivered' && !item.is_served)
             );
@@ -1811,6 +1823,8 @@ export default function WaiterTab({
                                                 isLight 
                                                     ? (status === 'calling'
                                                         ? 'bg-gradient-to-br from-red-50 via-red-50/50 to-white border-red-300 shadow-[0_0_20px_rgba(239,68,68,0.15)] animate-pulse text-slate-900'
+                                                        : status === 'new_order'
+                                                            ? 'bg-gradient-to-br from-orange-50 via-orange-100 to-white border-orange-400 shadow-[0_0_20px_rgba(249,115,22,0.25)] animate-pulse text-slate-900'
                                                         : status === 'ready'
                                                             ? 'bg-gradient-to-br from-red-100/50 via-red-55 to-white border-red-450 shadow-[0_0_22px_rgba(239,68,68,0.22)] animate-pulse text-slate-900'
                                                             : status === 'occupied' || status === 'occupied_empty'
@@ -1818,6 +1832,8 @@ export default function WaiterTab({
                                                                 : 'bg-white border-slate-200/60 hover:border-slate-350 shadow-sm text-slate-900')
                                                     : (status === 'calling'
                                                         ? 'bg-gradient-to-br from-red-950/80 via-red-900/30 to-slate-950/90 border-red-500/50 shadow-[0_0_25px_rgba(239,68,68,0.3)] animate-pulse text-white bg-slate-950/60 backdrop-blur-xl'
+                                                        : status === 'new_order'
+                                                            ? 'bg-gradient-to-br from-orange-950/80 via-orange-900/40 to-slate-950/90 border-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.4)] animate-pulse text-white bg-slate-950/60 backdrop-blur-xl'
                                                         : status === 'ready'
                                                             ? 'bg-gradient-to-br from-red-950/90 via-red-900/40 to-slate-950/95 border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.45)] animate-pulse text-white bg-slate-950/60 backdrop-blur-xl'
                                                             : status === 'occupied' || status === 'occupied_empty'
@@ -1835,30 +1851,32 @@ export default function WaiterTab({
                                                     {table.description?.split(' ')[0] || 'Mesa'}
                                                 </span>
                                                 <div className="flex items-center gap-2">
-                                                    {hasPendingItems ? (
-                                                        <div className="flex items-center gap-1 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-lg shrink-0">
-                                                            <span className="relative flex h-2 w-2">
-                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)]"></span>
-                                                            </span>
-                                                            <span className="text-[7px] font-black uppercase text-red-400 tracking-wider">Ocupada</span>
-                                                        </div>
-                                                    ) : table.is_occupied ? (
-                                                        <div className="flex items-center gap-1 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-lg shrink-0">
-                                                            <span className="relative flex h-2 w-2">
-                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.9)]"></span>
-                                                            </span>
-                                                            <span className="text-[7px] font-black uppercase text-orange-400 tracking-wider">Ocupada</span>
-                                                        </div>
-                                                    ) : (
-                                                        <div className={`flex items-center gap-1 border px-2 py-0.5 rounded-lg shrink-0 ${
-                                                            isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/80 border-slate-800'
-                                                        }`}>
-                                                            <span className={`w-1.5 h-1.5 rounded-full ${isLight ? 'bg-slate-400' : 'bg-slate-650'}`} />
-                                                            <span className="text-[7px] font-black uppercase text-slate-500 tracking-wider">Libre</span>
-                                                        </div>
-                                                    )}
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleToggleOccupancy(table.id, !table.is_occupied);
+                                                        }}
+                                                        className={`flex items-center gap-1.5 px-2 py-1 rounded-lg shrink-0 transition-colors border ${
+                                                            table.is_occupied 
+                                                                ? 'bg-red-500/10 border-red-500/20 hover:bg-red-500/20' 
+                                                                : isLight ? 'bg-slate-50 border-slate-200 hover:bg-slate-100' : 'bg-slate-900/80 border-slate-800 hover:bg-slate-800'
+                                                        }`}
+                                                    >
+                                                        {table.is_occupied ? (
+                                                            <>
+                                                                <span className="relative flex h-2 w-2">
+                                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)]"></span>
+                                                                </span>
+                                                                <span className="text-[7px] font-black uppercase text-red-500 tracking-wider">Ocupada</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <span className={`w-1.5 h-1.5 rounded-full ${isLight ? 'bg-slate-400' : 'bg-slate-650'}`} />
+                                                                <span className="text-[7px] font-black uppercase text-slate-500 tracking-wider">Libre</span>
+                                                            </>
+                                                        )}
+                                                    </button>
                                                     <span className="w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)]" title="Tu mesa" />
                                                 </div>
                                             </div>
@@ -1922,7 +1940,7 @@ export default function WaiterTab({
                                                                             {item.quantity}x {item.product?.name || 'Producto'}
                                                                         </span>
                                                                         {item.notes && (
-                                                                            <span className="text-[7.5px] font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-md mt-0.5 self-start tracking-wider truncate max-w-[150px] uppercase">
+                                                                            <span className="text-[7.5px] font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-md mt-0.5 self-start tracking-wider whitespace-normal break-words leading-snug uppercase w-full">
                                                                                 ⚠️ NOTA: {item.notes}
                                                                             </span>
                                                                         )}
@@ -1992,9 +2010,9 @@ export default function WaiterTab({
                                                 </div>
                                                 {table.is_occupied && (
                                                     <button
-                                                        onClick={async (e) => {
+                                                        onClick={(e) => {
                                                             e.stopPropagation();
-                                                            await handleFreeTable(table.id);
+                                                            handleToggleOccupancy(table.id, false);
                                                         }}
                                                         className={`text-[7px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl flex items-center gap-1 active:scale-95 transition-all w-full justify-center shadow-sm border ${
                                                             isLight 
@@ -2165,9 +2183,9 @@ export default function WaiterTab({
                                         )}
                                         {table.is_occupied && !isAssignedToOther && (
                                             <button
-                                                onClick={async (e) => {
+                                                onClick={(e) => {
                                                     e.stopPropagation();
-                                                    await handleFreeTable(table.id);
+                                                    handleToggleOccupancy(table.id, false);
                                                 }}
                                                 className={`text-[6.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md mt-0.5 active:scale-95 transition-all w-full text-center border ${
                                                     isLight 
@@ -2866,26 +2884,36 @@ export default function WaiterTab({
                                                 {tableOrders.filter(group => !group.items.every(i => i.is_served)).map(group => {
                                                     const orderObj = orders.find(o => o.id === group.orderId);
                                                     const isPendingPayment = orderObj?.payment_status !== 'pagado';
-                                                    const isNotApproved = !orderObj?.table_number && (orderObj as any)?.is_approved_for_production === false;
+                                                    const isNotApproved = (orderObj as any)?.is_approved_for_production === false;
 
                                                     return (
                                                         <div key={group.orderId} className={`rounded-[1.8rem] border p-4 space-y-3 transition-all duration-300 ${
                                                             isPendingPayment && isNotApproved ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.15)] bg-gradient-to-br from-red-950/10 to-slate-950/20' : (isLight ? 'bg-slate-50/50 border-slate-200/80 shadow-sm' : 'border-white/5 bg-slate-900/30')
                                                         }`}>
-                                                            {/* CARTEL ROJO BRILLANTE Y BOTÓN EN MOZO */}
-                                                            {isPendingPayment && isNotApproved && (
-                                                                <div className="bg-red-650 text-white p-3 rounded-2xl text-[9px] font-black uppercase tracking-wider flex justify-between items-center animate-pulse gap-2">
-                                                                    <span>⚠️ PENDIENTE DE PAGO</span>
-                                                                    {isAssigned && (
-                                                                        <button
-                                                                            onClick={(e) => {
-                                                                                e.stopPropagation();
-                                                                                handleSendOrderToProduction(group.orderId);
-                                                                            }}
-                                                                            className="bg-white text-red-650 hover:bg-slate-100 px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-wider transition-all shadow active:scale-95 shrink-0"
-                                                                        >
-                                                                            Enviar Pedido a Producción
-                                                                        </button>
+                                                            {/* CARTEL DE ESTADO DE PAGO (PAGADA / NO PAGADA) */}
+                                                            {isPendingPayment ? (
+                                                                <div className="bg-red-500/15 border-2 border-red-500/50 text-red-500 p-3 rounded-2xl text-[9px] font-black uppercase tracking-wider flex justify-between items-center animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                                                                    <span>⚠️ MESA NO PAGADA - Atentos para cobrar al final</span>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="bg-emerald-500/15 border-2 border-emerald-500/50 text-emerald-500 p-3 rounded-2xl text-[9px] font-black uppercase tracking-wider flex justify-between items-center shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                                                                    <span>✅ MESA PAGADA</span>
+                                                                </div>
+                                                            )}
+
+                                                            {/* CARTEL DISTINTIVO DE REGALO (SOCIAL DINING) */}
+                                                            {orderObj?.client_name?.startsWith('REGALO') && (
+                                                                <div className={`p-3.5 mb-2 rounded-[1.2rem] border animate-pulse flex flex-col gap-1.5 shadow-md ${isLight ? 'bg-fuchsia-50 border-fuchsia-200' : 'bg-fuchsia-500/20 border-fuchsia-500/40'}`}>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-base">🎁</span>
+                                                                        <span className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-fuchsia-800' : 'text-fuchsia-300'}`}>
+                                                                            {orderObj.client_name}
+                                                                        </span>
+                                                                    </div>
+                                                                    {group.items.some(i => i.notes?.includes('REGALO PARA:')) && (
+                                                                        <p className={`text-[10px] font-medium italic ${isLight ? 'text-fuchsia-700' : 'text-fuchsia-200'} pl-6`}>
+                                                                            Mensaje: {group.items.find(i => i.notes?.includes('REGALO PARA:'))?.notes?.split('| DE:')[0].replace('🎁 REGALO PARA:', '').trim()}
+                                                                        </p>
                                                                     )}
                                                                 </div>
                                                             )}
@@ -2966,7 +2994,7 @@ export default function WaiterTab({
                                                                                 </p>
                                                                                 <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                                                                                     {item.notes && (
-                                                                                        <span className="text-[7.5px] font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider max-w-[160px] truncate">
+                                                                                        <span className="text-[7.5px] font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider whitespace-normal break-words leading-snug w-full">
                                                                                             ⚠️ NOTA: {item.notes}
                                                                                         </span>
                                                                                     )}
@@ -3007,9 +3035,9 @@ export default function WaiterTab({
                                     <div className={`flex gap-2.5 pt-3 border-t shrink-0 w-full ${isLight ? 'border-slate-100' : 'border-white/5'}`}>
                                         {selectedTable.is_occupied && isAssigned && (
                                             <button
-                                                onClick={async () => {
+                                                onClick={() => {
                                                     if (confirm("¿Estás seguro de que deseas marcar esta mesa como DESOCUPADA? Pasará a estar libre para nuevos clientes.")) {
-                                                        await handleFreeTable(selectedTable.id);
+                                                        handleToggleOccupancy(selectedTable.id, false);
                                                         setSelectedTable(null);
                                                     }
                                                 }}

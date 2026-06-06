@@ -414,27 +414,8 @@ export default function OrderTab({ products, ingredients, categories, orders = [
             // Nota: Se removió la autoliberación automática de mesas en Caja al confirmar pago. La mesa
             // sigue ocupada por su respectivo mozo en salón hasta que el mozo la libere manualmente.
             
-            // Archivar todas las órdenes activas vinculadas a esta mesa para cerrarla al 100%
-            const activeMesaOrders = orders.filter(o => 
-                o.table_number === order.table_number && 
-                !o.is_archived && 
-                o.id !== order.id
-            );
-
-            for (const activeO of activeMesaOrders) {
-                await supabase
-                    .from('orders')
-                    .update({ is_archived: true, payment_status: 'pagado' })
-                    .eq('id', activeO.id);
-            }
-
-            // Si es pedido de salón, archivar también el actual
-            if (order.table_number) {
-                await supabase
-                    .from('orders')
-                    .update({ is_archived: true })
-                    .eq('id', order.id);
-            }
+            // Nota: Se removió la autoliberación automática de mesas en Caja al confirmar pago. La mesa
+            // sigue ocupada por su respectivo mozo en salón hasta que el mozo la libere manualmente.
 
             addNotification(`💵 Pago confirmado: Pedido #${order.order_number} cobrado en ${finalMethod.toUpperCase()}`, ['staff', 'admin'], 'success', tenant?.id);
             if (!isAfipBilling) {
@@ -912,13 +893,26 @@ export default function OrderTab({ products, ingredients, categories, orders = [
     };
 
     // Filtrar órdenes activas para la sección de entregas (Doble pestaña de Trazabilidad)
-    const pendingOrdersForDeliveries = orders.filter(o => 
-        o.status !== 'completed' && 
-        !o.is_archived
-    );
+    const pendingOrdersForDeliveries = orders.filter(o => {
+        if (o.status === 'completed' || o.is_archived) return false;
+
+        const isPaid = o.payment_status === 'pagado';
+        const isDelivered = o.status === 'delivered';
+        const allItemsServed = o.items?.every((item: any) => item.is_served) ?? true;
+        
+        // REGLA FASE 3: Si está pago Y completamente entregado/servido, desaparece de pendientes automáticamente.
+        if (isPaid && isDelivered && allItemsServed) return false;
+
+        return true;
+    });
 
     const completedOrdersForDeliveries = orders.filter(o => {
-        if (!(o.is_archived || o.status === 'completed')) return false;
+        const isPaid = o.payment_status === 'pagado';
+        const isDelivered = o.status === 'delivered';
+        const allItemsServed = o.items?.every((item: any) => item.is_served) ?? true;
+        const isFullyCompleted = isPaid && isDelivered && allItemsServed;
+
+        if (!(o.is_archived || o.status === 'completed' || isFullyCompleted)) return false;
 
         // Regla: Solo comandas completadas del día actual para evitar saturación del historial
         const orderDate = new Date(o.created_at);

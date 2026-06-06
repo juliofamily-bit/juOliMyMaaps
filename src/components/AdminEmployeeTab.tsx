@@ -14,6 +14,7 @@ const ROLES: { id: UserRole, label: string }[] = [
     { id: 'delivery', label: 'Repartidor' },
     { id: 'bartender', label: 'Bartender' },
     { id: 'waiter', label: 'Mozo' },
+    { id: 'animador', label: 'Animador / DJ' },
 ];
 
 export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant }) => {

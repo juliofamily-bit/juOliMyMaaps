@@ -7,7 +7,7 @@ import { useRealtimeData } from '@/hooks/useRealtimeData';
 import { useOfflineStore } from '@/lib/offlineStore';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { UserRole, Profile } from '@/types/database';
-import { Bell, ShoppingBag, ChefHat, Settings, LogOut, Wifi, WifiOff, X, AlertCircle, CheckCircle, CheckCircle2, Trash2, Shield, Lock, MapPin, Loader2, ArrowLeft, Navigation, GlassWater, Clock, Check, RefreshCw } from 'lucide-react';
+import { Bell, ShoppingBag, ChefHat, Settings, LogOut, Wifi, WifiOff, X, AlertCircle, CheckCircle, CheckCircle2, Trash2, Shield, Lock, MapPin, Loader2, ArrowLeft, Navigation, GlassWater, Clock, Check, RefreshCw, ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
 import { MaxesLogo, MaxesWatermark, MaxesCornerFrame } from '@/components/MaxesLogo';
 
@@ -17,6 +17,7 @@ import BartenderTab from '@/components/BartenderTab';
 import AdminTab from '@/components/AdminTab';
 import DeliveryTab from '@/components/DeliveryTab';
 import WaiterTab from '@/components/WaiterTab';
+import AnimadorTab from '@/components/AnimadorTab';
 
 interface TenantPageProps {
   params: Promise<{ tenant_slug: string }>;
@@ -44,7 +45,7 @@ export default function TenantApp({ params }: TenantPageProps) {
   const [resetSuccess, setResetSuccess] = useState(false);
 
   // App General State
-  const [activeTab, setActiveTab] = useState<'orders' | 'kitchen' | 'bartender' | 'admin' | 'delivery' | 'waiter'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'kitchen' | 'bartender' | 'admin' | 'delivery' | 'waiter' | 'animador'>('orders');
   const [isOnline, setIsOnline] = useState(true);
   const [showNotificationOverlay, setShowNotificationOverlay] = useState(false);
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
@@ -280,6 +281,7 @@ export default function TenantApp({ params }: TenantPageProps) {
   if (employees.some(e => e.role === 'bartender')) baseRoles.push('bartender');
   if (employees.some(e => e.role === 'delivery')) baseRoles.push('delivery');
   if (employees.some(e => e.role === 'waiter')) baseRoles.push('waiter');
+  if (employees.some(e => e.role === 'animador') || tenant?.enabled_roles?.includes('animador')) baseRoles.push('animador');
   const availableRoles = baseRoles.filter((role: string) => {
     if (loadingTenant) return true;
     
@@ -527,7 +529,7 @@ export default function TenantApp({ params }: TenantPageProps) {
         });
 
         if (authError) {
-          console.error("Auth Error:", authError);
+          console.warn(`[Auth Fallback] Intento con Supabase Auth fallido (${authError.message}). Usando RPC legacy...`);
           // Fallback legacy (por si aún no se migró el usuario a auth.users en la DB)
           const { data: legacyData, error: rpcError } = await supabase.rpc('check_tenant_credential', {
             p_slug: tenant_slug,
@@ -651,6 +653,7 @@ export default function TenantApp({ params }: TenantPageProps) {
         else if (role === 'bartender') setActiveTab('bartender');
         else if (role === 'delivery') setActiveTab('delivery');
         else if (role === 'waiter') setActiveTab('waiter');
+        else if (role === 'animador') setActiveTab('animador');
         else setActiveTab('orders');
       }
     } catch (err) {
@@ -818,8 +821,9 @@ export default function TenantApp({ params }: TenantPageProps) {
                 {r === 'bartender' && <GlassWater size={13} />}
                 {r === 'delivery' && <Navigation size={13} />}
                 {r === 'waiter' && <Bell size={13} />}
+                {r === 'animador' && <ShieldAlert size={13} />}
                 
-                {r === 'admin' ? 'Admin' : r === 'staff' ? 'Caja' : r === 'kitchen' ? 'Cocina' : r === 'bartender' ? 'Barra' : r === 'waiter' ? 'Mozo' : 'Envíos'}
+                {r === 'admin' ? 'Admin' : r === 'staff' ? 'Caja' : r === 'kitchen' ? 'Cocina' : r === 'bartender' ? 'Barra' : r === 'waiter' ? 'Mozo' : r === 'animador' ? 'Animador' : 'Envíos'}
               </button>
             ))}
           </div>
@@ -1063,6 +1067,7 @@ export default function TenantApp({ params }: TenantPageProps) {
             isLight={isLight}
           />
         )}
+        {activeTab === 'animador' && <AnimadorTab tenant={tenant} isLight={isLight} />}
         {activeTab === 'admin' && profile.role === 'admin' && (
           <AdminTab
             products={products}
@@ -1144,6 +1149,18 @@ export default function TenantApp({ params }: TenantPageProps) {
                 style={activeTab === 'waiter' ? { backgroundColor: primaryColor } : {}}
               >
                 <Bell size={18} /><span className="text-[8px] font-black uppercase mt-1">Mozo</span>
+              </button>
+            )}
+
+            {availableRoles.includes('animador') && (
+              <button
+                onClick={() => setActiveTab('animador')}
+                className={`flex-1 flex flex-col items-center py-3 rounded-[2rem] transition-all ${
+                  activeTab === 'animador' ? 'text-white shadow-lg animate-scale-up' : isLight ? 'text-slate-500 hover:text-slate-900' : 'text-slate-500 hover:text-slate-300'
+                }`}
+                style={activeTab === 'animador' ? { backgroundColor: primaryColor } : {}}
+              >
+                <ShieldAlert size={18} /><span className="text-[8px] font-black uppercase mt-1">Animador</span>
               </button>
             )}
 

@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'staff' | 'kitchen' | 'delivery' | 'bartender' | 'waiter';
+export type UserRole = 'admin' | 'staff' | 'kitchen' | 'delivery' | 'bartender' | 'waiter' | 'animador';
 
 export interface Profile {
     id: string;
@@ -169,6 +169,19 @@ export interface Tenant {
     created_at: string;
     franchise_id?: string;
     max_devices?: number;
+    landing_config?: any;
+}
+
+export interface SocialInteraction {
+    id: string;
+    tenant_id: string;
+    interaction_type: 'music_request' | 'announcement' | 'table_invite';
+    from_table?: string;
+    to_table?: string;
+    is_anonymous?: boolean;
+    message?: string;
+    status: 'pending' | 'approved' | 'rejected';
+    created_at: string;
 }
 
 export interface Employee {

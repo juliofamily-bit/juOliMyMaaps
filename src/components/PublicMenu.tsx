@@ -2,10 +2,50 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Category, Product, OrderItem, Ingredient, ProductIngredient, ProductOffer } from '@/types/database';
-import { ShoppingBag, ChevronRight, Minus, Plus, X, Search, Utensils, CheckCircle, Loader2, Trash2, ChevronDown, ChevronUp, Star, BellRing, Instagram, Facebook, MessageCircle, MapPin, Map, Sun, Moon, Info, Gift } from 'lucide-react';
+import { ShoppingBag, ChevronRight, ChevronLeft, Minus, Plus, X, Search, Utensils, CheckCircle, Loader2, Trash2, ChevronDown, ChevronUp, Star, BellRing, Instagram, Facebook, MessageCircle, MapPin, Map, Sun, Moon, Info, Gift, Home, ArrowLeft, Image as ImageIcon } from 'lucide-react';
 import { MaxesLogo } from '@/components/MaxesLogo';
 import { useRealtimeData } from '@/hooks/useRealtimeData';
 import { supabase, broadcastTenantChange } from '@/lib/supabase';
+import { SocialWall } from '@/components/SocialWall';
+
+const AutoCarousel = ({ children, gapClass = 'gap-4 md:gap-6' }: { children: React.ReactNode, gapClass?: string }) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (scrollRef.current) {
+        const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+        if (scrollLeft + clientWidth >= scrollWidth - 10) {
+          scrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+        } else {
+          scrollRef.current.scrollBy({ left: clientWidth * 0.8, behavior: 'smooth' });
+        }
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const scroll = (direction: 'left' | 'right') => {
+    if (scrollRef.current) {
+      const { clientWidth } = scrollRef.current;
+      scrollRef.current.scrollBy({ left: direction === 'left' ? -clientWidth * 0.8 : clientWidth * 0.8, behavior: 'smooth' });
+    }
+  };
+
+  return (
+    <div className="relative group">
+      <button onClick={() => scroll('left')} className="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-black/50 hover:bg-black/80 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hidden md:block backdrop-blur-md">
+        <ChevronLeft className="w-6 h-6" />
+      </button>
+      <div ref={scrollRef} className={`flex overflow-x-auto ${gapClass} pb-6 snap-x snap-mandatory hide-scrollbar`} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        {children}
+      </div>
+      <button onClick={() => scroll('right')} className="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-black/50 hover:bg-black/80 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hidden md:block backdrop-blur-md">
+        <ChevronRight className="w-6 h-6" />
+      </button>
+    </div>
+  );
+};
 
 interface PublicMenuProps {
   tenant: any;
@@ -156,6 +196,8 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   };
   
   // States para interactividad
+  const [showLanding, setShowLanding] = useState<boolean>(tenant.landing_config?.enabled || false);
+  const [giftMode, setGiftMode] = useState<{ isActive: boolean, fromTable: string, toTable: string, isAnonymous: boolean, giftHint: string }>({ isActive: false, fromTable: '', toTable: '', isAnonymous: false, giftHint: '' });
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedProducts, setExpandedProducts] = useState<Record<string, boolean>>({});
@@ -215,6 +257,35 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [successOrderNumber, setSuccessOrderNumber] = useState<number | null>(null);
+
+  // Navegación e Historial (Botón Atrás físico)
+  const goToMenu = () => {
+    setShowLanding(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (window.location.hash !== '#menu') {
+      window.history.pushState({ screen: 'menu' }, '', window.location.pathname + window.location.search + '#menu');
+    }
+  };
+
+  const goToLanding = () => {
+    setShowLanding(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (window.location.hash === '#menu') {
+      window.history.back();
+    }
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (window.location.hash !== '#menu' && tenant?.landing_config?.enabled) {
+        setShowLanding(true);
+      } else if (window.location.hash === '#menu') {
+        setShowLanding(false);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [tenant?.landing_config?.enabled]);
 
   // Delivery and Payment State
   const currentDayOfWeek = new Date().getDay();
@@ -1006,7 +1077,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     });
   }, [products, categories, activeCategory, searchQuery, productOffers, orders]);
 
-  const submitOrderToSupabase = async (paymentStatus: 'pendiente' | 'pagado', isApproved: boolean, method: string, skipSuccessUI: boolean = false): Promise<string | undefined> => {
+  const submitOrderToSupabase = async (paymentStatus: 'pendiente' | 'pagado', isApproved: boolean, method: string, skipSuccessUI: boolean = false, externalOrderId?: string): Promise<string | undefined> => {
     setIsSubmitting(true);
     try {
       // 0. Verificar Latido (Heartbeat) para evitar pedidos en el limbo
@@ -1025,7 +1096,9 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       }
       // Asignación automática inteligente si la mesa no tiene mozo asignado
       let assignedWaiterName: string | null = null;
-      const targetTableNumber = tableParamId || tableName || null;
+      let targetTableNumber = tableParamId || tableName || null;
+      // Los regalos (Social Dining) ahora se asignan a la mesa origen (targetTableNumber).
+      // El destino solo se mostrará en las notas para que el mozo del origen lo entregue.
       let finalTableNumber: string | null = null;
       
       if (targetTableNumber && tenant) {
@@ -1125,12 +1198,14 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
       // Si no logramos emparejar una mesa pero tenemos tableParamId o tableName en crudo, los usamos
       if (!finalTableNumber) {
-        finalTableNumber = tableParamId || tableName || null;
+        finalTableNumber = targetTableNumber || null;
       }
 
       // 1. Crear el Pedido
       let finalCustomerInfo = customerInfo.trim() || tableParamId || tableName || 'Salón';
-      if (deliveryType === 'delivery') {
+      if (giftMode.isActive) {
+        finalCustomerInfo = `🎁 REGALO: Entregar en ${giftMode.toTable}`;
+      } else if (deliveryType === 'delivery') {
         finalCustomerInfo = `${customerInfo.trim() || 'Cliente'} (Envío)`;
       } else if (deliveryType === 'llevar') {
         finalCustomerInfo = `${customerInfo.trim() || 'Cliente'} (Take Away)`;
@@ -1159,6 +1234,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       const firstAttempt = await supabase
         .from('orders')
         .insert([{
+          ...(externalOrderId ? { id: externalOrderId } : {}),
           client_name: finalCustomerInfo,
           table_number: deliveryType === 'local' ? finalTableNumber : null,
           total_price: finalTotal,
@@ -1202,6 +1278,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         const secondAttempt = await supabase
           .from('orders')
           .insert([{
+            ...(externalOrderId ? { id: externalOrderId } : {}),
             client_name: finalCustomerInfo,
             table_number: deliveryType === 'local' ? finalTableNumber : null,
             total_price: finalTotal,
@@ -1273,6 +1350,8 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
       // 2. Lógica de Smart Splitter Mejorada: Priorizar Categoría Única
       const orderItemsToInsert: any[] = [];
+      const hintText = giftMode.giftHint ? ` (${giftMode.giftHint})` : '';
+      const giftNoteBase = giftMode.isActive ? `🎁 REGALO PARA: ${giftMode.toTable}${hintText} | DE: ${giftMode.isAnonymous ? 'Alguien Misterioso' : giftMode.fromTable}` : '';
       
       cart.forEach(item => {
         const product = products.find(p => p.id === item.id);
@@ -1292,7 +1371,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             status: 'pending',
             tenant_id: tenant.id,
             target_departments: catDepts,
-            notes: '' // No necesita desglosarse en notas
+            notes: giftNoteBase // No necesita desglosarse en notas
           });
           return;
         }
@@ -1311,7 +1390,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             status: 'pending',
             tenant_id: tenant.id,
             target_departments: ['kitchen'],
-            notes: ''
+            notes: giftNoteBase
           });
           return;
         }
@@ -1340,11 +1419,12 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             status: 'pending',
             tenant_id: tenant.id,
             target_departments: deptsFound.length === 1 ? [deptsFound[0]] : ['kitchen'],
-            notes: ''
+            notes: giftNoteBase
           });
         } else {
           // Multi-departamento REAL: DIVIDIR (Ej: Hamburguesa + Gaseosa)
           deptsFound.forEach((d, idx) => {
+            const splitNote = deptsMap[d].join(' + ');
             orderItemsToInsert.push({
               order_id: createdOrder.id,
               product_id: item.id,
@@ -1353,7 +1433,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               status: 'pending',
               tenant_id: tenant.id,
               target_departments: [d],
-              notes: deptsMap[d].join(' + ') // Nombre específico del componente (ej: Hamburguesa o Coca-Cola)
+              notes: giftNoteBase ? `${giftNoteBase} - ${splitNote}` : splitNote // Nombre específico del componente (ej: Hamburguesa o Coca-Cola)
             });
           });
         }
@@ -1364,20 +1444,39 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
       // 3. Determinar a quién notificar basándonos en los departamentos destino
       const targetDeptsSet = new Set<string>();
+      
+      // 3. Marcar la mesa como ocupada automáticamente (Post-pago / Salón)
+      if (finalTableNumber && deliveryType === 'local') {
+        try {
+          const { data: tenantData } = await supabase.from('tenants').select('tables').eq('id', tenant.id).single();
+          if (tenantData && Array.isArray(tenantData.tables)) {
+            const updatedTables = tenantData.tables.map((t: any) => 
+              t.id === finalTableNumber ? { ...t, is_occupied: true } : t
+            );
+            await supabase.from('tenants').update({ tables: updatedTables }).eq('id', tenant.id);
+            broadcastTenantChange(tenant.id);
+          }
+        } catch (e) {
+          console.error("Error al marcar mesa como ocupada:", e);
+        }
+      }
+
       orderItemsToInsert.forEach(item => {
         item.target_departments.forEach((d: string) => targetDeptsSet.add(d));
       });
       const notifyRoles = Array.from(targetDeptsSet);
       if (!notifyRoles.includes('admin')) notifyRoles.push('admin');
+      if (deliveryType === 'local' && !notifyRoles.includes('waiter')) notifyRoles.push('waiter');
 
+      const destName = deliveryType === 'local' ? (giftMode.isActive ? giftMode.toTable : (tableName || tableParamId || 'Mesa Local')) : 'Mostrador/Delivery';
       const notifMsg = isApproved
-        ? `🔔 Tienes un nuevo pedido de ${finalCustomerInfo} #${createdOrder.order_number}`
-        : `⚠️ Pedido PENDIENTE DE PAGO de ${finalCustomerInfo} #${createdOrder.order_number}`;
+        ? `🔔 Pedido para ${destName} (De: ${finalCustomerInfo}) #${createdOrder.order_number}`
+        : `⚠️ Pedido PENDIENTE para ${destName} (De: ${finalCustomerInfo}) #${createdOrder.order_number}`;
 
       await supabase.from('app_notifications').insert([{
         message: notifMsg,
         type: isApproved ? 'info' : 'alert',
-        target_roles: isApproved ? notifyRoles : ['staff', 'admin'],
+        target_roles: isApproved ? notifyRoles : ['staff', 'admin', ...(deliveryType === 'local' ? ['waiter'] : [])],
         tenant_id: tenant.id
       }]);
 
@@ -1402,8 +1501,29 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
       broadcastTenantChange(tenant.id);
 
+      // Notificación Pública de Regalo (Social Dining)
+      if (giftMode.isActive) {
+        try {
+          await supabase.from('social_interactions').insert([{
+            tenant_id: tenant.id,
+            type: 'announcement',
+            sender_name: 'Sistema',
+            is_anonymous: false,
+            content: giftMode.isAnonymous 
+              ? `🤫 ¡La ${giftMode.toTable} está por recibir un regalo misterioso de otra mesa! 🎁`
+              : `🔥 ¡La mesa ${giftMode.fromTable} le acaba de invitar algo a la ${giftMode.toTable}! 🥂`,
+            status: 'approved'
+          }]);
+        } catch (e) {
+          console.error("Error publicando regalo en muro social", e);
+        }
+      }
+
       if (!skipSuccessUI) {
         // Éxito Normal
+        if (giftMode.isActive) {
+          setGiftMode({ isActive: false, fromTable: '', toTable: '', isAnonymous: false, giftHint: '' });
+        }
         setSuccessOrderNumber(createdOrder.order_number);
         setOrderSuccess(true);
         setCart([]);
@@ -1434,6 +1554,8 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   };
 
   const executeCheckout = async () => {
+    if (isSubmitting) return; // Protección absoluta contra doble click concurrente
+
     if (paymentMethod === 'mercadopago' || paymentMethod === 'credito') {
       if (!tenant?.mercadopago_access_token) {
         alert("⚠️ Error del Local: Falta configurar el Access Token de Mercado Pago en el Panel de Admin.");
@@ -1442,20 +1564,13 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       setIsSubmitting(true);
       try {
         setIsRedirectingToPayment(true);
-        // 1. Guardar orden pendiente en Supabase
-        const orderId = await submitOrderToSupabase('pendiente', false, paymentMethod, true);
-        
-        if (!orderId) {
-          throw new Error("No se pudo obtener el ID del pedido.");
-        }
+        // Generamos un ID pre-asignado para enlazar la orden a Mercado Pago
+        const externalOrderId = crypto.randomUUID();
 
-        // 2. Generar Preference en MP
         let currentDomain = window.location.origin;
         const isLocalhost = window.location.hostname === 'localhost' || 
                             window.location.hostname === '127.0.0.1';
         if (currentDomain.startsWith('http://') && !isLocalhost) {
-          // Mercado Pago exige HTTPS para redirecciones automáticas (auto_return).
-          // Convertimos http:// a https:// para que la API de Mercado Pago valide la URL correctamente.
           currentDomain = currentDomain.replace('http://', 'https://');
         }
         
@@ -1465,7 +1580,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             accessToken: tenant.mercadopago_access_token,
-            external_reference: orderId,
+            external_reference: externalOrderId,
             items: [
               {
                 title: `Pedido en ${tenant.name}`,
@@ -1484,12 +1599,15 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
         const data = await response.json();
         if (data.init_point) {
+          // SOLO si MP generó la preferencia con éxito, creamos la orden y notificamos a todos.
+          await submitOrderToSupabase('pendiente', false, paymentMethod, true, externalOrderId);
           window.location.href = data.init_point;
         } else {
           throw new Error(data.error || "Error al generar pasarela de pago");
         }
       } catch (err: any) {
         console.error(err);
+        // Como nunca llegamos a llamar a submitOrderToSupabase, no hay pedidos que borrar ni notificaciones fantasma enviadas.
         alert("Error al iniciar el pago online: " + err.message);
         setIsSubmitting(false);
         setIsRedirectingToPayment(false);
@@ -1501,6 +1619,8 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   };
 
   const handleCheckout = async () => {
+    if (isSubmitting) return; // Protección absoluta contra doble click
+
     if (cart.length === 0) return;
     
     if (deliveryType === 'delivery') {
@@ -1640,22 +1760,29 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       {/* INFORMACIÓN DEL LOCAL CON FOTO DE PERFIL SUPERPUESTA */}
       <div className="max-w-4xl mx-auto px-4 pb-4 relative z-10">
         <div className="flex flex-col md:flex-row items-center md:items-end gap-5 -mt-16 md:-mt-24 mb-4 text-center md:text-left">
-          {/* Foto de perfil circular */}
-          <div 
-            className={`w-28 h-28 md:w-36 md:h-36 rounded-full overflow-hidden border-4 bg-neutral-900 shadow-2xl flex-shrink-0 flex items-center justify-center relative transition-colors duration-500 ${isLight ? 'border-slate-50' : 'border-neutral-950'}`}
-            style={{ 
-              boxShadow: isLight ? '0 8px 32px rgba(99, 102, 241, 0.15)' : `0 8px 32px rgba(0, 0, 0, 0.6), 0 0 20px ${primaryColor}20`
-            }}
-          >
-            {profilePictureUrl ? (
-              <img 
-                src={profilePictureUrl} 
-                alt={tenant.name} 
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <Utensils className="w-12 h-12 md:w-16 md:h-16" style={{ color: primaryColor }} />
-            )}
+          {/* Foto de perfil circular con efecto Glow */}
+          <div className="relative group flex-shrink-0 flex items-center justify-center">
+            {/* Efecto Glow / Luz de fondo */}
+            <div 
+              className="absolute -inset-2 rounded-full blur-xl opacity-60 group-hover:opacity-100 transition duration-1000" 
+              style={{ backgroundColor: primaryColor }} 
+            />
+            <div 
+              className={`relative w-28 h-28 md:w-36 md:h-36 rounded-full overflow-hidden border-4 bg-neutral-900 shadow-2xl flex items-center justify-center transition-transform duration-500 group-hover:scale-105 ${isLight ? 'border-slate-50' : 'border-neutral-950'}`}
+              style={{ 
+                boxShadow: isLight ? '0 8px 32px rgba(99, 102, 241, 0.15)' : `0 8px 32px rgba(0, 0, 0, 0.6), 0 0 20px ${primaryColor}20`
+              }}
+            >
+              {profilePictureUrl ? (
+                <img 
+                  src={profilePictureUrl} 
+                  alt={tenant.name} 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <Utensils className="w-12 h-12 md:w-16 md:h-16" style={{ color: primaryColor }} />
+              )}
+            </div>
           </div>
 
           {/* Info del Local y Enlaces */}
@@ -1782,23 +1909,62 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         </div>
       </div>
 
-      {/* BUSCADOR COMPACTO STICKY */}
-      <div 
-        className={`sticky top-0 z-40 backdrop-blur-xl border-b p-4 transition-all duration-300 ${
-          isLight ? 'bg-slate-50/80 border-slate-200/60 shadow-sm' : 'bg-neutral-950/80 border-neutral-900/60'
-        }`}
-        style={{ borderBottomColor: isLight ? undefined : `${primaryColor}15` }}
-      >
+      {/* GIFT MODE BANNER */}
+      {giftMode.isActive && (
+        <div className="sticky top-0 z-[45] mx-4 md:mx-auto max-w-4xl p-3 bg-gradient-to-r from-orange-500 to-amber-500 rounded-b-2xl shadow-xl animate-in slide-in-from-top flex items-center justify-between border-x border-b border-orange-400/30">
+          <div className="flex items-center gap-3 text-white">
+            <div className="p-2 bg-white/20 rounded-lg">
+              <Gift className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <p className="font-black uppercase text-xs md:text-sm leading-tight tracking-wider text-white drop-shadow-md">Modo Regalo</p>
+              <p className="text-[10px] md:text-xs opacity-90 text-orange-50 mt-0.5">Comprando para la <b>{giftMode.toTable}</b></p>
+            </div>
+          </div>
+          <button 
+            onClick={() => setGiftMode({ isActive: false, fromTable: '', toTable: '', isAnonymous: false, giftHint: '' })}
+            className="text-[10px] md:text-xs font-bold px-3 py-2 rounded-lg bg-black/20 hover:bg-black/40 text-white transition-colors uppercase tracking-wider"
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
+
+      {/* BUSCADOR COMPACTO STICKY (Oculto en Landing) */}
+      {!showLanding && (
+        <>
+        <div 
+          className={`sticky top-0 z-40 backdrop-blur-xl border-b p-4 transition-all duration-300 ${
+            isLight ? 'bg-slate-50/80 border-slate-200/60 shadow-sm' : 'bg-neutral-950/80 border-neutral-900/60'
+          }`}
+          style={{ borderBottomColor: isLight ? undefined : `${primaryColor}15` }}
+        >
         <div className="max-w-4xl mx-auto">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
-            <input 
-              type="text" 
-              placeholder="¿Qué se te antoja?"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-neutral-900/50 border border-neutral-800/80 rounded-2xl pl-10 pr-4 py-2.5 text-sm outline-none transition-all placeholder:text-neutral-500 focus:border-white focus:ring-1 focus:ring-white focus:bg-neutral-900"
-            />
+          <div className="flex items-center gap-3">
+            {tenant?.landing_config?.enabled && (
+              <button
+                onClick={goToLanding}
+                className={`px-4 py-2.5 rounded-2xl border transition-all flex items-center justify-center shrink-0 gap-2 font-bold text-sm ${
+                  isLight 
+                    ? 'bg-white border-slate-200 text-slate-700 hover:text-slate-900 shadow-sm hover:shadow-md' 
+                    : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white hover:border-neutral-700'
+                }`}
+                title="Atrás"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                <span className="hidden sm:inline">Atrás</span>
+              </button>
+            )}
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+              <input 
+                type="text" 
+                placeholder="¿Qué se te antoja?"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-neutral-900/50 border border-neutral-800/80 rounded-2xl pl-10 pr-4 py-2.5 text-sm outline-none transition-all placeholder:text-neutral-500 focus:border-white focus:ring-1 focus:ring-white focus:bg-neutral-900"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -2159,6 +2325,275 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
           </div>
         </div>
       </main>
+      </>
+      )}
+
+      {/* LANDING PAGE CONTENT */}
+      {showLanding && (
+        <main className="w-full min-h-screen bg-black overflow-x-hidden animate-in fade-in zoom-in-95 duration-500 pb-40 relative">
+          {/* Fondo Estrellado Animado (opcional para dar más "wow") */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-[#0a0a0a] to-black opacity-80 pointer-events-none" />
+          {/* SECCIÓN PRINCIPAL: IMAGEN DE AMBIENTE / CARRUSEL */}
+          {(tenant?.landing_config?.hero_style === 'image' || tenant?.landing_config?.hero_style === 'video') && (
+            <div className="relative w-full h-64 md:h-96 overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-0 rounded-b-[2rem] md:rounded-b-[4rem]">
+              {tenant?.landing_config?.hero_style === 'video' && tenant?.landing_config?.hero_video_url ? (
+                <video 
+                  src={tenant.landing_config.hero_video_url}
+                  autoPlay loop muted playsInline
+                  className="w-full h-full object-cover scale-105"
+                  style={{ objectPosition: tenant?.landing_config?.hero_position || 'center' }}
+                />
+              ) : (
+                <img 
+                  src={tenant.landing_config.hero_image_url}
+                  alt="Ambiente del local"
+                  className="w-full h-full object-cover"
+                  style={{ objectPosition: tenant?.landing_config?.hero_position || 'center' }}
+                />
+              )}
+              {/* Overlay Gradient suave para fusionar con el fondo negro */}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent opacity-90" />
+            </div>
+          )}
+
+          <div className={`relative z-20 max-w-5xl mx-auto px-4 ${tenant?.landing_config?.hero_style !== 'gradient' ? '-mt-12 md:-mt-20' : 'mt-8'} space-y-16`}>
+            
+            {/* NUESTRA ESENCIA (ABOUT US) */}
+            {tenant?.landing_config?.about_text && (
+              <section className="text-center max-w-3xl mx-auto space-y-6 animate-in slide-in-from-bottom-8 duration-700">
+                <div className="p-8 md:p-12 rounded-[3rem] bg-neutral-900/50 border border-white/5 backdrop-blur-md shadow-2xl relative overflow-hidden">
+                  <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                  <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-widest drop-shadow-lg mb-6">Nuestra Esencia</h2>
+                  <p className="text-slate-300 text-base md:text-lg leading-relaxed font-medium whitespace-pre-wrap">
+                    {tenant.landing_config.about_text}
+                  </p>
+                </div>
+              </section>
+            )}
+
+            {/* CARRUSEL DINÁMICO (CUSTOM CAROUSEL) */}
+            {tenant?.landing_config?.custom_carousel?.length > 0 && (
+              <section className="space-y-6 animate-in slide-in-from-bottom-8 duration-700">
+                <div className="flex items-center gap-3 px-2">
+                  <div className="p-2 rounded-xl bg-orange-500/20 text-orange-500 border border-orange-500/30">
+                    <Star className="w-6 h-6 fill-current" />
+                  </div>
+                  <h2 className="text-2xl md:text-3xl font-black uppercase tracking-widest text-white">
+                    Novedades
+                  </h2>
+                </div>
+                
+                <AutoCarousel gapClass="gap-4 md:gap-6">
+                  {tenant.landing_config.custom_carousel.map((slide: any) => (
+                    <div key={slide.id} className="min-w-[300px] md:min-w-[400px] snap-center bg-neutral-900/60 border border-white/5 rounded-[2rem] overflow-hidden shadow-2xl relative group">
+                      <div className="h-64 md:h-72 w-full bg-neutral-800 relative overflow-hidden">
+                        {slide.image_url ? (
+                          <img src={slide.image_url} alt={slide.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-orange-500/10 to-purple-500/10">
+                            <ImageIcon className="w-12 h-12 text-white/20" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-90" />
+                        
+                        {slide.badge_text && (
+                          <div className="absolute top-4 left-4 px-3 py-1.5 bg-white/10 backdrop-blur-md rounded-xl font-bold text-white text-xs border border-white/20 shadow-lg">
+                            ✨ {slide.badge_text}
+                          </div>
+                        )}
+                        
+                        <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-col justify-end">
+                          <h3 className="text-xl md:text-2xl font-black text-white leading-tight mb-2 drop-shadow-md">{slide.title}</h3>
+                          <p className="text-sm text-slate-300 line-clamp-3 leading-relaxed drop-shadow-sm">{slide.description}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </AutoCarousel>
+              </section>
+            )}
+
+            {/* CARRUSEL DE PRODUCTOS DESTACADOS */}
+            {tenant?.landing_config?.featured_products_enabled && (
+              <section className="space-y-6">
+                <div className="flex items-center justify-between px-2">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-green-500/20 text-green-500 border border-green-500/30">
+                      <Utensils className="w-6 h-6 fill-current" />
+                    </div>
+                    <h2 className="text-2xl md:text-3xl font-black uppercase tracking-widest text-white">
+                      Lo Más Destacado
+                    </h2>
+                  </div>
+                  <button onClick={goToMenu} className="text-xs font-bold text-slate-400 hover:text-white transition-colors uppercase tracking-widest flex items-center gap-1">
+                    Ver Menú <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+                
+                {/* Scroll horizontal de productos */}
+                <AutoCarousel gapClass="gap-4">
+                  {categories.flatMap(c => c.products || []).filter(p => p.is_active !== false).slice(0, 6).map((product) => (
+                    <div key={product.id} className="min-w-[260px] md:min-w-[300px] snap-center bg-neutral-900/60 border border-white/5 rounded-3xl overflow-hidden shadow-xl hover:border-white/20 transition-all duration-300 flex flex-col cursor-pointer" onClick={goToMenu}>
+                      <div className="h-48 w-full bg-neutral-800 relative overflow-hidden">
+                        {product.image_url ? (
+                          <img src={product.image_url} alt={product.name} className="w-full h-full object-cover transition-transform duration-700 hover:scale-110 opacity-90 hover:opacity-100" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-neutral-800/50">
+                            <Utensils className="w-10 h-10 text-neutral-600" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 via-transparent to-transparent" />
+                        <div className="absolute bottom-3 right-3 px-3 py-1.5 bg-black/80 backdrop-blur-md rounded-xl font-bold text-white text-sm shadow-lg border border-white/10">
+                          ${product.price}
+                        </div>
+                      </div>
+                      <div className="p-5 flex-1 flex flex-col">
+                        <h3 className="text-lg font-black text-white leading-tight mb-2 line-clamp-1">{product.name}</h3>
+                        <p className="text-sm text-slate-400 line-clamp-2 leading-relaxed flex-1">{product.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </AutoCarousel>
+              </section>
+            )}
+            
+            {/* PROMOS & BANNERS */}
+            {tenant?.landing_config?.promos?.length > 0 && (
+              <section className="space-y-6">
+                <div className="flex items-center gap-3 px-2">
+                  <div className="p-2 rounded-xl bg-orange-500/20 text-orange-500 border border-orange-500/30">
+                    <Star className="w-6 h-6 fill-current" />
+                  </div>
+                  <h2 className="text-2xl md:text-3xl font-black uppercase tracking-widest text-white">
+                    Promociones
+                  </h2>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {tenant.landing_config.promos.map((promo: any) => (
+                    <div key={promo.id} className="relative rounded-[2rem] overflow-hidden group border border-white/5 shadow-2xl bg-neutral-900/50 hover:border-white/20 transition-all duration-500 hover:-translate-y-2">
+                      <div className="aspect-[4/3] w-full bg-black relative overflow-hidden">
+                        {promo.image_url ? (
+                          <img src={promo.image_url} alt={promo.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-orange-500/10 to-purple-500/10">
+                            <Gift className="w-12 h-12 text-white/20" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-transparent" />
+                      </div>
+                      <div className="absolute bottom-0 inset-x-0 p-6 space-y-2 translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
+                        <h3 className="text-xl font-black text-white uppercase tracking-wider drop-shadow-md">{promo.title}</h3>
+                        <p className="text-sm text-slate-300 font-medium drop-shadow-md line-clamp-2">{promo.subtitle}</p>
+                        {promo.cta_text && promo.cta_link && (
+                          <div className="pt-3 opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-100">
+                            <a href={promo.cta_link} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 w-full px-5 py-3 rounded-xl bg-white text-black text-xs font-black uppercase tracking-wider hover:bg-slate-200 transition-colors shadow-[0_0_20px_rgba(255,255,255,0.3)]">
+                              {promo.cta_text} <ChevronRight className="w-4 h-4" />
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* EVENTOS */}
+            {tenant?.landing_config?.events?.length > 0 && (
+              <section className="space-y-6">
+                <div className="flex items-center gap-3 px-2">
+                  <div className="p-2 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                    <BellRing className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <h2 className="text-2xl md:text-3xl font-black uppercase tracking-widest text-white">
+                    Próximos Eventos
+                  </h2>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                  {tenant.landing_config.events.map((ev: any) => (
+                    <div key={ev.id} className="p-5 rounded-[2rem] border border-white/5 space-y-4 hover:border-purple-500/40 transition-all duration-300 shadow-xl group bg-white/5 backdrop-blur-md relative overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                      {ev.image_url && (
+                        <div className="w-full h-36 rounded-2xl overflow-hidden bg-black border border-white/5 relative">
+                          <img src={ev.image_url} alt={ev.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+                        </div>
+                      )}
+                      <div className="relative z-10">
+                        <div className="inline-block px-3 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-full text-[9px] font-black uppercase tracking-widest mb-3 shadow-[0_0_10px_rgba(168,85,247,0.2)]">
+                          📅 {ev.date || 'Próximamente'}
+                        </div>
+                        <h3 className="text-lg font-black text-white leading-tight uppercase tracking-wide group-hover:text-purple-300 transition-colors">{ev.title}</h3>
+                        <p className="text-xs text-slate-400 mt-2 leading-relaxed line-clamp-3">{ev.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Muro Interactivo Social Dining */}
+            {tenant?.landing_config?.interactive_wall_enabled !== false && (
+              <section className="pt-8">
+                <div className="relative">
+                  {/* Decoración detrás del muro */}
+                  <div className="absolute -inset-4 bg-gradient-to-r from-orange-500/10 via-purple-500/10 to-blue-500/10 rounded-[3rem] blur-xl opacity-50" />
+                  <div className="relative">
+                    <SocialWall 
+                      tenantId={tenant?.id || ''} 
+                      primaryColor={primaryColor} 
+                      isLight={false}
+                      currentTable={tableName || tableParamId}
+                      tables={tenant?.tables || []}
+                      onStartGiftMode={(from, to, anon, hint) => {
+                        setGiftMode({ isActive: true, fromTable: from, toTable: to, isAnonymous: anon, giftHint: hint });
+                        setDeliveryType('local');
+                        goToMenu();
+                      }}
+                    />
+                  </div>
+                </div>
+              </section>
+            )}
+          </div>
+        </main>
+      )}
+
+      {/* FAB - Botón Flotante Animado para Landing */}
+      {showLanding && (
+        <div className="fixed bottom-10 inset-x-0 flex justify-center z-[200] pointer-events-none">
+          <button
+            onClick={goToMenu}
+            className="pointer-events-auto relative group flex items-center justify-center px-8 py-4 rounded-full shadow-[0_0_30px_rgba(249,115,22,0.6)] active:scale-95 transition-all animate-bounce font-black text-white uppercase tracking-widest border border-white/20 hover:shadow-[0_0_40px_rgba(249,115,22,0.8)] overflow-hidden"
+            style={{ backgroundColor: primaryColor }}
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/30 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+            <Utensils className="w-5 h-5 mr-3 animate-pulse" />
+            <span className="drop-shadow-md">Ver Menú</span>
+            <div className="absolute inset-0 rounded-full animate-ping opacity-20 bg-white"></div>
+          </button>
+        </div>
+      )}
+
+      {/* FAB - Botón Flotante para volver a la Landing */}
+      {!showLanding && tenant?.landing_config?.enabled && (
+        <div className="fixed bottom-24 right-4 z-40 flex justify-end animate-in fade-in slide-in-from-right-4 duration-500">
+          <button
+            onClick={goToLanding}
+            className="flex items-center gap-2 px-4 py-3 rounded-full font-bold shadow-2xl transition-transform hover:scale-105 active:scale-95 border"
+            style={{ 
+              backgroundColor: isLight ? '#ffffff' : '#000000', 
+              color: primaryColor, 
+              borderColor: `${primaryColor}40`,
+              boxShadow: `0 10px 25px -5px ${primaryColor}40`
+            }}
+          >
+            <Home className="w-5 h-5" />
+            <span className="text-xs uppercase tracking-wider hidden md:inline">Portada / Muro</span>
+          </button>
+        </div>
+      )}
+
 
       {/* FAB - Botón de Carrito Flotante */}
       {cartCount > 0 && (
@@ -2213,9 +2648,10 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     setShowAntiForgetModal(false);
                     if (pendingAction) pendingAction();
                   }}
-                  className="w-full py-3.5 bg-orange-600 hover:bg-orange-500 text-white rounded-2xl font-black text-sm uppercase tracking-wider transition-all shadow-lg active:scale-95"
+                  disabled={isSubmitting}
+                  className="w-full py-3.5 bg-orange-600 hover:bg-orange-500 text-white rounded-2xl font-black text-sm uppercase tracking-wider transition-all shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  ✅ No tengo código, Continuar
+                  {isSubmitting ? 'Procesando...' : '✅ No tengo código, Continuar'}
                 </button>
               </div>
             </div>
@@ -2254,8 +2690,9 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                 <X className="w-5 h-5" />
               </button>
             </div>            {/* Lista de Ítems */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-6">
-              <div className="space-y-4">
+            <div className="flex-1 overflow-y-auto flex flex-col">
+              <div className="p-5 space-y-6 flex-1">
+                <div className="space-y-4">
                 {cart.map(item => (
                   <div key={item.cartItemId} className="flex gap-4 items-center">
                     {/* Foto miniatura */}
@@ -2377,9 +2814,10 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                         </label>
                         <input 
                           type="text" 
-                          value={`Mesa: ${tableName || tableParamId}`}
-                          readOnly
-                          className="w-full bg-neutral-950 border border-purple-500/40 rounded-xl px-4 py-3 text-sm outline-none text-purple-400 font-bold opacity-80 cursor-not-allowed"
+                          value={tableName || tableParamId || ''}
+                          onChange={(e) => setTableName(e.target.value)}
+                          placeholder="Ej: 3, Mesa 4, Patio..."
+                          className="w-full bg-neutral-950 border border-purple-500/40 rounded-xl px-4 py-3 text-sm outline-none text-purple-400 font-bold focus:border-purple-400 focus:ring-1 focus:ring-purple-400 transition-all"
                         />
                       </div>
                       <div>
@@ -2914,43 +3352,51 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     })()}
                   </div>
                 </div>
-
-                {orderSuccess ? (
-                  <div className="w-full bg-green-500/20 border border-green-500/30 text-green-400 py-6 rounded-3xl flex flex-col items-center justify-center gap-3 animate-in fade-in zoom-in duration-500">
-                    <CheckCircle className="w-12 h-12 mb-1" />
-                    <div className="text-center">
-                      <h4 className="text-xl font-black uppercase tracking-tighter italic">
-                        {successOrderNumber === 0 ? '¡Pedido Pagado Online!' : `¡Pedido #${successOrderNumber} recibido!`}
-                      </h4>
-                      <p className="text-[10px] font-bold text-green-500/80 uppercase tracking-widest mt-1">Ya estamos preparando tu orden</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex w-full rounded-xl overflow-hidden shadow-lg transition-all" style={{ boxShadow: `0 8px 30px -10px ${primaryColor}` }}>
-                    <button 
-                      onClick={() => setIsCartOpen(false)}
-                      className={`w-1/2 py-4 font-semibold transition-colors flex justify-center items-center text-xs uppercase tracking-widest ${
-                        isLight ? 'text-slate-600 bg-slate-100 hover:bg-slate-200 active:bg-slate-350' : 'text-neutral-300 bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600'
-                      }`}
-                    >
-                      Seguir Pidiendo
-                    </button>
-                    <button 
-                      onClick={handleCheckout}
-                      disabled={isSubmitting}
-                      className="w-1/2 py-4 font-bold text-white transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:brightness-90 text-xs uppercase tracking-widest"
-                      style={{ backgroundColor: primaryColor }}
-                    >
-                      {isSubmitting ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        'Confirmar Pedido'
-                      )}
-                    </button>
-                  </div>
-                )}
               </div>
             )}
+            </div>
+
+            {/* Footer de Acciones (Siempre visible aunque el carrito esté vacío, pero fluye con el contenido) */}
+            <div className={`p-5 border-t shrink-0 mt-auto ${isLight ? 'border-slate-200 bg-white' : 'border-neutral-800 bg-neutral-950'}`}>
+              {orderSuccess ? (
+                <div className="w-full bg-green-500/20 border border-green-500/30 text-green-400 py-6 rounded-3xl flex flex-col items-center justify-center gap-3 animate-in fade-in zoom-in duration-500">
+                  <CheckCircle className="w-12 h-12 mb-1" />
+                  <div className="text-center">
+                    <h4 className="text-xl font-black uppercase tracking-tighter italic">
+                      {successOrderNumber === 0 ? '¡Pedido Pagado Online!' : `¡Pedido #${successOrderNumber} recibido!`}
+                    </h4>
+                    <p className="text-[10px] font-bold text-green-500/80 uppercase tracking-widest mt-1">Ya estamos preparando tu orden</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex w-full rounded-xl overflow-hidden shadow-lg transition-all" style={{ boxShadow: cart.length === 0 ? 'none' : `0 8px 30px -10px ${primaryColor}` }}>
+                  <button 
+                    onClick={() => setIsCartOpen(false)}
+                    className={`w-1/2 py-4 font-semibold transition-colors flex justify-center items-center text-xs uppercase tracking-widest ${
+                      isLight ? 'text-slate-600 bg-slate-100 hover:bg-slate-200 active:bg-slate-350' : 'text-neutral-300 bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600'
+                    }`}
+                  >
+                    Seguir Pidiendo
+                  </button>
+                  <button 
+                    onClick={handleCheckout}
+                    disabled={isSubmitting || cart.length === 0}
+                    className={`w-1/2 py-4 font-bold text-white transition-all flex justify-center items-center gap-2 text-xs uppercase tracking-widest ${
+                      cart.length === 0 
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'hover:brightness-110 active:brightness-90'
+                    }`}
+                    style={{ backgroundColor: cart.length === 0 ? (isLight ? '#94a3b8' : '#52525b') : primaryColor }}
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      'Confirmar Pedido'
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -3078,8 +3524,6 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
           </div>
         </div>
       )}
-
-      {/* Modal Pasarela Virtual de Mercado Pago */}
 
       {/* MODAL DE RESERVAR MESA */}
       {isReservationModalOpen && (

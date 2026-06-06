@@ -261,6 +261,21 @@ export default function KitchenTab({ orders, products, tenant, refetchData }: Ki
                                     </div>
                                 </div>
 
+                                {/* CARTEL DISTINTIVO DE REGALO (SOCIAL DINING) */}
+                                {order.client_name?.startsWith('REGALO') && (
+                                    <div className="bg-fuchsia-600 text-white p-3 flex flex-col gap-1 shadow-inner border-y border-fuchsia-500">
+                                        <div className="flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-widest animate-pulse">
+                                            <span className="text-base">🎁</span>
+                                            {order.client_name}
+                                        </div>
+                                        {kitchenItems.some((i: any) => i.notes?.includes('REGALO PARA:')) && (
+                                            <p className="text-center text-[9px] font-medium italic text-fuchsia-100 opacity-90">
+                                                Mensaje: {kitchenItems.find((i: any) => i.notes?.includes('REGALO PARA:'))?.notes?.split('| DE:')[0].replace('🎁 REGALO PARA:', '').trim()}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+
                                 {/* ADVERTENCIA DE PAGO PENDIENTE */}
                                 {order.payment_status === 'pendiente' && (
                                     <div className="bg-red-650 text-white font-black px-6 py-2.5 text-[9px] uppercase tracking-widest text-center animate-pulse">
