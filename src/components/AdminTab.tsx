@@ -5460,7 +5460,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                                 accept="image/*" 
                                                                 onChange={async (e) => {
                                                                     await handleLandingImageUpload(e);
-                                                                    setCfgLandingConfig(prev => ({ ...prev, hero_style: 'image' }));
+                                                                    setCfgLandingConfig((prev: any) => ({ ...prev, hero_style: 'image' }));
                                                                 }} 
                                                                 className="hidden" 
                                                             />
