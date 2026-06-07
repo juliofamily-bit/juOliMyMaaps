@@ -3,7 +3,7 @@ import { supabase as rawSupabase, broadcastTenantChange } from '@/lib/supabase';
 import { Product, Ingredient, Order, Expense, OrderStatus, Category, ProductIngredient, IngredientBatch, ProductOffer } from '@/types/database';
 import { PRESET_IMAGES, NEON_ICONS } from '@/lib/constants';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, ReferenceLine } from 'recharts';
-import { Plus, Trash2, Edit, TrendingUp, DollarSign, Package, Layers, History, ChevronRight, X, Save, Check, Upload, Image as ImageIcon, Wallet, Receipt, ArrowUpCircle, ArrowDownCircle, Calendar, FilterX, Star, StarOff, PieChart, Paintbrush, LayoutGrid, Sun, Moon, CheckCircle, AlertCircle, Loader2, Share2, AlertTriangle, CalendarRange, Trophy, Smartphone, Instagram, Facebook, Phone, Printer, Download, Award, Coins, Search, MessageCircle, Gift, RefreshCw, Settings, ChevronUp, ChevronDown, Users, Truck, Map as MapIcon, Utensils } from 'lucide-react';
+import { CreditCard, BarChart2, QrCode, FileText, Plus, Trash2, Edit, TrendingUp, DollarSign, Package, Layers, History, ChevronRight, X, Save, Check, Upload, Image as ImageIcon, Wallet, Receipt, ArrowUpCircle, ArrowDownCircle, Calendar, FilterX, Star, StarOff, PieChart, Paintbrush, LayoutGrid, Sun, Moon, CheckCircle, AlertCircle, Loader2, Share2, AlertTriangle, CalendarRange, Trophy, Smartphone, Instagram, Facebook, Phone, Printer, Download, Award, Coins, Search, MessageCircle, Gift, RefreshCw, Settings, ChevronUp, ChevronDown, Users, Truck, Map as MapIcon, Utensils } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { PrintableQRPoster } from './PrintableQRPoster';
 import { AdminEmployeeTab } from './AdminEmployeeTab';
@@ -2352,7 +2352,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
         }
     };
 
-    return (
+                                return (
         <div className="space-y-6 pb-4 max-w-5xl mx-auto px-2">
             <div className="flex gap-2 bg-slate-900/50 p-1 rounded-2xl border border-slate-800 overflow-x-auto scrollbar-hide">
                 {(['dashboard', 'products', 'stock', 'sales', 'balance', 'config'] as const).map(v => {
@@ -3830,499 +3830,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
                 </div>
             )}
 
-            {view === 'tables' && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4">
-                    <div className="px-2 flex justify-between items-center">
-                        <div>
-                            <h3 className="font-black uppercase italic text-sm">Gestión de Mesas y Códigos QR</h3>
-                            <p className="text-slate-500 text-[10px] uppercase font-bold mt-1">Crea mesas físicas y genera códigos QR únicos para que tus clientes pidan desde su celular</p>
-                        </div>
-                    </div>
 
-                    {/* Formulario para agregar Mesa */}
-                    <div className="glass p-6 rounded-[2.5rem] border border-white/5 bg-slate-900/10">
-                        <form onSubmit={handleAddTable} className="flex gap-3 items-end">
-                             <div className="flex-[2] space-y-1">
-                                <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Nombre o Número de Mesa</label>
-                                <input
-                                    type="text"
-                                    value={newTableName}
-                                    onChange={e => setNewTableName(e.target.value)}
-                                    placeholder="Ej: Mesa 4, Barra 2, Terraza 1..."
-                                    className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-bold outline-none focus:border-orange-500/50 transition-all text-xs"
-                                    disabled={isSavingTables}
-                                />
-                            </div>
-                            <div className="flex-1 space-y-1">
-                                <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Capacidad (Personas)</label>
-                                <input
-                                    type="number"
-                                    value={newTableCapacity}
-                                    onChange={e => setNewTableCapacity(parseInt(e.target.value) || 2)}
-                                    min="1"
-                                    className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-bold outline-none focus:border-orange-500/50 transition-all text-xs"
-                                    disabled={isSavingTables}
-                                />
-                            </div>
-                            <button
-                                type="submit"
-                                disabled={isSavingTables || !newTableName.trim()}
-                                className="py-4.5 px-6 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest text-xs flex items-center gap-2 active:scale-95 transition-all flex-shrink-0"
-                                style={{ backgroundColor: tenant?.theme_colors?.primary || '#f97316' }}
-                            >
-                                {isSavingTables ? (
-                                    <Loader2 className="animate-spin" size={14} />
-                                ) : (
-                                    <>
-                                        <Plus size={14} />
-                                        Agregar Mesa
-                                    </>
-                                )}
-                            </button>
-                        </form>
-                    </div>
 
-                    {/* Listado de Mesas en una cuadrícula premium */}
-                    {tablesList.length === 0 ? (
-                        <div className="text-center py-12 glass rounded-[2.5rem] border border-white/5">
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">No hay mesas configuradas aún.</p>
-                            <p className="text-[9px] text-slate-600 uppercase mt-1">Ingresa un nombre arriba para crear tu primera mesa.</p>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                            {tablesList.map(table => {
-                                const tableQrUrl = `${window.location.origin}/${tenant.slug}/menu?table=${table.id}`;
-                                const qrImgApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(tableQrUrl)}`;
-                                return (
-                                    <div key={table.id} className="glass p-5 rounded-[2rem] border border-white/5 flex flex-col justify-between gap-4 relative overflow-hidden group bg-slate-900/20">
-                                        <div className="flex justify-between items-start">
-                                            <div className="p-3 bg-slate-950 rounded-2xl text-lg flex items-center justify-center">
-                                                🍽️
-                                            </div>
-                                            <button
-                                                onClick={() => handleDeleteTable(table.id)}
-                                                className="p-2 text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
-                                                title="Eliminar Mesa"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
-                                        <div>
-                                            <h4 className="font-black text-sm text-white group-hover:text-orange-500 transition-colors flex items-center gap-1.5">
-                                                {table.name}
-                                                <span className="text-[9px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
-                                                    👥 {table.capacity || 2}
-                                                </span>
-                                            </h4>
-                                            <div className="flex items-center gap-1.5 mt-1">
-                                                <span className={`w-2 h-2 rounded-full ${table.is_occupied ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} />
-                                                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">
-                                                    {table.is_occupied ? 'Ocupada' : 'Libre'}
-                                                </span>
-                                            </div>
-                                            <p className="text-[8px] font-bold text-slate-600 uppercase mt-1 tracking-wider leading-none">ID: {table.id}</p>
-                                        </div>
-                                        <button
-                                            onClick={() => setSelectedTableForQr(table)}
-                                            className="w-full py-3 bg-slate-950 hover:bg-slate-900 border border-white/5 hover:border-white/10 text-white font-black rounded-xl text-[9px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all"
-                                        >
-                                            <LayoutGrid size={12} style={{ color: tenant?.theme_colors?.primary || '#f97316' }} />
-                                            Ver Código QR
-                                        </button>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-
-                    {/* Modal Premium para mostrar y descargar el QR */}
-                    {selectedTableForQr && (() => {
-                        const tableQrUrl = `${window.location.origin}/${tenant.slug}/menu?table=${selectedTableForQr.id}`;
-                        const qrImgApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(tableQrUrl)}`;
-                        return (
-                            <div className="fixed inset-0 z-[150] flex items-center justify-center px-4 bg-black/85 backdrop-blur-md animate-in fade-in">
-                                <div className="glass w-full max-w-sm rounded-[3rem] p-8 space-y-6 shadow-2xl border border-white/10 text-center relative overflow-hidden">
-                                    <button
-                                        onClick={() => setSelectedTableForQr(null)}
-                                        className="absolute top-4 right-4 text-slate-500 hover:text-white p-2 bg-slate-900 rounded-full transition-all"
-                                    >
-                                        <X size={18} />
-                                    </button>
-                                    <div className="space-y-1.5">
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Mesa Seleccionada</span>
-                                        <h3 className="text-xl font-black text-white italic uppercase" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>{selectedTableForQr.name}</h3>
-                                        <p className="text-[8px] font-bold text-slate-600 uppercase tracking-widest break-all px-4">{tableQrUrl}</p>
-                                    </div>
-
-                                    {/* Contenedor del QR con estética de lujo */}
-                                    <div className="bg-white p-6 rounded-[2rem] inline-block shadow-2xl border border-white/5 relative mx-auto my-2">
-                                        <img src={qrImgApiUrl} alt={`QR ${selectedTableForQr.name}`} className="w-48 h-48 mx-auto" />
-                                    </div>
-
-                                    <div className="space-y-2 pt-2">
-                                        <a
-                                            href={qrImgApiUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="w-full py-4 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest text-xs flex items-center justify-center gap-2 active:scale-95 transition-all"
-                                            style={{ backgroundColor: tenant?.theme_colors?.primary || '#f97316' }}
-                                        >
-                                            <Plus size={14} />
-                                            Descargar QR (Imagen)
-                                        </a>
-                                        <button
-                                            onClick={() => {
-                                                if (navigator.clipboard) {
-                                                    navigator.clipboard.writeText(tableQrUrl);
-                                                    alert('✅ ¡Enlace copiado al portapapeles!');
-                                                }
-                                            }}
-                                            className="w-full py-3 bg-slate-950 hover:bg-slate-900 border border-white/5 hover:border-white/10 text-slate-400 hover:text-white font-black rounded-xl text-[9px] uppercase tracking-wider transition-all"
-                                        >
-                                            Copiar Enlace Directo
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })()}
-                </div>
-            )}
-
-            {view === 'fiscal' && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4">
-                    <div className="px-2">
-                        <h3 className="font-black uppercase italic text-sm">Configuración Fiscal / AFIP</h3>
-                        <p className="text-slate-500 text-[10px] uppercase font-bold mt-1">Integra facturación electrónica en blanco de forma legal</p>
-                    </div>
-
-                    <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 relative overflow-hidden">
-                        {/* Background Deco */}
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
-
-                        <div className="relative z-10 space-y-6">
-                            {/* Header switch */}
-                            <div className="flex items-center justify-between p-4 bg-slate-950/40 rounded-2xl border border-white/5">
-                                <div>
-                                    <h4 className="text-sm font-black text-white uppercase flex items-center gap-2">
-                                        <Receipt size={16} className={cfgAfipEnabled ? "text-blue-400" : "text-slate-500"} /> 
-                                        Habilitar Módulo AFIP
-                                    </h4>
-                                    <p className="text-[10px] text-slate-400 font-bold mt-1">
-                                        Permitirá emitir facturas legales desde la caja
-                                    </p>
-                                </div>
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input 
-                                        type="checkbox" 
-                                        className="sr-only peer" 
-                                        checked={cfgAfipEnabled}
-                                        onChange={(e) => setCfgAfipEnabled(e.target.checked)}
-                                    />
-                                    <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
-                                </label>
-                            </div>
-
-                            {cfgAfipEnabled && (
-                                <div className="space-y-5 animate-in fade-in slide-in-from-top-4 duration-300">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {/* CUIT */}
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black uppercase text-blue-400">CUIT del Local</label>
-                                            <input 
-                                                type="text" 
-                                                placeholder="Ej: 20346582201"
-                                                className="w-full bg-slate-950/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
-                                                value={cfgAfipCuit}
-                                                onChange={(e) => setCfgAfipCuit(e.target.value)}
-                                            />
-                                        </div>
-                                        {/* Punto de Venta */}
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black uppercase text-blue-400">Punto de Venta</label>
-                                            <input 
-                                                type="number" 
-                                                placeholder="Ej: 1"
-                                                className="w-full bg-slate-950/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
-                                                value={cfgAfipPuntoVenta}
-                                                onChange={(e) => setCfgAfipPuntoVenta(e.target.value)}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Condicion IVA y Sandbox */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black uppercase text-blue-400">Condición frente al IVA</label>
-                                            <select 
-                                                className="w-full bg-slate-950/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-bold focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all appearance-none"
-                                                value={cfgAfipCondicionIva}
-                                                onChange={(e) => setCfgAfipCondicionIva(e.target.value)}
-                                            >
-                                                <option value="Monotributista">Monotributista (Factura C)</option>
-                                                <option value="Responsable Inscripto">Responsable Inscripto (Factura A y B)</option>
-                                                <option value="Exento">Exento</option>
-                                            </select>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black uppercase text-blue-400">Entorno de Conexión</label>
-                                            <select 
-                                                className="w-full bg-slate-950/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-bold focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all appearance-none"
-                                                value={cfgAfipIsSandbox ? 'sandbox' : 'production'}
-                                                onChange={(e) => setCfgAfipIsSandbox(e.target.value === 'sandbox')}
-                                            >
-                                                <option value="sandbox">Pruebas (Homologación AFIP)</option>
-                                                <option value="production">Producción (AFIP Real)</option>
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    {/* Certificados */}
-                                    <div className="space-y-3 bg-slate-950/40 p-4 rounded-2xl border border-white/5">
-                                        <div className="flex items-start gap-3">
-                                            <div className="p-2 bg-blue-500/10 text-blue-400 rounded-xl">
-                                                <AlertCircle size={16} />
-                                            </div>
-                                            <div>
-                                                <h5 className="text-[11px] font-black uppercase text-white">Certificados Digitales</h5>
-                                                <p className="text-[10px] text-slate-400 font-bold mt-1 leading-relaxed">
-                                                    Si estás en modo desarrollo (local), el sistema usará los archivos "afip_certificado.crt" y "afip_privada.key" en la raíz del proyecto. Para producción, sube tus certificados oficiales aquí.
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                                            {/* Certificado CRT */}
-                                            <div className="relative group cursor-pointer">
-                                                <input 
-                                                    type="file" 
-                                                    accept=".crt,.txt" 
-                                                    onChange={handleAfipCertUpload} 
-                                                    disabled={isUploadingCert}
-                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed" 
-                                                />
-                                                <div className={`p-4 rounded-xl border border-dashed transition-all h-28 flex flex-col items-center justify-center text-center ${
-                                                    isUploadingCert ? 'border-amber-500 bg-amber-950/20' :
-                                                    cfgAfipCertPath ? 'border-green-500 bg-green-950/20' : 
-                                                    'border-white/20 group-hover:border-blue-500 bg-slate-900'
-                                                }`}>
-                                                    {isUploadingCert ? (
-                                                        <>
-                                                            <Loader2 size={22} className="text-amber-400 animate-spin mb-2" />
-                                                            <span className="text-[10px] font-black text-amber-400 uppercase tracking-wider">Subiendo Certificado...</span>
-                                                        </>
-                                                    ) : cfgAfipCertPath ? (
-                                                        <>
-                                                            <CheckCircle size={22} className="text-green-400 mb-2 animate-bounce" />
-                                                            <span className="text-[10px] font-black text-green-400 uppercase tracking-wider">Certificado Subido Correctamente</span>
-                                                            <span className="text-[9px] text-green-300/80 font-mono mt-1 break-all px-2 line-clamp-1">{cfgAfipCertPath}</span>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Upload size={18} className="text-slate-400 group-hover:text-blue-400 mb-2 transition-transform group-hover:-translate-y-0.5" />
-                                                            <span className="text-[10px] font-bold text-slate-300 uppercase">Subir Certificado (.crt)</span>
-                                                            <span className="text-[9px] text-slate-500 mt-1">Haz clic o arrastra el archivo</span>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Clave Privada KEY */}
-                                            <div className="relative group cursor-pointer">
-                                                <input 
-                                                    type="file" 
-                                                    accept=".key,.txt" 
-                                                    onChange={handleAfipKeyUpload} 
-                                                    disabled={isUploadingKey}
-                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed" 
-                                                />
-                                                <div className={`p-4 rounded-xl border border-dashed transition-all h-28 flex flex-col items-center justify-center text-center ${
-                                                    isUploadingKey ? 'border-amber-500 bg-amber-950/20' :
-                                                    cfgAfipKeyPath ? 'border-green-500 bg-green-950/20' : 
-                                                    'border-white/20 group-hover:border-blue-500 bg-slate-900'
-                                                }`}>
-                                                    {isUploadingKey ? (
-                                                        <>
-                                                            <Loader2 size={22} className="text-amber-400 animate-spin mb-2" />
-                                                            <span className="text-[10px] font-black text-amber-400 uppercase tracking-wider">Subiendo Clave...</span>
-                                                        </>
-                                                    ) : cfgAfipKeyPath ? (
-                                                        <>
-                                                            <CheckCircle size={22} className="text-green-400 mb-2 animate-bounce" />
-                                                            <span className="text-[10px] font-black text-green-400 uppercase tracking-wider">Clave Privada Subida Correctamente</span>
-                                                            <span className="text-[9px] text-green-300/80 font-mono mt-1 break-all px-2 line-clamp-1">{cfgAfipKeyPath}</span>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Upload size={18} className="text-slate-400 group-hover:text-blue-400 mb-2 transition-transform group-hover:-translate-y-0.5" />
-                                                            <span className="text-[10px] font-bold text-slate-300 uppercase">Subir Clave Privada (.key)</span>
-                                                            <span className="text-[9px] text-slate-500 mt-1">Haz clic o arrastra el archivo</span>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Guardar Botón */}
-                            <button
-                                onClick={handleSaveAfipConfig}
-                                disabled={isSavingAfip}
-                                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest text-xs transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
-                            >
-                                {isSavingAfip ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                                Guardar Configuración AFIP
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {view === 'reports' && (() => {
-                const { start, end } = getFilteredDateRange();
-                
-                // Calculate KPIs for the period
-                const filteredOrders = orders.filter(o => {
-                    const d = new Date(o.created_at);
-                    return d >= start && d <= end;
-                });
-                
-                const filteredWaste = expenses.filter(e => {
-                    const d = new Date(e.date || new Date());
-                    return d >= start && d <= end && (e.type === 'waste' || e.description?.startsWith('Merma:'));
-                });
-
-                const totalSales = filteredOrders.reduce((sum, o) => sum + getOrderRevenue(o), 0);
-                const orderCount = filteredOrders.length;
-                const avgTicket = orderCount > 0 ? totalSales / orderCount : 0;
-                const totalWaste = filteredWaste.reduce((sum, e) => sum + (e.amount || 0), 0);
-
-                return (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4">
-                    <div className="flex justify-between items-end px-2">
-                        <div>
-                            <h3 className="font-black uppercase italic text-sm bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">Centro de Reportes</h3>
-                            <p className="text-slate-500 text-[10px] uppercase font-bold mt-1">Exporta la información clave de tu negocio</p>
-                        </div>
-                        <button onClick={() => window.print()} className="bg-slate-800 hover:bg-slate-700 text-white p-2.5 rounded-2xl border border-white/10 active:scale-95 transition-all shadow-lg flex items-center justify-center" title="Imprimir Resumen Ejecutivo">
-                            <Printer size={18} className="text-slate-300" />
-                        </button>
-                    </div>
-
-                    {/* Selector de Rango */}
-                    <div className="glass p-5 rounded-[2rem] border border-white/5 space-y-4">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><Calendar size={14} className="text-orange-500"/> Rango de Fechas a Exportar</label>
-                        <div className="flex flex-wrap gap-2">
-                            {(['today', 'yesterday', 'last7', 'thisMonth', 'lastMonth', 'custom'] as const).map(range => (
-                                <button
-                                    key={range}
-                                    onClick={() => setReportRange(range)}
-                                    className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase transition-all border ${
-                                        reportRange === range 
-                                            ? 'bg-orange-500 text-slate-950 border-orange-400 shadow-lg shadow-orange-500/20' 
-                                            : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800 hover:text-white'
-                                    }`}
-                                >
-                                    {range === 'today' ? 'Hoy' : range === 'yesterday' ? 'Ayer' : range === 'last7' ? 'Últ. 7 Días' : range === 'thisMonth' ? 'Este Mes' : range === 'lastMonth' ? 'Mes Pasado' : 'Personalizado'}
-                                </button>
-                            ))}
-                        </div>
-                        {reportRange === 'custom' && (
-                            <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2 pt-2">
-                                <div>
-                                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Desde</label>
-                                    <input 
-                                        type="date" 
-                                        value={customStartDate} 
-                                        onChange={e => setCustomStartDate(e.target.value)}
-                                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white focus:border-orange-500 outline-none transition-all"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Hasta</label>
-                                    <input 
-                                        type="date" 
-                                        value={customEndDate} 
-                                        onChange={e => setCustomEndDate(e.target.value)}
-                                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white focus:border-orange-500 outline-none transition-all"
-                                    />
-                                </div>
-                            </div>
-                        )}
-                        <div className="pt-2 border-t border-white/5">
-                            <p className="text-[10px] font-bold text-slate-500 bg-slate-900/50 px-3 py-2 rounded-xl border border-white/5 inline-flex items-center gap-2">
-                                Datos del período: <span className="text-orange-400">{start.toLocaleDateString('es-AR')}</span> al <span className="text-orange-400">{end.toLocaleDateString('es-AR')}</span>
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* KPIs */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div className="glass p-5 rounded-[1.5rem] border border-green-500/10 flex flex-col justify-between hover:bg-slate-900/50 transition-all">
-                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><DollarSign size={12} className="text-green-500"/> Facturación</p>
-                            <p className="text-xl font-black text-white font-mono tracking-tight">{formatARS(totalSales)}</p>
-                        </div>
-                        <div className="glass p-5 rounded-[1.5rem] border border-blue-500/10 flex flex-col justify-between hover:bg-slate-900/50 transition-all">
-                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Receipt size={12} className="text-blue-500"/> Pedidos</p>
-                            <p className="text-xl font-black text-white font-mono tracking-tight">{orderCount}</p>
-                        </div>
-                        <div className="glass p-5 rounded-[1.5rem] border border-purple-500/10 flex flex-col justify-between hover:bg-slate-900/50 transition-all">
-                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Layers size={12} className="text-purple-500"/> Tkt. Promedio</p>
-                            <p className="text-xl font-black text-white font-mono tracking-tight">{formatARS(avgTicket)}</p>
-                        </div>
-                        <div className="glass p-5 rounded-[1.5rem] border border-red-500/10 flex flex-col justify-between hover:bg-slate-900/50 transition-all">
-                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><AlertTriangle size={12} className="text-red-500"/> Costo Mermas</p>
-                            <p className="text-xl font-black text-red-400 font-mono tracking-tight">-{formatARS(totalWaste)}</p>
-                        </div>
-                    </div>
-
-                    {/* Descargas Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="glass p-6 rounded-[2rem] border border-white/5 space-y-5 hover:border-green-500/30 hover:bg-slate-900/50 transition-all group">
-                            <div className="space-y-2">
-                                <h4 className="font-black text-white text-[13px] flex items-center gap-2 uppercase tracking-wide"><DollarSign size={18} className="text-green-400"/> Libro de IVA Ventas</h4>
-                                <p className="text-[10px] text-slate-400 leading-relaxed font-bold">Exporta el detalle de cada comanda cobrada en el período seleccionado. Ideal para entregar al contador y liquidar impuestos (IVA / Ingresos Brutos).</p>
-                            </div>
-                            <button onClick={handleExportSales} className="w-full py-4 bg-slate-800 group-hover:bg-green-600 group-hover:text-white text-slate-300 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2">
-                                <Download size={14} /> Descargar CSV Excel
-                            </button>
-                        </div>
-
-                        <div className="glass p-6 rounded-[2rem] border border-white/5 space-y-5 hover:border-yellow-500/30 hover:bg-slate-900/50 transition-all group">
-                            <div className="space-y-2">
-                                <h4 className="font-black text-white text-[13px] flex items-center gap-2 uppercase tracking-wide"><Star size={18} className="text-yellow-400"/> Ranking de Productos</h4>
-                                <p className="text-[10px] text-slate-400 leading-relaxed font-bold">Descubre qué platos y bebidas rinden más. Ayuda a optimizar tu menú, analizar el mix de ventas y crear estrategias de marketing.</p>
-                            </div>
-                            <button onClick={handleExportProducts} className="w-full py-4 bg-slate-800 group-hover:bg-yellow-600 group-hover:text-slate-900 text-slate-300 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2">
-                                <Download size={14} /> Descargar CSV Excel
-                            </button>
-                        </div>
-
-                        <div className="glass p-6 rounded-[2rem] border border-white/5 space-y-5 hover:border-red-500/30 hover:bg-slate-900/50 transition-all group">
-                            <div className="space-y-2">
-                                <h4 className="font-black text-white text-[13px] flex items-center gap-2 uppercase tracking-wide"><AlertTriangle size={18} className="text-red-400"/> Auditoría de Mermas</h4>
-                                <p className="text-[10px] text-slate-400 leading-relaxed font-bold">Controla las pérdidas de dinero ocultas en cocina por roturas, vencimientos o errores de preparación con sus costos exactos.</p>
-                            </div>
-                            <button onClick={handleExportWaste} className="w-full py-4 bg-slate-800 group-hover:bg-red-600 group-hover:text-white text-slate-300 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2">
-                                <Download size={14} /> Descargar CSV Excel
-                            </button>
-                        </div>
-
-                        <div className="glass p-6 rounded-[2rem] border border-white/5 space-y-5 hover:border-blue-500/30 hover:bg-slate-900/50 transition-all group">
-                            <div className="space-y-2">
-                                <h4 className="font-black text-white text-[13px] flex items-center gap-2 uppercase tracking-wide"><Wallet size={18} className="text-blue-400"/> Cierres de Caja (Historial)</h4>
-                                <p className="text-[10px] text-slate-400 leading-relaxed font-bold">Audita el historial de cierres de caja diarios. Analiza el volumen de transacciones y los ingresos discriminados por efectivo vs medios digitales.</p>
-                            </div>
-                            <button onClick={handleExportBoxes} className="w-full py-4 bg-slate-800 group-hover:bg-blue-600 group-hover:text-white text-slate-300 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2">
-                                <Download size={14} /> Descargar CSV Excel
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                );
-            })()}
 
             {view === 'config' && (
                 <div className="space-y-6 animate-in slide-in-from-bottom-4">
@@ -4479,7 +3988,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             )}
                         </div>
 
-                        {/* Accordion: Módulo de Envíos Propios */}
+                        {/* Accordion: Módulo y zonas de envío */}
                         <div className="flex flex-col gap-2">
                             <button
                                 onClick={() => setExpandedConfigSection(prev => prev === 'envios' ? null : 'envios')}
@@ -4495,7 +4004,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             >
                                 <div className="flex items-center gap-3">
                                     <Truck className="w-5 h-5" />
-                                    <span className="font-bold uppercase text-sm tracking-wider">{cfgHasDelivery ? '✅ ' : ''}Módulo de Envíos Propios</span>
+                                    <span className="font-bold uppercase text-sm tracking-wider">{cfgHasDelivery ? '✅ ' : ''}Módulo y zonas de envío</span>
                                 </div>
                                 {expandedConfigSection === 'envios' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                             </button>
@@ -4549,32 +4058,6 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             </label>
                         </div>
 
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Accordion: Zonas de Envío */}
-                        <div className="flex flex-col gap-2">
-                            <button
-                                onClick={() => setExpandedConfigSection(prev => prev === 'zonas' ? null : 'zonas')}
-                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                                    cfgHasDelivery 
-                                      ? (expandedConfigSection === 'zonas' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400')
-                                      : (expandedConfigSection === 'zonas' ? 'bg-slate-800 border-slate-600 text-white' : 'bg-slate-950 border-slate-800 text-slate-500 opacity-80')
-                                }`}
-                                style={{
-                                    borderColor: cfgHasDelivery ? (expandedConfigSection === 'zonas' ? tenant?.theme_colors?.primary : undefined) : undefined,
-                                    color: cfgHasDelivery ? (expandedConfigSection === 'zonas' ? tenant?.theme_colors?.primary : undefined) : undefined,
-                                }}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <MapIcon className="w-5 h-5" />
-                                    <span className="font-bold uppercase text-sm tracking-wider">{cfgHasDelivery ? '✅ ' : ''}Zonas de Envío</span>
-                                </div>
-                                {expandedConfigSection === 'zonas' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                            </button>
-                            {expandedConfigSection === 'zonas' && (
-                                <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 animate-in slide-in-from-top-2">
                         {/* 2.5 Configuración de Zonas de Envío */}
                         {cfgHasDelivery && (
                             <div className="space-y-4 pt-3 border-t border-white/5 animate-in slide-in-from-top-2 duration-300">
@@ -5179,6 +4662,32 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             </div>
                         </div>
 
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Accordion: Módulo de Reservas */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => setExpandedConfigSection(prev => prev === 'reservas' ? null : 'reservas')}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                    cfgReservationsEnabled 
+                                      ? (expandedConfigSection === 'reservas' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400')
+                                      : (expandedConfigSection === 'reservas' ? 'bg-slate-800 border-slate-600 text-white' : 'bg-slate-950 border-slate-800 text-slate-500 opacity-80')
+                                }`}
+                                style={{
+                                    borderColor: cfgReservationsEnabled ? (expandedConfigSection === 'reservas' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                    color: cfgReservationsEnabled ? (expandedConfigSection === 'reservas' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                }}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Calendar className="w-5 h-5" />
+                                    <span className="font-bold uppercase text-sm tracking-wider">{cfgReservationsEnabled ? '✅ ' : ''}Módulo de Reservas</span>
+                                </div>
+                                {expandedConfigSection === 'reservas' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                            {expandedConfigSection === 'reservas' && (
+                                <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 animate-in slide-in-from-top-2">
                         {/* Reservas y Códigos de Descuento (UI) */}
                         {cfgReservationsEnabled && (
                             <div className="space-y-4 pt-4 border-t border-white/5 animate-in slide-in-from-top-2 duration-300">
@@ -5318,33 +4827,6 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 </div>
                             </div>
                         )}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Accordion: Módulo de Reservas */}
-                        <div className="flex flex-col gap-2">
-                            <button
-                                onClick={() => setExpandedConfigSection(prev => prev === 'reservas' ? null : 'reservas')}
-                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                                    cfgReservationsEnabled 
-                                      ? (expandedConfigSection === 'reservas' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400')
-                                      : (expandedConfigSection === 'reservas' ? 'bg-slate-800 border-slate-600 text-white' : 'bg-slate-950 border-slate-800 text-slate-500 opacity-80')
-                                }`}
-                                style={{
-                                    borderColor: cfgReservationsEnabled ? (expandedConfigSection === 'reservas' ? tenant?.theme_colors?.primary : undefined) : undefined,
-                                    color: cfgReservationsEnabled ? (expandedConfigSection === 'reservas' ? tenant?.theme_colors?.primary : undefined) : undefined,
-                                }}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <Calendar className="w-5 h-5" />
-                                    <span className="font-bold uppercase text-sm tracking-wider">{cfgReservationsEnabled ? '✅ ' : ''}Módulo de Reservas</span>
-                                </div>
-                                {expandedConfigSection === 'reservas' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                            </button>
-                            {expandedConfigSection === 'reservas' && (
-                                <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 animate-in slide-in-from-top-2">
-                                    <p className="text-[10px] text-slate-500 font-bold uppercase italic">Módulo de reservas activo.</p>
                                 </div>
                             )}
                         </div>
@@ -5659,6 +5141,979 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             </div>
                         )}
 
+                    </div>
+
+
+                        {/* Accordion: Gestión de Mesas y QR */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => setExpandedConfigSection(prev => prev === 'tables' ? null : 'tables')}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                    expandedConfigSection === 'tables' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400'
+                                }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <QrCode className="w-5 h-5" />
+                                    <span className="font-bold uppercase text-sm tracking-wider">Gestión de Mesas y Códigos QR</span>
+                                </div>
+                                {expandedConfigSection === 'tables' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                            {expandedConfigSection === 'tables' && (
+                <div className="space-y-6 animate-in slide-in-from-bottom-4">
+                    <div className="px-2 flex justify-between items-center">
+                        <div>
+                            <h3 className="font-black uppercase italic text-sm">Gestión de Mesas y Códigos QR</h3>
+                            <p className="text-slate-500 text-[10px] uppercase font-bold mt-1">Crea mesas físicas y genera códigos QR únicos para que tus clientes pidan desde su celular</p>
+                        </div>
+                    </div>
+
+                    {/* Formulario para agregar Mesa */}
+                    <div className="glass p-6 rounded-[2.5rem] border border-white/5 bg-slate-900/10">
+                        <form onSubmit={handleAddTable} className="flex gap-3 items-end">
+                             <div className="flex-[2] space-y-1">
+                                <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Nombre o Número de Mesa</label>
+                                <input
+                                    type="text"
+                                    value={newTableName}
+                                    onChange={e => setNewTableName(e.target.value)}
+                                    placeholder="Ej: Mesa 4, Barra 2, Terraza 1..."
+                                    className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-bold outline-none focus:border-orange-500/50 transition-all text-xs"
+                                    disabled={isSavingTables}
+                                />
+                            </div>
+                            <div className="flex-1 space-y-1">
+                                <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Capacidad (Personas)</label>
+                                <input
+                                    type="number"
+                                    value={newTableCapacity}
+                                    onChange={e => setNewTableCapacity(parseInt(e.target.value) || 2)}
+                                    min="1"
+                                    className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-bold outline-none focus:border-orange-500/50 transition-all text-xs"
+                                    disabled={isSavingTables}
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={isSavingTables || !newTableName.trim()}
+                                className="py-4.5 px-6 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest text-xs flex items-center gap-2 active:scale-95 transition-all flex-shrink-0"
+                                style={{ backgroundColor: tenant?.theme_colors?.primary || '#f97316' }}
+                            >
+                                {isSavingTables ? (
+                                    <Loader2 className="animate-spin" size={14} />
+                                ) : (
+                                    <>
+                                        <Plus size={14} />
+                                        Agregar Mesa
+                                    </>
+                                )}
+                            </button>
+                        </form>
+                    </div>
+
+                    {/* Listado de Mesas en una cuadrícula premium */}
+                    {tablesList.length === 0 ? (
+                        <div className="text-center py-12 glass rounded-[2.5rem] border border-white/5">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">No hay mesas configuradas aún.</p>
+                            <p className="text-[9px] text-slate-600 uppercase mt-1">Ingresa un nombre arriba para crear tu primera mesa.</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            {tablesList.map(table => {
+                                const tableQrUrl = `${window.location.origin}/${tenant.slug}/menu?table=${table.id}`;
+                                const qrImgApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(tableQrUrl)}`;
+                                return (
+                                    <div key={table.id} className="glass p-5 rounded-[2rem] border border-white/5 flex flex-col justify-between gap-4 relative overflow-hidden group bg-slate-900/20">
+                                        <div className="flex justify-between items-start">
+                                            <div className="p-3 bg-slate-950 rounded-2xl text-lg flex items-center justify-center">
+                                                🍽️
+                                            </div>
+                                            <button
+                                                onClick={() => handleDeleteTable(table.id)}
+                                                className="p-2 text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
+                                                title="Eliminar Mesa"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-black text-sm text-white group-hover:text-orange-500 transition-colors flex items-center gap-1.5">
+                                                {table.name}
+                                                <span className="text-[9px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
+                                                    👥 {table.capacity || 2}
+                                                </span>
+                                            </h4>
+                                            <div className="flex items-center gap-1.5 mt-1">
+                                                <span className={`w-2 h-2 rounded-full ${table.is_occupied ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} />
+                                                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">
+                                                    {table.is_occupied ? 'Ocupada' : 'Libre'}
+                                                </span>
+                                            </div>
+                                            <p className="text-[8px] font-bold text-slate-600 uppercase mt-1 tracking-wider leading-none">ID: {table.id}</p>
+                                        </div>
+                                        <button
+                                            onClick={() => setSelectedTableForQr(table)}
+                                            className="w-full py-3 bg-slate-950 hover:bg-slate-900 border border-white/5 hover:border-white/10 text-white font-black rounded-xl text-[9px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all"
+                                        >
+                                            <LayoutGrid size={12} style={{ color: tenant?.theme_colors?.primary || '#f97316' }} />
+                                            Ver Código QR
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {/* Modal Premium para mostrar y descargar el QR */}
+                    {selectedTableForQr && (() => {
+                        const tableQrUrl = `${window.location.origin}/${tenant.slug}/menu?table=${selectedTableForQr.id}`;
+                        const qrImgApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(tableQrUrl)}`;
+                        return (
+                            <div className="fixed inset-0 z-[150] flex items-center justify-center px-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+                                <div className="glass w-full max-w-sm rounded-[3rem] p-8 space-y-6 shadow-2xl border border-white/10 text-center relative overflow-hidden">
+                                    <button
+                                        onClick={() => setSelectedTableForQr(null)}
+                                        className="absolute top-4 right-4 text-slate-500 hover:text-white p-2 bg-slate-900 rounded-full transition-all"
+                                    >
+                                        <X size={18} />
+                                    </button>
+                                    <div className="space-y-1.5">
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Mesa Seleccionada</span>
+                                        <h3 className="text-xl font-black text-white italic uppercase" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>{selectedTableForQr.name}</h3>
+                                        <p className="text-[8px] font-bold text-slate-600 uppercase tracking-widest break-all px-4">{tableQrUrl}</p>
+                                    </div>
+
+                                    {/* Contenedor del QR con estética de lujo */}
+                                    <div className="bg-white p-6 rounded-[2rem] inline-block shadow-2xl border border-white/5 relative mx-auto my-2">
+                                        <img src={qrImgApiUrl} alt={`QR ${selectedTableForQr.name}`} className="w-48 h-48 mx-auto" />
+                                    </div>
+
+                                    <div className="space-y-2 pt-2">
+                                        <a
+                                            href={qrImgApiUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="w-full py-4 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest text-xs flex items-center justify-center gap-2 active:scale-95 transition-all"
+                                            style={{ backgroundColor: tenant?.theme_colors?.primary || '#f97316' }}
+                                        >
+                                            <Plus size={14} />
+                                            Descargar QR (Imagen)
+                                        </a>
+                                        <button
+                                            onClick={() => {
+                                                if (navigator.clipboard) {
+                                                    navigator.clipboard.writeText(tableQrUrl);
+                                                    alert('✅ ¡Enlace copiado al portapapeles!');
+                                                }
+                                            }}
+                                            className="w-full py-3 bg-slate-950 hover:bg-slate-900 border border-white/5 hover:border-white/10 text-slate-400 hover:text-white font-black rounded-xl text-[9px] uppercase tracking-wider transition-all"
+                                        >
+                                            Copiar Enlace Directo
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+                </div>
+                            )}
+                        </div>
+
+                        {/* Accordion: Centro de Reportes */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => setExpandedConfigSection(prev => prev === 'reports' ? null : 'reports')}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                    expandedConfigSection === 'reports' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400'
+                                }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <BarChart2 className="w-5 h-5" />
+                                    <span className="font-bold uppercase text-sm tracking-wider">Centro de Reportes</span>
+                                </div>
+                                {expandedConfigSection === 'reports' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                            {expandedConfigSection === 'reports' && (() => {
+                const { start, end } = getFilteredDateRange();
+                
+                // Calculate KPIs for the period
+                const filteredOrders = orders.filter(o => {
+                    const d = new Date(o.created_at);
+                    return d >= start && d <= end;
+                });
+                
+                const filteredWaste = expenses.filter(e => {
+                    const d = new Date(e.date || new Date());
+                    return d >= start && d <= end && (e.type === 'waste' || e.description?.startsWith('Merma:'));
+                });
+
+                const totalSales = filteredOrders.reduce((sum, o) => sum + getOrderRevenue(o), 0);
+                const orderCount = filteredOrders.length;
+                const avgTicket = orderCount > 0 ? totalSales / orderCount : 0;
+                const totalWaste = filteredWaste.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+                
+                                return (
+                <div className="space-y-6 animate-in slide-in-from-bottom-4">
+                    <div className="flex justify-between items-end px-2">
+                        <div>
+                            <h3 className="font-black uppercase italic text-sm bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">Centro de Reportes</h3>
+                            <p className="text-slate-500 text-[10px] uppercase font-bold mt-1">Exporta la información clave de tu negocio</p>
+                        </div>
+                        <button onClick={() => window.print()} className="bg-slate-800 hover:bg-slate-700 text-white p-2.5 rounded-2xl border border-white/10 active:scale-95 transition-all shadow-lg flex items-center justify-center" title="Imprimir Resumen Ejecutivo">
+                            <Printer size={18} className="text-slate-300" />
+                        </button>
+                    </div>
+
+                    {/* Selector de Rango */}
+                    <div className="glass p-5 rounded-[2rem] border border-white/5 space-y-4">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><Calendar size={14} className="text-orange-500"/> Rango de Fechas a Exportar</label>
+                        <div className="flex flex-wrap gap-2">
+                            {(['today', 'yesterday', 'last7', 'thisMonth', 'lastMonth', 'custom'] as const).map(range => (
+                                <button
+                                    key={range}
+                                    onClick={() => setReportRange(range)}
+                                    className={`px-4 py-2.5 rounded-xl text-[9px] font-black uppercase transition-all border ${
+                                        reportRange === range 
+                                            ? 'bg-orange-500 text-slate-950 border-orange-400 shadow-lg shadow-orange-500/20' 
+                                            : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800 hover:text-white'
+                                    }`}
+                                >
+                                    {range === 'today' ? 'Hoy' : range === 'yesterday' ? 'Ayer' : range === 'last7' ? 'Últ. 7 Días' : range === 'thisMonth' ? 'Este Mes' : range === 'lastMonth' ? 'Mes Pasado' : 'Personalizado'}
+                                </button>
+                            ))}
+                        </div>
+                        {reportRange === 'custom' && (
+                            <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2 pt-2">
+                                <div>
+                                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Desde</label>
+                                    <input 
+                                        type="date" 
+                                        value={customStartDate} 
+                                        onChange={e => setCustomStartDate(e.target.value)}
+                                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white focus:border-orange-500 outline-none transition-all"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Hasta</label>
+                                    <input 
+                                        type="date" 
+                                        value={customEndDate} 
+                                        onChange={e => setCustomEndDate(e.target.value)}
+                                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-xs font-bold text-white focus:border-orange-500 outline-none transition-all"
+                                    />
+                                </div>
+                            </div>
+                        )}
+                        <div className="pt-2 border-t border-white/5">
+                            <p className="text-[10px] font-bold text-slate-500 bg-slate-900/50 px-3 py-2 rounded-xl border border-white/5 inline-flex items-center gap-2">
+                                Datos del período: <span className="text-orange-400">{start.toLocaleDateString('es-AR')}</span> al <span className="text-orange-400">{end.toLocaleDateString('es-AR')}</span>
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* KPIs */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="glass p-5 rounded-[1.5rem] border border-green-500/10 flex flex-col justify-between hover:bg-slate-900/50 transition-all">
+                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><DollarSign size={12} className="text-green-500"/> Facturación</p>
+                            <p className="text-xl font-black text-white font-mono tracking-tight">{formatARS(totalSales)}</p>
+                        </div>
+                        <div className="glass p-5 rounded-[1.5rem] border border-blue-500/10 flex flex-col justify-between hover:bg-slate-900/50 transition-all">
+                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Receipt size={12} className="text-blue-500"/> Pedidos</p>
+                            <p className="text-xl font-black text-white font-mono tracking-tight">{orderCount}</p>
+                        </div>
+                        <div className="glass p-5 rounded-[1.5rem] border border-purple-500/10 flex flex-col justify-between hover:bg-slate-900/50 transition-all">
+                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Layers size={12} className="text-purple-500"/> Tkt. Promedio</p>
+                            <p className="text-xl font-black text-white font-mono tracking-tight">{formatARS(avgTicket)}</p>
+                        </div>
+                        <div className="glass p-5 rounded-[1.5rem] border border-red-500/10 flex flex-col justify-between hover:bg-slate-900/50 transition-all">
+                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><AlertTriangle size={12} className="text-red-500"/> Costo Mermas</p>
+                            <p className="text-xl font-black text-red-400 font-mono tracking-tight">-{formatARS(totalWaste)}</p>
+                        </div>
+                    </div>
+
+                    {/* Descargas Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="glass p-6 rounded-[2rem] border border-white/5 space-y-5 hover:border-green-500/30 hover:bg-slate-900/50 transition-all group">
+                            <div className="space-y-2">
+                                <h4 className="font-black text-white text-[13px] flex items-center gap-2 uppercase tracking-wide"><DollarSign size={18} className="text-green-400"/> Libro de IVA Ventas</h4>
+                                <p className="text-[10px] text-slate-400 leading-relaxed font-bold">Exporta el detalle de cada comanda cobrada en el período seleccionado. Ideal para entregar al contador y liquidar impuestos (IVA / Ingresos Brutos).</p>
+                            </div>
+                            <button onClick={handleExportSales} className="w-full py-4 bg-slate-800 group-hover:bg-green-600 group-hover:text-white text-slate-300 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2">
+                                <Download size={14} /> Descargar CSV Excel
+                            </button>
+                        </div>
+
+                        <div className="glass p-6 rounded-[2rem] border border-white/5 space-y-5 hover:border-yellow-500/30 hover:bg-slate-900/50 transition-all group">
+                            <div className="space-y-2">
+                                <h4 className="font-black text-white text-[13px] flex items-center gap-2 uppercase tracking-wide"><Star size={18} className="text-yellow-400"/> Ranking de Productos</h4>
+                                <p className="text-[10px] text-slate-400 leading-relaxed font-bold">Descubre qué platos y bebidas rinden más. Ayuda a optimizar tu menú, analizar el mix de ventas y crear estrategias de marketing.</p>
+                            </div>
+                            <button onClick={handleExportProducts} className="w-full py-4 bg-slate-800 group-hover:bg-yellow-600 group-hover:text-slate-900 text-slate-300 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2">
+                                <Download size={14} /> Descargar CSV Excel
+                            </button>
+                        </div>
+
+                        <div className="glass p-6 rounded-[2rem] border border-white/5 space-y-5 hover:border-red-500/30 hover:bg-slate-900/50 transition-all group">
+                            <div className="space-y-2">
+                                <h4 className="font-black text-white text-[13px] flex items-center gap-2 uppercase tracking-wide"><AlertTriangle size={18} className="text-red-400"/> Auditoría de Mermas</h4>
+                                <p className="text-[10px] text-slate-400 leading-relaxed font-bold">Controla las pérdidas de dinero ocultas en cocina por roturas, vencimientos o errores de preparación con sus costos exactos.</p>
+                            </div>
+                            <button onClick={handleExportWaste} className="w-full py-4 bg-slate-800 group-hover:bg-red-600 group-hover:text-white text-slate-300 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2">
+                                <Download size={14} /> Descargar CSV Excel
+                            </button>
+                        </div>
+
+                        <div className="glass p-6 rounded-[2rem] border border-white/5 space-y-5 hover:border-blue-500/30 hover:bg-slate-900/50 transition-all group">
+                            <div className="space-y-2">
+                                <h4 className="font-black text-white text-[13px] flex items-center gap-2 uppercase tracking-wide"><Wallet size={18} className="text-blue-400"/> Cierres de Caja (Historial)</h4>
+                                <p className="text-[10px] text-slate-400 leading-relaxed font-bold">Audita el historial de cierres de caja diarios. Analiza el volumen de transacciones y los ingresos discriminados por efectivo vs medios digitales.</p>
+                            </div>
+                            <button onClick={handleExportBoxes} className="w-full py-4 bg-slate-800 group-hover:bg-blue-600 group-hover:text-white text-slate-300 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2">
+                                <Download size={14} /> Descargar CSV Excel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                            ); })()}
+                        </div>
+                        {/* Accordion: Facturación AFIP */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => setExpandedConfigSection(prev => prev === 'fiscal' ? null : 'fiscal')}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                    expandedConfigSection === 'fiscal' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400'
+                                }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <FileText className="w-5 h-5" />
+                                    <span className="font-bold uppercase text-sm tracking-wider">Facturación Fiscal (AFIP)</span>
+                                </div>
+                                {expandedConfigSection === 'fiscal' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                            {expandedConfigSection === 'fiscal' && (
+                <div className="space-y-6 animate-in slide-in-from-bottom-4">
+                    <div className="px-2">
+                        <h3 className="font-black uppercase italic text-sm">Configuración Fiscal / AFIP</h3>
+                        <p className="text-slate-500 text-[10px] uppercase font-bold mt-1">Integra facturación electrónica en blanco de forma legal</p>
+                    </div>
+
+                    <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 relative overflow-hidden">
+                        {/* Background Deco */}
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
+
+                        <div className="relative z-10 space-y-6">
+                            {/* Header switch */}
+                            <div className="flex items-center justify-between p-4 bg-slate-950/40 rounded-2xl border border-white/5">
+                                <div>
+                                    <h4 className="text-sm font-black text-white uppercase flex items-center gap-2">
+                                        <Receipt size={16} className={cfgAfipEnabled ? "text-blue-400" : "text-slate-500"} /> 
+                                        Habilitar Módulo AFIP
+                                    </h4>
+                                    <p className="text-[10px] text-slate-400 font-bold mt-1">
+                                        Permitirá emitir facturas legales desde la caja
+                                    </p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        className="sr-only peer" 
+                                        checked={cfgAfipEnabled}
+                                        onChange={(e) => setCfgAfipEnabled(e.target.checked)}
+                                    />
+                                    <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                                </label>
+                            </div>
+
+                            {cfgAfipEnabled && (
+                                <div className="space-y-5 animate-in fade-in slide-in-from-top-4 duration-300">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {/* CUIT */}
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-black uppercase text-blue-400">CUIT del Local</label>
+                                            <input 
+                                                type="text" 
+                                                placeholder="Ej: 20346582201"
+                                                className="w-full bg-slate-950/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                                                value={cfgAfipCuit}
+                                                onChange={(e) => setCfgAfipCuit(e.target.value)}
+                                            />
+                                        </div>
+                                        {/* Punto de Venta */}
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-black uppercase text-blue-400">Punto de Venta</label>
+                                            <input 
+                                                type="number" 
+                                                placeholder="Ej: 1"
+                                                className="w-full bg-slate-950/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                                                value={cfgAfipPuntoVenta}
+                                                onChange={(e) => setCfgAfipPuntoVenta(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Condicion IVA y Sandbox */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-black uppercase text-blue-400">Condición frente al IVA</label>
+                                            <select 
+                                                className="w-full bg-slate-950/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-bold focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all appearance-none"
+                                                value={cfgAfipCondicionIva}
+                                                onChange={(e) => setCfgAfipCondicionIva(e.target.value)}
+                                            >
+                                                <option value="Monotributista">Monotributista (Factura C)</option>
+                                                <option value="Responsable Inscripto">Responsable Inscripto (Factura A y B)</option>
+                                                <option value="Exento">Exento</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-black uppercase text-blue-400">Entorno de Conexión</label>
+                                            <select 
+                                                className="w-full bg-slate-950/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-bold focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all appearance-none"
+                                                value={cfgAfipIsSandbox ? 'sandbox' : 'production'}
+                                                onChange={(e) => setCfgAfipIsSandbox(e.target.value === 'sandbox')}
+                                            >
+                                                <option value="sandbox">Pruebas (Homologación AFIP)</option>
+                                                <option value="production">Producción (AFIP Real)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {/* Certificados */}
+                                    <div className="space-y-3 bg-slate-950/40 p-4 rounded-2xl border border-white/5">
+                                        <div className="flex items-start gap-3">
+                                            <div className="p-2 bg-blue-500/10 text-blue-400 rounded-xl">
+                                                <AlertCircle size={16} />
+                                            </div>
+                                            <div>
+                                                <h5 className="text-[11px] font-black uppercase text-white">Certificados Digitales</h5>
+                                                <p className="text-[10px] text-slate-400 font-bold mt-1 leading-relaxed">
+                                                    Si estás en modo desarrollo (local), el sistema usará los archivos "afip_certificado.crt" y "afip_privada.key" en la raíz del proyecto. Para producción, sube tus certificados oficiales aquí.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                                            {/* Certificado CRT */}
+                                            <div className="relative group cursor-pointer">
+                                                <input 
+                                                    type="file" 
+                                                    accept=".crt,.txt" 
+                                                    onChange={handleAfipCertUpload} 
+                                                    disabled={isUploadingCert}
+                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed" 
+                                                />
+                                                <div className={`p-4 rounded-xl border border-dashed transition-all h-28 flex flex-col items-center justify-center text-center ${
+                                                    isUploadingCert ? 'border-amber-500 bg-amber-950/20' :
+                                                    cfgAfipCertPath ? 'border-green-500 bg-green-950/20' : 
+                                                    'border-white/20 group-hover:border-blue-500 bg-slate-900'
+                                                }`}>
+                                                    {isUploadingCert ? (
+                                                        <>
+                                                            <Loader2 size={22} className="text-amber-400 animate-spin mb-2" />
+                                                            <span className="text-[10px] font-black text-amber-400 uppercase tracking-wider">Subiendo Certificado...</span>
+                                                        </>
+                                                    ) : cfgAfipCertPath ? (
+                                                        <>
+                                                            <CheckCircle size={22} className="text-green-400 mb-2 animate-bounce" />
+                                                            <span className="text-[10px] font-black text-green-400 uppercase tracking-wider">Certificado Subido Correctamente</span>
+                                                            <span className="text-[9px] text-green-300/80 font-mono mt-1 break-all px-2 line-clamp-1">{cfgAfipCertPath}</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Upload size={18} className="text-slate-400 group-hover:text-blue-400 mb-2 transition-transform group-hover:-translate-y-0.5" />
+                                                            <span className="text-[10px] font-bold text-slate-300 uppercase">Subir Certificado (.crt)</span>
+                                                            <span className="text-[9px] text-slate-500 mt-1">Haz clic o arrastra el archivo</span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Clave Privada KEY */}
+                                            <div className="relative group cursor-pointer">
+                                                <input 
+                                                    type="file" 
+                                                    accept=".key,.txt" 
+                                                    onChange={handleAfipKeyUpload} 
+                                                    disabled={isUploadingKey}
+                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed" 
+                                                />
+                                                <div className={`p-4 rounded-xl border border-dashed transition-all h-28 flex flex-col items-center justify-center text-center ${
+                                                    isUploadingKey ? 'border-amber-500 bg-amber-950/20' :
+                                                    cfgAfipKeyPath ? 'border-green-500 bg-green-950/20' : 
+                                                    'border-white/20 group-hover:border-blue-500 bg-slate-900'
+                                                }`}>
+                                                    {isUploadingKey ? (
+                                                        <>
+                                                            <Loader2 size={22} className="text-amber-400 animate-spin mb-2" />
+                                                            <span className="text-[10px] font-black text-amber-400 uppercase tracking-wider">Subiendo Clave...</span>
+                                                        </>
+                                                    ) : cfgAfipKeyPath ? (
+                                                        <>
+                                                            <CheckCircle size={22} className="text-green-400 mb-2 animate-bounce" />
+                                                            <span className="text-[10px] font-black text-green-400 uppercase tracking-wider">Clave Privada Subida Correctamente</span>
+                                                            <span className="text-[9px] text-green-300/80 font-mono mt-1 break-all px-2 line-clamp-1">{cfgAfipKeyPath}</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Upload size={18} className="text-slate-400 group-hover:text-blue-400 mb-2 transition-transform group-hover:-translate-y-0.5" />
+                                                            <span className="text-[10px] font-bold text-slate-300 uppercase">Subir Clave Privada (.key)</span>
+                                                            <span className="text-[9px] text-slate-500 mt-1">Haz clic o arrastra el archivo</span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Guardar Botón */}
+                            <button
+                                onClick={handleSaveAfipConfig}
+                                disabled={isSavingAfip}
+                                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest text-xs transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {isSavingAfip ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                                Guardar Configuración AFIP
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                            )}
+                        </div>
+                        {/* Accordion: Club de Clientes */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => setExpandedConfigSection(prev => prev === 'loyalty' ? null : 'loyalty')}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                    expandedConfigSection === 'loyalty' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400'
+                                }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Users className="w-5 h-5" />
+                                    <span className="font-bold uppercase text-sm tracking-wider">Club de Clientes / Fidelización</span>
+                                </div>
+                                {expandedConfigSection === 'loyalty' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+            {expandedConfigSection === 'loyalty' && (
+                <div className="space-y-6 animate-in slide-in-from-bottom-4">
+                    <div className="px-2 flex justify-between items-center flex-wrap gap-3">
+                        <div>
+                            <h3 className="font-black uppercase italic text-sm">Fidelización y Club de Clientes</h3>
+                            <p className="text-slate-500 text-[10px] uppercase font-bold mt-1">Monitorea y premia a tus clientes más fieles con monedero virtual</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={fetchLoyaltyAccounts}
+                                className="py-2.5 px-4 bg-slate-900 border border-slate-800 text-[9px] font-black uppercase text-slate-400 rounded-xl hover:text-white transition-all active:scale-95 flex items-center gap-1.5"
+                            >
+                                <RefreshCw size={10} className={isFetchingLoyalty ? "animate-spin" : ""} /> Refrescar
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* CONFIGURACIÓN DEL CLUB */}
+                    <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-6">
+                        <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                            <div className="flex items-center gap-3 text-left">
+                                <div className="w-10 h-10 rounded-2xl bg-orange-500/10 text-orange-500 flex items-center justify-center">
+                                    <Settings size={18} />
+                                </div>
+                                <div>
+                                    <h4 className="font-black text-white text-[12px] uppercase">Ajustes del Programa de Fidelidad</h4>
+                                    <p className="text-[9px] text-slate-400 font-bold uppercase">Controla cómo los clientes ganan y gastan su cashback</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${loyConfigEnabled ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                    {loyConfigEnabled ? 'Activo' : 'Inactivo'}
+                                </span>
+                                <input
+                                    type="checkbox"
+                                    checked={loyConfigEnabled}
+                                    onChange={(e) => setLoyConfigEnabled(e.target.checked)}
+                                    className="w-9 h-5 bg-slate-950 rounded-full appearance-none checked:bg-orange-500 border border-slate-800 cursor-pointer relative after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-4 after:w-4 after:transition-all checked:after:translate-x-4 checked:after:bg-white"
+                                />
+                            </div>
+                        </div>
+
+                        {loyConfigEnabled && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
+                                <div className="bg-slate-950/40 p-4 rounded-3xl border border-white/5 space-y-2">
+                                    <label className="text-[8.5px] font-black uppercase text-slate-500 block">Canal de Acumulación (Ganar)</label>
+                                    <select
+                                        value={loyConfigEarnChan}
+                                        onChange={(e) => setLoyConfigEarnChan(e.target.value as any)}
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500/50 font-bold"
+                                    >
+                                        <option value="both">Ambos (Online + Salón/Caja)</option>
+                                        <option value="online">Solo Pedidos Online (PublicMenu)</option>
+                                        <option value="salon">Solo Salón (Mesas/Caja)</option>
+                                    </select>
+                                    <p className="text-[7.5px] text-slate-500 font-bold leading-normal uppercase">Promueve un canal específico de venta permitiendo acumular saldo únicamente allí.</p>
+                                </div>
+
+                                <div className="bg-slate-950/40 p-4 rounded-3xl border border-white/5 space-y-2">
+                                    <label className="text-[8.5px] font-black uppercase text-slate-500 block">Canal de Canje (Gastar)</label>
+                                    <select
+                                        value={loyConfigRedeemChan}
+                                        onChange={(e) => setLoyConfigRedeemChan(e.target.value as any)}
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500/50 font-bold"
+                                    >
+                                        <option value="both">Ambos (Online + Salón/Caja)</option>
+                                        <option value="online">Solo Pedidos Online (PublicMenu)</option>
+                                        <option value="salon">Solo Salón (Mesas/Caja)</option>
+                                    </select>
+                                    <p className="text-[7.5px] text-slate-500 font-bold leading-normal uppercase">Decide en qué canales los clientes pueden descontar su dinero acumulado.</p>
+                                </div>
+
+                                <div className="bg-slate-950/40 p-4 rounded-3xl border border-white/5 space-y-2">
+                                    <label className="text-[8.5px] font-black uppercase text-slate-500 block">Tasa de Cashback Base (%)</label>
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            value={loyConfigCashbackPct}
+                                            onChange={(e) => setLoyConfigCashbackPct(parseFloat(e.target.value) || 0)}
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-bold outline-none focus:border-orange-500/50 pr-8"
+                                        />
+                                        <span className="absolute right-3 top-2 text-[9px] font-black text-slate-500">%</span>
+                                    </div>
+                                    <p className="text-[7.5px] text-slate-500 font-bold leading-normal uppercase">Porcentaje de la compra que vuelve en pesos al monedero del cliente.</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* CONFIGURACIÓN DE NIVELES (TIERS) */}
+                        {loyConfigEnabled && (
+                            <div className="space-y-4 text-left border-t border-white/5 pt-5">
+                                <h5 className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1.5">
+                                    <Trophy size={12} /> Configuración de Niveles y Beneficios del Club
+                                </h5>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    {loyConfigTiers.map((t, idx) => (
+                                        <div key={t.name} className="bg-slate-950/30 border border-white/5 rounded-3xl p-5 space-y-4">
+                                            <div className="flex justify-between items-center">
+                                                <span className={`text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full ${
+                                                    t.name === 'oro' ? 'bg-yellow-500/10 text-yellow-400' :
+                                                    t.name === 'plata' ? 'bg-slate-300/10 text-slate-350' : 'bg-orange-500/10 text-orange-400'
+                                                }`}>
+                                                    ⭐ {t.name}
+                                                </span>
+                                                <span className="text-[8px] font-bold text-slate-500 uppercase">Nivel {idx + 1}</span>
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <label className="text-[7.5px] font-black text-slate-500 uppercase block mb-1">Mín. Pedidos</label>
+                                                        <input
+                                                            type="number"
+                                                            value={t.min_orders}
+                                                            onChange={(e) => {
+                                                                const val = parseInt(e.target.value) || 0;
+                                                                setLoyConfigTiers(prev => prev.map(item => item.name === t.name ? { ...item, min_orders: val } : item));
+                                                            }}
+                                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-[11px] text-white font-mono font-bold"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[7.5px] font-black text-slate-500 uppercase block mb-1">Máx. Pedidos</label>
+                                                        <input
+                                                            type="number"
+                                                            value={t.max_orders}
+                                                            onChange={(e) => {
+                                                                const val = parseInt(e.target.value) || 0;
+                                                                setLoyConfigTiers(prev => prev.map(item => item.name === t.name ? { ...item, max_orders: val } : item));
+                                                            }}
+                                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-[11px] text-white font-mono font-bold"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <label className="text-[7.5px] font-black text-slate-500 uppercase block mb-1">Cashback %</label>
+                                                        <input
+                                                            type="number"
+                                                            value={t.cashback_pct}
+                                                            onChange={(e) => {
+                                                                const val = parseFloat(e.target.value) || 0;
+                                                                setLoyConfigTiers(prev => prev.map(item => item.name === t.name ? { ...item, cashback_pct: val } : item));
+                                                            }}
+                                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-[11px] text-white font-mono font-bold"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[7.5px] font-black text-slate-500 uppercase block mb-1">Desc. Extra %</label>
+                                                        <input
+                                                            type="number"
+                                                            value={t.discount_pct}
+                                                            onChange={(e) => {
+                                                                const val = parseFloat(e.target.value) || 0;
+                                                                setLoyConfigTiers(prev => prev.map(item => item.name === t.name ? { ...item, discount_pct: val } : item));
+                                                            }}
+                                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-[11px] text-white font-mono font-bold"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex justify-end border-t border-white/5 pt-4">
+                            <button
+                                onClick={handleUpdateLoyaltyConfig}
+                                disabled={isSavingLoyaltyConfig}
+                                className="px-6 py-3 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-[10px] font-black uppercase text-white rounded-xl active:scale-95 transition-all shadow-md flex items-center gap-1.5"
+                                style={{ backgroundColor: tenant?.theme_colors?.primary || '#f97316' }}
+                            >
+                                {isSavingLoyaltyConfig ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                                Guardar Cambios del Club
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* ANALÍTICA DEL CLUB Y CRM */}
+                    {loyConfigEnabled && (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-left">
+                            <div className="glass p-5 rounded-[2.5rem] border border-white/5 flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-orange-500/10 text-orange-400 flex items-center justify-center shrink-0">
+                                    <Award size={22} />
+                                </div>
+                                <div className="space-y-0.5">
+                                    <p className="text-[7.5px] text-slate-500 font-black uppercase tracking-wider">Miembros Registrados</p>
+                                    <h3 className="text-xl font-black text-white font-mono">{loyaltyAccounts.length}</h3>
+                                    <p className="text-[7px] text-slate-400 font-bold uppercase">Clientes identificados por móvil</p>
+                                </div>
+                            </div>
+
+                            <div className="glass p-5 rounded-[2.5rem] border border-white/5 flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
+                                    <Coins size={22} />
+                                </div>
+                                <div className="space-y-0.5">
+                                    <p className="text-[7.5px] text-slate-500 font-black uppercase tracking-wider">Crédito en Circulación</p>
+                                    <h3 className="text-xl font-black text-emerald-400 font-mono">
+                                        {formatARS(loyaltyAccounts.reduce((sum, item) => sum + (parseFloat(item.balance) || 0), 0))}
+                                    </h3>
+                                    <p className="text-[7px] text-slate-400 font-bold uppercase">Saldo total acumulado</p>
+                                </div>
+                            </div>
+
+                            <div className="glass p-5 rounded-[2.5rem] border border-white/5 flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
+                                    <TrendingUp size={22} />
+                                </div>
+                                <div className="space-y-0.5">
+                                    <p className="text-[7.5px] text-slate-500 font-black uppercase tracking-wider">Ticket Promedio General</p>
+                                    <h3 className="text-xl font-black text-blue-400 font-mono">
+                                        {(() => {
+                                            const validSpent = loyaltyAccounts.filter(a => a.total_orders > 0);
+                                            if (validSpent.length === 0) return '$0';
+                                            const totalOrders = validSpent.reduce((sum, item) => sum + item.total_orders, 0);
+                                            const totalSpent = validSpent.reduce((sum, item) => sum + (parseFloat(item.total_spent) || 0), 0);
+                                            return formatARS(Math.round(totalSpent / totalOrders));
+                                        })()}
+                                    </h3>
+                                    <p className="text-[7px] text-slate-400 font-bold uppercase">Consumo por visita</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* BUSCADOR Y TABLA CRM */}
+                    {loyConfigEnabled && (
+                        <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-6">
+                            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center text-left">
+                                <div>
+                                    <h4 className="font-black text-white text-[12px] uppercase">Base de Datos de Clientes y Trazabilidad</h4>
+                                    <p className="text-[9px] text-slate-400 font-bold uppercase">Audita consumos, rankings y reactiva clientes inactivos</p>
+                                </div>
+
+                                <div className="flex gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap">
+                                    {/* Buscador */}
+                                    <div className="relative flex-1 sm:w-60">
+                                        <Search size={12} className="absolute left-3.5 top-3 text-slate-500" />
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar por teléfono o nombre..."
+                                            value={loyaltySearch}
+                                            onChange={(e) => setLoyaltySearch(e.target.value)}
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white outline-none focus:border-orange-500/50 font-bold"
+                                        />
+                                    </div>
+                                    {/* Filtro Tier */}
+                                    <select
+                                        value={selectedLoyaltyTier}
+                                        onChange={(e) => setSelectedLoyaltyTier(e.target.value as any)}
+                                        className="bg-slate-950 border border-slate-800 text-xs text-white rounded-xl px-3 py-2 outline-none font-bold cursor-pointer"
+                                    >
+                                        <option value="all">Todos los Niveles</option>
+                                        <option value="bronce">⭐ Bronce</option>
+                                        <option value="plata">⭐ Plata</option>
+                                        <option value="oro">⭐ Oro</option>
+                                        <option value="dormant">💤 Inactivos ({'>'}30 días)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* TABLA CRM */}
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-[10px] text-left border-collapse">
+                                    <thead>
+                                        <tr className="border-b border-white/5 text-slate-500 uppercase tracking-widest text-[8px] font-black">
+                                            <th className="py-3 px-4">Cliente</th>
+                                            <th className="py-3 px-4">Nivel</th>
+                                            <th className="py-3 px-4 text-center">Pedidos</th>
+                                            <th className="py-3 px-4 text-right">Ticket Promedio</th>
+                                            <th className="py-3 px-4 text-right">Total Consumido</th>
+                                            <th className="py-3 px-4 text-right">Saldo Monedero</th>
+                                            <th className="py-3 px-4 text-center">Última Compra</th>
+                                            <th className="py-3 px-4 text-center">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5">
+                                        {(() => {
+                                            const filtered = loyaltyAccounts.filter(acc => {
+                                                // Búsqueda de texto
+                                                if (loyaltySearch) {
+                                                    const q = loyaltySearch.toLowerCase();
+                                                    const name = (acc.client_name || '').toLowerCase();
+                                                    const phone = acc.phone_number || '';
+                                                    if (!name.includes(q) && !phone.includes(q)) return false;
+                                                }
+                                                // Filtro de Nivel o Inactividad
+                                                if (selectedLoyaltyTier === 'dormant') {
+                                                    const diff = Date.now() - new Date(acc.last_order_date).getTime();
+                                                    return diff > 30 * 24 * 60 * 60 * 1000;
+                                                } else if (selectedLoyaltyTier !== 'all') {
+                                                    return acc.tier === selectedLoyaltyTier;
+                                                }
+                                                return true;
+                                            });
+
+                                            if (filtered.length === 0) {
+                                                return (
+                                                    <tr>
+                                                        <td colSpan={8} className="py-8 text-center text-slate-500 font-bold uppercase tracking-wider">
+                                                            No se encontraron clientes que coincidan con la búsqueda.
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            }
+
+                                            return filtered.map((acc, index) => {
+                                                const ticketPromedio = acc.total_orders > 0 
+                                                    ? Math.round(parseFloat(acc.total_spent) / acc.total_orders) 
+                                                    : 0;
+
+                                                const lastDate = new Date(acc.last_order_date);
+                                                const diffDays = Math.floor((Date.now() - lastDate.getTime()) / 1000 / 60 / 60 / 24);
+                                                const isClientDormant = diffDays > 30;
+
+                                                // Mensaje personalizado de WhatsApp de fidelización / reactivación
+                                                let waMessage = `¡Hola ${acc.client_name || 'Cliente'}! Te escribimos de ${tenant?.name || 'nuestro local'}. Queremos agradecerte por ser parte de nuestro Club.`;
+                                                if (isClientDormant) {
+                                                    waMessage = `¡Hola ${acc.client_name || 'Cliente'}! Te extrañamos en ${tenant?.name || 'nuestro local'}. Hace más de ${diffDays} días que no nos visitas. Por eso te regalamos un 10% de descuento en tu próxima compra online ingresando tu celular. ¡Te esperamos!`;
+                                                } else if (acc.tier === 'oro') {
+                                                    waMessage = `¡Hola ${acc.client_name || 'Cliente'}! Como miembro ORO de ${tenant?.name || 'nuestro local'}, te recordamos que tenés $[Saldo] de saldo en tu monedero virtual listos para usar, además de tu 5% de descuento automático en salón.`;
+                                                }
+
+                                                waMessage = waMessage.replace('[Saldo]', formatARS(parseFloat(acc.balance) || 0));
+
+                                                return (
+                                                    <tr key={acc.id} className="hover:bg-slate-900/30 transition-all font-bold">
+                                                        <td className="py-3.5 px-4">
+                                                            <div className="flex flex-col text-left">
+                                                                <span className="text-white text-xs leading-tight">{acc.client_name || 'Sin Nombre'}</span>
+                                                                <span className="text-slate-500 text-[8.5px] mt-0.5 font-mono">📱 {acc.phone_number}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3.5 px-4 align-middle">
+                                                            <span className={`text-[7px] uppercase font-black px-2 py-0.5 rounded-full ${
+                                                                acc.tier === 'oro' ? 'bg-yellow-500/10 text-yellow-400' :
+                                                                acc.tier === 'plata' ? 'bg-slate-300/10 text-slate-350' : 'bg-orange-500/10 text-orange-400'
+                                                            }`}>
+                                                                {acc.tier}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-3.5 px-4 text-center text-slate-300 font-mono">{acc.total_orders}</td>
+                                                        <td className="py-3.5 px-4 text-right text-slate-300 font-mono">{formatARS(ticketPromedio)}</td>
+                                                        <td className="py-3.5 px-4 text-right text-slate-400 font-mono">{formatARS(parseFloat(acc.total_spent) || 0)}</td>
+                                                        <td className="py-3.5 px-4 text-right text-emerald-400 font-mono font-black">{formatARS(parseFloat(acc.balance) || 0)}</td>
+                                                        <td className="py-3.5 px-4 text-center">
+                                                            <div className="flex flex-col items-center">
+                                                                <span className="text-slate-300 text-[9px] font-mono">
+                                                                    {lastDate.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                                                                </span>
+                                                                <span className={`text-[6.5px] font-black uppercase mt-0.5 ${isClientDormant ? 'text-red-500' : 'text-slate-500'}`}>
+                                                                    {isClientDormant ? `💤 Inactivo hace ${diffDays}d` : `Hace ${diffDays}d`}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3.5 px-4">
+                                                            <div className="flex gap-1.5 justify-center items-center">
+                                                                {/* WhatsApp Link */}
+                                                                <a
+                                                                    href={`https://wa.me/${acc.phone_number.replace(/\D/g, '')}?text=${encodeURIComponent(waMessage)}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    title="Contactar o Reactivar por WhatsApp"
+                                                                    className={`p-2 rounded-xl border flex items-center justify-center transition-all ${
+                                                                        isClientDormant
+                                                                            ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/20 hover:scale-105'
+                                                                            : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/20 hover:scale-105'
+                                                                    }`}
+                                                                >
+                                                                    <MessageCircle size={11} />
+                                                                </a>
+                                                                {/* Manual Adjustment */}
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setEditingLoyaltyAccount(acc);
+                                                                        setNewBalance(String(acc.balance));
+                                                                    }}
+                                                                    title="Ajustar Saldo Manualmente"
+                                                                    className="p-2 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all"
+                                                                >
+                                                                    <Edit size={11} />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            });
+                                        })()}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+                        </div>
+                        {/* Accordion: Suscripción y Planes */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => setExpandedConfigSection(prev => prev === 'subscription' ? null : 'subscription')}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                    expandedConfigSection === 'subscription' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400'
+                                }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <CreditCard className="w-5 h-5" />
+                                    <span className="font-bold uppercase text-sm tracking-wider">Suscripción y Planes</span>
+                                </div>
+                                {expandedConfigSection === 'subscription' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+            {expandedConfigSection === 'subscription' && tenant && (
+                <AdminSaasTab tenantId={tenant.id} />
+            )}
+                        </div>
                         {/* Save Button */}
                         <button
                             onClick={handleSaveConfig}
@@ -5672,7 +6127,6 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 'Guardar Cambios'
                             )}
                         </button>
-                    </div>
 
 
                 </div>
@@ -6503,405 +6957,6 @@ const AdminTab: React.FC<AdminTabProps> = ({
                 </div>
             )}
 
-            {view === 'loyalty' && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4">
-                    <div className="px-2 flex justify-between items-center flex-wrap gap-3">
-                        <div>
-                            <h3 className="font-black uppercase italic text-sm">Fidelización y Club de Clientes</h3>
-                            <p className="text-slate-500 text-[10px] uppercase font-bold mt-1">Monitorea y premia a tus clientes más fieles con monedero virtual</p>
-                        </div>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={fetchLoyaltyAccounts}
-                                className="py-2.5 px-4 bg-slate-900 border border-slate-800 text-[9px] font-black uppercase text-slate-400 rounded-xl hover:text-white transition-all active:scale-95 flex items-center gap-1.5"
-                            >
-                                <RefreshCw size={10} className={isFetchingLoyalty ? "animate-spin" : ""} /> Refrescar
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* CONFIGURACIÓN DEL CLUB */}
-                    <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-6">
-                        <div className="flex items-center justify-between border-b border-white/5 pb-4">
-                            <div className="flex items-center gap-3 text-left">
-                                <div className="w-10 h-10 rounded-2xl bg-orange-500/10 text-orange-500 flex items-center justify-center">
-                                    <Settings size={18} />
-                                </div>
-                                <div>
-                                    <h4 className="font-black text-white text-[12px] uppercase">Ajustes del Programa de Fidelidad</h4>
-                                    <p className="text-[9px] text-slate-400 font-bold uppercase">Controla cómo los clientes ganan y gastan su cashback</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${loyConfigEnabled ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                                    {loyConfigEnabled ? 'Activo' : 'Inactivo'}
-                                </span>
-                                <input
-                                    type="checkbox"
-                                    checked={loyConfigEnabled}
-                                    onChange={(e) => setLoyConfigEnabled(e.target.checked)}
-                                    className="w-9 h-5 bg-slate-950 rounded-full appearance-none checked:bg-orange-500 border border-slate-800 cursor-pointer relative after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-4 after:w-4 after:transition-all checked:after:translate-x-4 checked:after:bg-white"
-                                />
-                            </div>
-                        </div>
-
-                        {loyConfigEnabled && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
-                                <div className="bg-slate-950/40 p-4 rounded-3xl border border-white/5 space-y-2">
-                                    <label className="text-[8.5px] font-black uppercase text-slate-500 block">Canal de Acumulación (Ganar)</label>
-                                    <select
-                                        value={loyConfigEarnChan}
-                                        onChange={(e) => setLoyConfigEarnChan(e.target.value as any)}
-                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500/50 font-bold"
-                                    >
-                                        <option value="both">Ambos (Online + Salón/Caja)</option>
-                                        <option value="online">Solo Pedidos Online (PublicMenu)</option>
-                                        <option value="salon">Solo Salón (Mesas/Caja)</option>
-                                    </select>
-                                    <p className="text-[7.5px] text-slate-500 font-bold leading-normal uppercase">Promueve un canal específico de venta permitiendo acumular saldo únicamente allí.</p>
-                                </div>
-
-                                <div className="bg-slate-950/40 p-4 rounded-3xl border border-white/5 space-y-2">
-                                    <label className="text-[8.5px] font-black uppercase text-slate-500 block">Canal de Canje (Gastar)</label>
-                                    <select
-                                        value={loyConfigRedeemChan}
-                                        onChange={(e) => setLoyConfigRedeemChan(e.target.value as any)}
-                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500/50 font-bold"
-                                    >
-                                        <option value="both">Ambos (Online + Salón/Caja)</option>
-                                        <option value="online">Solo Pedidos Online (PublicMenu)</option>
-                                        <option value="salon">Solo Salón (Mesas/Caja)</option>
-                                    </select>
-                                    <p className="text-[7.5px] text-slate-500 font-bold leading-normal uppercase">Decide en qué canales los clientes pueden descontar su dinero acumulado.</p>
-                                </div>
-
-                                <div className="bg-slate-950/40 p-4 rounded-3xl border border-white/5 space-y-2">
-                                    <label className="text-[8.5px] font-black uppercase text-slate-500 block">Tasa de Cashback Base (%)</label>
-                                    <div className="relative">
-                                        <input
-                                            type="number"
-                                            value={loyConfigCashbackPct}
-                                            onChange={(e) => setLoyConfigCashbackPct(parseFloat(e.target.value) || 0)}
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-bold outline-none focus:border-orange-500/50 pr-8"
-                                        />
-                                        <span className="absolute right-3 top-2 text-[9px] font-black text-slate-500">%</span>
-                                    </div>
-                                    <p className="text-[7.5px] text-slate-500 font-bold leading-normal uppercase">Porcentaje de la compra que vuelve en pesos al monedero del cliente.</p>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* CONFIGURACIÓN DE NIVELES (TIERS) */}
-                        {loyConfigEnabled && (
-                            <div className="space-y-4 text-left border-t border-white/5 pt-5">
-                                <h5 className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1.5">
-                                    <Trophy size={12} /> Configuración de Niveles y Beneficios del Club
-                                </h5>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    {loyConfigTiers.map((t, idx) => (
-                                        <div key={t.name} className="bg-slate-950/30 border border-white/5 rounded-3xl p-5 space-y-4">
-                                            <div className="flex justify-between items-center">
-                                                <span className={`text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full ${
-                                                    t.name === 'oro' ? 'bg-yellow-500/10 text-yellow-400' :
-                                                    t.name === 'plata' ? 'bg-slate-300/10 text-slate-350' : 'bg-orange-500/10 text-orange-400'
-                                                }`}>
-                                                    ⭐ {t.name}
-                                                </span>
-                                                <span className="text-[8px] font-bold text-slate-500 uppercase">Nivel {idx + 1}</span>
-                                            </div>
-
-                                            <div className="space-y-3">
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <div>
-                                                        <label className="text-[7.5px] font-black text-slate-500 uppercase block mb-1">Mín. Pedidos</label>
-                                                        <input
-                                                            type="number"
-                                                            value={t.min_orders}
-                                                            onChange={(e) => {
-                                                                const val = parseInt(e.target.value) || 0;
-                                                                setLoyConfigTiers(prev => prev.map(item => item.name === t.name ? { ...item, min_orders: val } : item));
-                                                            }}
-                                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-[11px] text-white font-mono font-bold"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-[7.5px] font-black text-slate-500 uppercase block mb-1">Máx. Pedidos</label>
-                                                        <input
-                                                            type="number"
-                                                            value={t.max_orders}
-                                                            onChange={(e) => {
-                                                                const val = parseInt(e.target.value) || 0;
-                                                                setLoyConfigTiers(prev => prev.map(item => item.name === t.name ? { ...item, max_orders: val } : item));
-                                                            }}
-                                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-[11px] text-white font-mono font-bold"
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <div>
-                                                        <label className="text-[7.5px] font-black text-slate-500 uppercase block mb-1">Cashback %</label>
-                                                        <input
-                                                            type="number"
-                                                            value={t.cashback_pct}
-                                                            onChange={(e) => {
-                                                                const val = parseFloat(e.target.value) || 0;
-                                                                setLoyConfigTiers(prev => prev.map(item => item.name === t.name ? { ...item, cashback_pct: val } : item));
-                                                            }}
-                                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-[11px] text-white font-mono font-bold"
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-[7.5px] font-black text-slate-500 uppercase block mb-1">Desc. Extra %</label>
-                                                        <input
-                                                            type="number"
-                                                            value={t.discount_pct}
-                                                            onChange={(e) => {
-                                                                const val = parseFloat(e.target.value) || 0;
-                                                                setLoyConfigTiers(prev => prev.map(item => item.name === t.name ? { ...item, discount_pct: val } : item));
-                                                            }}
-                                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-[11px] text-white font-mono font-bold"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="flex justify-end border-t border-white/5 pt-4">
-                            <button
-                                onClick={handleUpdateLoyaltyConfig}
-                                disabled={isSavingLoyaltyConfig}
-                                className="px-6 py-3 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-[10px] font-black uppercase text-white rounded-xl active:scale-95 transition-all shadow-md flex items-center gap-1.5"
-                                style={{ backgroundColor: tenant?.theme_colors?.primary || '#f97316' }}
-                            >
-                                {isSavingLoyaltyConfig ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-                                Guardar Cambios del Club
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* ANALÍTICA DEL CLUB Y CRM */}
-                    {loyConfigEnabled && (
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-left">
-                            <div className="glass p-5 rounded-[2.5rem] border border-white/5 flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-2xl bg-orange-500/10 text-orange-400 flex items-center justify-center shrink-0">
-                                    <Award size={22} />
-                                </div>
-                                <div className="space-y-0.5">
-                                    <p className="text-[7.5px] text-slate-500 font-black uppercase tracking-wider">Miembros Registrados</p>
-                                    <h3 className="text-xl font-black text-white font-mono">{loyaltyAccounts.length}</h3>
-                                    <p className="text-[7px] text-slate-400 font-bold uppercase">Clientes identificados por móvil</p>
-                                </div>
-                            </div>
-
-                            <div className="glass p-5 rounded-[2.5rem] border border-white/5 flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
-                                    <Coins size={22} />
-                                </div>
-                                <div className="space-y-0.5">
-                                    <p className="text-[7.5px] text-slate-500 font-black uppercase tracking-wider">Crédito en Circulación</p>
-                                    <h3 className="text-xl font-black text-emerald-400 font-mono">
-                                        {formatARS(loyaltyAccounts.reduce((sum, item) => sum + (parseFloat(item.balance) || 0), 0))}
-                                    </h3>
-                                    <p className="text-[7px] text-slate-400 font-bold uppercase">Saldo total acumulado</p>
-                                </div>
-                            </div>
-
-                            <div className="glass p-5 rounded-[2.5rem] border border-white/5 flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
-                                    <TrendingUp size={22} />
-                                </div>
-                                <div className="space-y-0.5">
-                                    <p className="text-[7.5px] text-slate-500 font-black uppercase tracking-wider">Ticket Promedio General</p>
-                                    <h3 className="text-xl font-black text-blue-400 font-mono">
-                                        {(() => {
-                                            const validSpent = loyaltyAccounts.filter(a => a.total_orders > 0);
-                                            if (validSpent.length === 0) return '$0';
-                                            const totalOrders = validSpent.reduce((sum, item) => sum + item.total_orders, 0);
-                                            const totalSpent = validSpent.reduce((sum, item) => sum + (parseFloat(item.total_spent) || 0), 0);
-                                            return formatARS(Math.round(totalSpent / totalOrders));
-                                        })()}
-                                    </h3>
-                                    <p className="text-[7px] text-slate-400 font-bold uppercase">Consumo por visita</p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* BUSCADOR Y TABLA CRM */}
-                    {loyConfigEnabled && (
-                        <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-6">
-                            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center text-left">
-                                <div>
-                                    <h4 className="font-black text-white text-[12px] uppercase">Base de Datos de Clientes y Trazabilidad</h4>
-                                    <p className="text-[9px] text-slate-400 font-bold uppercase">Audita consumos, rankings y reactiva clientes inactivos</p>
-                                </div>
-
-                                <div className="flex gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap">
-                                    {/* Buscador */}
-                                    <div className="relative flex-1 sm:w-60">
-                                        <Search size={12} className="absolute left-3.5 top-3 text-slate-500" />
-                                        <input
-                                            type="text"
-                                            placeholder="Buscar por teléfono o nombre..."
-                                            value={loyaltySearch}
-                                            onChange={(e) => setLoyaltySearch(e.target.value)}
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white outline-none focus:border-orange-500/50 font-bold"
-                                        />
-                                    </div>
-                                    {/* Filtro Tier */}
-                                    <select
-                                        value={selectedLoyaltyTier}
-                                        onChange={(e) => setSelectedLoyaltyTier(e.target.value as any)}
-                                        className="bg-slate-950 border border-slate-800 text-xs text-white rounded-xl px-3 py-2 outline-none font-bold cursor-pointer"
-                                    >
-                                        <option value="all">Todos los Niveles</option>
-                                        <option value="bronce">⭐ Bronce</option>
-                                        <option value="plata">⭐ Plata</option>
-                                        <option value="oro">⭐ Oro</option>
-                                        <option value="dormant">💤 Inactivos ({'>'}30 días)</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            {/* TABLA CRM */}
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-[10px] text-left border-collapse">
-                                    <thead>
-                                        <tr className="border-b border-white/5 text-slate-500 uppercase tracking-widest text-[8px] font-black">
-                                            <th className="py-3 px-4">Cliente</th>
-                                            <th className="py-3 px-4">Nivel</th>
-                                            <th className="py-3 px-4 text-center">Pedidos</th>
-                                            <th className="py-3 px-4 text-right">Ticket Promedio</th>
-                                            <th className="py-3 px-4 text-right">Total Consumido</th>
-                                            <th className="py-3 px-4 text-right">Saldo Monedero</th>
-                                            <th className="py-3 px-4 text-center">Última Compra</th>
-                                            <th className="py-3 px-4 text-center">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-white/5">
-                                        {(() => {
-                                            const filtered = loyaltyAccounts.filter(acc => {
-                                                // Búsqueda de texto
-                                                if (loyaltySearch) {
-                                                    const q = loyaltySearch.toLowerCase();
-                                                    const name = (acc.client_name || '').toLowerCase();
-                                                    const phone = acc.phone_number || '';
-                                                    if (!name.includes(q) && !phone.includes(q)) return false;
-                                                }
-                                                // Filtro de Nivel o Inactividad
-                                                if (selectedLoyaltyTier === 'dormant') {
-                                                    const diff = Date.now() - new Date(acc.last_order_date).getTime();
-                                                    return diff > 30 * 24 * 60 * 60 * 1000;
-                                                } else if (selectedLoyaltyTier !== 'all') {
-                                                    return acc.tier === selectedLoyaltyTier;
-                                                }
-                                                return true;
-                                            });
-
-                                            if (filtered.length === 0) {
-                                                return (
-                                                    <tr>
-                                                        <td colSpan={8} className="py-8 text-center text-slate-500 font-bold uppercase tracking-wider">
-                                                            No se encontraron clientes que coincidan con la búsqueda.
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            }
-
-                                            return filtered.map((acc, index) => {
-                                                const ticketPromedio = acc.total_orders > 0 
-                                                    ? Math.round(parseFloat(acc.total_spent) / acc.total_orders) 
-                                                    : 0;
-
-                                                const lastDate = new Date(acc.last_order_date);
-                                                const diffDays = Math.floor((Date.now() - lastDate.getTime()) / 1000 / 60 / 60 / 24);
-                                                const isClientDormant = diffDays > 30;
-
-                                                // Mensaje personalizado de WhatsApp de fidelización / reactivación
-                                                let waMessage = `¡Hola ${acc.client_name || 'Cliente'}! Te escribimos de ${tenant?.name || 'nuestro local'}. Queremos agradecerte por ser parte de nuestro Club.`;
-                                                if (isClientDormant) {
-                                                    waMessage = `¡Hola ${acc.client_name || 'Cliente'}! Te extrañamos en ${tenant?.name || 'nuestro local'}. Hace más de ${diffDays} días que no nos visitas. Por eso te regalamos un 10% de descuento en tu próxima compra online ingresando tu celular. ¡Te esperamos!`;
-                                                } else if (acc.tier === 'oro') {
-                                                    waMessage = `¡Hola ${acc.client_name || 'Cliente'}! Como miembro ORO de ${tenant?.name || 'nuestro local'}, te recordamos que tenés $[Saldo] de saldo en tu monedero virtual listos para usar, además de tu 5% de descuento automático en salón.`;
-                                                }
-
-                                                waMessage = waMessage.replace('[Saldo]', formatARS(parseFloat(acc.balance) || 0));
-
-                                                return (
-                                                    <tr key={acc.id} className="hover:bg-slate-900/30 transition-all font-bold">
-                                                        <td className="py-3.5 px-4">
-                                                            <div className="flex flex-col text-left">
-                                                                <span className="text-white text-xs leading-tight">{acc.client_name || 'Sin Nombre'}</span>
-                                                                <span className="text-slate-500 text-[8.5px] mt-0.5 font-mono">📱 {acc.phone_number}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="py-3.5 px-4 align-middle">
-                                                            <span className={`text-[7px] uppercase font-black px-2 py-0.5 rounded-full ${
-                                                                acc.tier === 'oro' ? 'bg-yellow-500/10 text-yellow-400' :
-                                                                acc.tier === 'plata' ? 'bg-slate-300/10 text-slate-350' : 'bg-orange-500/10 text-orange-400'
-                                                            }`}>
-                                                                {acc.tier}
-                                                            </span>
-                                                        </td>
-                                                        <td className="py-3.5 px-4 text-center text-slate-300 font-mono">{acc.total_orders}</td>
-                                                        <td className="py-3.5 px-4 text-right text-slate-300 font-mono">{formatARS(ticketPromedio)}</td>
-                                                        <td className="py-3.5 px-4 text-right text-slate-400 font-mono">{formatARS(parseFloat(acc.total_spent) || 0)}</td>
-                                                        <td className="py-3.5 px-4 text-right text-emerald-400 font-mono font-black">{formatARS(parseFloat(acc.balance) || 0)}</td>
-                                                        <td className="py-3.5 px-4 text-center">
-                                                            <div className="flex flex-col items-center">
-                                                                <span className="text-slate-300 text-[9px] font-mono">
-                                                                    {lastDate.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
-                                                                </span>
-                                                                <span className={`text-[6.5px] font-black uppercase mt-0.5 ${isClientDormant ? 'text-red-500' : 'text-slate-500'}`}>
-                                                                    {isClientDormant ? `💤 Inactivo hace ${diffDays}d` : `Hace ${diffDays}d`}
-                                                                </span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="py-3.5 px-4">
-                                                            <div className="flex gap-1.5 justify-center items-center">
-                                                                {/* WhatsApp Link */}
-                                                                <a
-                                                                    href={`https://wa.me/${acc.phone_number.replace(/\D/g, '')}?text=${encodeURIComponent(waMessage)}`}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    title="Contactar o Reactivar por WhatsApp"
-                                                                    className={`p-2 rounded-xl border flex items-center justify-center transition-all ${
-                                                                        isClientDormant
-                                                                            ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/20 hover:scale-105'
-                                                                            : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/20 hover:scale-105'
-                                                                    }`}
-                                                                >
-                                                                    <MessageCircle size={11} />
-                                                                </a>
-                                                                {/* Manual Adjustment */}
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setEditingLoyaltyAccount(acc);
-                                                                        setNewBalance(String(acc.balance));
-                                                                    }}
-                                                                    title="Ajustar Saldo Manualmente"
-                                                                    className="p-2 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all"
-                                                                >
-                                                                    <Edit size={11} />
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            });
-                                        })()}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
 
             {/* MODAL DE AJUSTE MANUAL DE SALDO */}
             {editingLoyaltyAccount && (
@@ -7012,9 +7067,6 @@ const AdminTab: React.FC<AdminTabProps> = ({
             {/* Hidden component for printing QR poster */}
             <PrintableQRPoster ref={qrPrintRef} tenant={tenant} />
 
-            {view === 'subscription' && tenant && (
-                <AdminSaasTab tenantId={tenant.id} />
-            )}
 
             {tenant && <AdminSupportFloatingButton tenantId={tenant.id} />}
 
@@ -7061,4 +7113,4 @@ const AdminTab: React.FC<AdminTabProps> = ({
 };
 
 export default AdminTab;
-
+
