@@ -4840,42 +4840,6 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                     </button>
                                 </div>
 
-                                {/* Switch Sistema de Reservas */}
-                                <div className="pt-2 flex items-center justify-between border-t border-white/5">
-                                    <div className="space-y-0.5">
-                                        <span className="text-[9px] font-black uppercase text-slate-400 block">Sistema de Reservas</span>
-                                        <span className="text-[7.5px] text-slate-500 uppercase block font-semibold">Habilitar reservas de mesa para clientes</span>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setCfgReservationsEnabled(!cfgReservationsEnabled)}
-                                        className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                            cfgReservationsEnabled ? 'bg-orange-500' : 'bg-slate-800'
-                                        }`}
-                                    >
-                                        <span
-                                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                                cfgReservationsEnabled ? 'translate-x-5' : 'translate-x-0'
-                                            }`}
-                                        />
-                                    </button>
-                                </div>
-
-                                {/* Seña obligatoria de Reserva */}
-                                {cfgReservationsEnabled && (
-                                    <div className="pt-2 space-y-1 animate-in slide-in-from-top-2 duration-200 border-t border-white/5">
-                                        <label className="text-[8px] font-bold uppercase text-slate-500 block ml-1">Monto de la Seña Requerida ($)</label>
-                                        <input
-                                            type="number"
-                                            value={cfgReservationDepositAmount}
-                                            onChange={(e) => setCfgReservationDepositAmount(parseFloat(e.target.value) || 0)}
-                                            min="0"
-                                            className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-bold outline-none focus:border-orange-500/50 transition-all text-xs"
-                                            placeholder="Ingresa el valor de la seña (0 para sin seña)"
-                                        />
-                                        <span className="text-[7px] text-slate-500 uppercase block font-semibold ml-1">Fija el valor a abonar por Mercado Pago para confirmar la reserva</span>
-                                    </div>
-                                )}
                             </div>
                         </div>
 
@@ -4905,10 +4869,68 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             </button>
                             {expandedConfigSection === 'reservas' && (
                                 <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 animate-in slide-in-from-top-2">
+                                    {/* Habilitar / Deshabilitar Reservas */}
+                                    <div className="flex items-center justify-between pb-4 border-b border-white/5">
+                                        <div className="space-y-0.5">
+                                            <span className="text-[12px] font-black uppercase text-orange-400 block" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>Sistema de Reservas</span>
+                                            <span className="text-[9px] text-slate-400 uppercase block font-semibold">Habilitar reservas de mesa para clientes</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCfgReservationsEnabled(!cfgReservationsEnabled)}
+                                            className={`relative inline-flex h-6 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                                cfgReservationsEnabled ? 'bg-orange-500' : 'bg-slate-800'
+                                            }`}
+                                        >
+                                            <span
+                                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                                    cfgReservationsEnabled ? 'translate-x-6' : 'translate-x-0'
+                                                }`}
+                                            />
+                                        </button>
+                                    </div>
+
                         {/* Reservas y Códigos de Descuento (UI) */}
                         {cfgReservationsEnabled && (
-                            <div className="space-y-4 pt-4 border-t border-white/5 animate-in slide-in-from-top-2 duration-300">
-                                <div className="flex justify-between items-center">
+                            <div className="space-y-5 pt-2 animate-in slide-in-from-top-2 duration-300">
+                                
+                                {/* Seña obligatoria de Reserva */}
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold uppercase text-slate-500 block ml-1">Monto de la Seña Requerida ($)</label>
+                                    <input
+                                        type="number"
+                                        value={cfgReservationDepositAmount}
+                                        onChange={(e) => setCfgReservationDepositAmount(parseFloat(e.target.value) || 0)}
+                                        min="0"
+                                        className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-bold outline-none focus:border-orange-500/50 transition-all text-xs"
+                                        placeholder="Ingresa el valor de la seña (0 para sin seña)"
+                                    />
+                                    <span className="text-[8px] text-slate-500 uppercase block font-semibold ml-1 mt-1">Fija el valor a abonar por Mercado Pago para confirmar la reserva</span>
+                                </div>
+
+                                {/* Horarios de Reserva */}
+                                <div className="space-y-3 pt-3 border-t border-white/5 pb-2">
+                                    <label className="text-[10px] font-black uppercase flex items-center gap-1 text-orange-500" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
+                                        <Calendar size={12} /> Días y Horarios para Reservas
+                                    </label>
+                                    <p className="text-[9px] text-slate-400 leading-relaxed">
+                                        Define las franjas horarias en las que los clientes pueden realizar reservas. Fuera de estos turnos, no se permitirá seleccionar la hora en el menú.
+                                    </p>
+                                    <ScheduleEditor cfg={cfgReservationHours} setCfg={setCfgReservationHours} primaryColor={tenant?.theme_colors?.primary || '#f97316'} />
+                                </div>
+                                <div className="flex justify-between items-center pt-4 border-t border-white/5">
+                                    <label className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1.5" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
+                                        📅 Listado de Reservas
+                                    </label>
+                                    <button 
+                                        type="button"
+                                        onClick={fetchReservationsAndCodes}
+                                        className="text-[8px] bg-white/5 hover:bg-white/10 p-1.5 rounded-lg border border-white/10 text-white transition-all active:scale-95"
+                                        title="Recargar datos"
+                                    >
+                                        🔄 Recargar
+                                    </button>
+                                </div>  <div className="flex justify-between items-center">
                                     <label className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1.5" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
                                         📅 Reservas y Descuentos
                                     </label>

@@ -220,13 +220,110 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   const [reservationName, setReservationName] = useState('');
   const [reservationPhone, setReservationPhone] = useState('');
   const [reservationPhonePrefix, setReservationPhonePrefix] = useState('+54');
-  const [reservationDate, setReservationDate] = useState(() => {
-    const today = new Date();
-    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  });
+  const [reservationDate, setReservationDate] = useState('');
   const [reservationTime, setReservationTime] = useState('');
   const [reservationPartySize, setReservationPartySize] = useState<number>(2);
   const [isSubmittingReservation, setIsSubmittingReservation] = useState(false);
+  const [bookedTimesCount, setBookedTimesCount] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!reservationDate || !tenant?.id) return;
+    
+    const fetchBookings = async () => {
+      const { data, error } = await supabase
+        .from('reservations')
+        .select('reservation_time')
+        .eq('tenant_id', tenant.id)
+        .eq('reservation_date', reservationDate)
+        .in('status', ['confirmed', 'pending_payment']);
+        
+      if (!error && data) {
+        const counts: Record<string, number> = {};
+        data.forEach((r) => {
+          if (r.reservation_time) {
+              const timePrefix = r.reservation_time.substring(0, 5);
+              counts[timePrefix] = (counts[timePrefix] || 0) + 1;
+          }
+        });
+        setBookedTimesCount(counts);
+      }
+    };
+    fetchBookings();
+  }, [reservationDate, tenant?.id]);
+
+  // Horarios de reserva disponibles (calculados)
+  const availableReservationTimes = useMemo(() => {
+    if (!reservationDate) return [];
+    
+    const selectedDate = new Date(reservationDate + 'T00:00:00');
+    const dayOfWeek = selectedDate.getDay().toString();
+    const resHours = (tenant as any).reservation_hours;
+    
+    const now = new Date();
+    const isToday = selectedDate.getDate() === now.getDate() && 
+                    selectedDate.getMonth() === now.getMonth() && 
+                    selectedDate.getFullYear() === now.getFullYear();
+    const currentTotalMins = now.getHours() * 60 + now.getMinutes();
+
+    let timeSlots = [];
+    if (resHours && resHours.enabled && resHours.schedule && resHours.schedule[dayOfWeek]) {
+        timeSlots = resHours.schedule[dayOfWeek];
+    } else {
+        // Fallback: Si no hay horarios configurados o está apagado el candado estricto, 
+        // permitimos 24hs (y validaremos si el horario pasó si es hoy).
+        timeSlots = [{ open: '00:00', close: '23:59' }];
+    }
+    
+    if (timeSlots.length === 0) return [];
+
+    const availableSlots: string[] = [];
+    for (const slot of timeSlots) {
+        if (!slot.open || !slot.close) continue;
+        const [oH, oM] = slot.open.split(':').map(Number);
+        const [cH, cM] = slot.close.split(':').map(Number);
+        const openMins = oH * 60 + oM;
+        let closeMins = cH * 60 + cM;
+        if (closeMins < openMins) closeMins += 24 * 60; 
+        
+        for (let t = openMins; t <= closeMins; t += 30) {
+           let adjustedT = t;
+           if (adjustedT >= 24 * 60) adjustedT -= 24 * 60;
+           
+           if (isToday) {
+               if (t < 24 * 60 && adjustedT <= currentTotalMins) continue;
+           }
+           
+           const h = Math.floor(adjustedT / 60);
+           const m = adjustedT % 60;
+           availableSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+        }
+    }
+    
+    const uniqueSlots = Array.from(new Set(availableSlots));
+    
+    // Filtrar turnos llenos (donde reservas >= cantidad de mesas)
+    const totalTables = Array.isArray(tenant?.tables) ? tenant.tables.length : 0;
+    
+    const capacityFilteredSlots = uniqueSlots.filter(time => {
+        const booked = bookedTimesCount[time] || 0;
+        return booked < totalTables;
+    });
+
+    return capacityFilteredSlots.sort((a, b) => {
+        const amins = parseInt(a.split(':')[0]) * 60 + parseInt(a.split(':')[1]);
+        const bmins = parseInt(b.split(':')[0]) * 60 + parseInt(b.split(':')[1]);
+        return amins - bmins;
+    });
+  }, [reservationDate, tenant, bookedTimesCount]);
+
+  useEffect(() => {
+      // Auto-seleccionar el primer horario disponible si el actual no es válido
+      if (availableReservationTimes.length > 0 && !availableReservationTimes.includes(reservationTime)) {
+          setReservationTime(availableReservationTimes[0]);
+      } else if (availableReservationTimes.length === 0) {
+          setReservationTime('');
+      }
+  }, [availableReservationTimes, reservationTime]);
   
   // Pasarela virtual Mercado Pago para Reservas
   const [isMpReservationModalOpen, setIsMpReservationModalOpen] = useState(false);
@@ -3813,17 +3910,33 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                         }
                       }
                     }}
-                    className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-white focus:ring-1 focus:ring-white transition-all font-bold"
+                    className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-white focus:ring-1 focus:ring-white transition-all font-bold [color-scheme:dark]"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-500 block ml-1">Hora</label>
-                  <input
-                    type="time"
-                    value={reservationTime}
-                    onChange={(e) => setReservationTime(e.target.value)}
-                    className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-white focus:ring-1 focus:ring-white transition-all font-bold"
-                  />
+                  {!reservationDate ? (
+                    <div className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-neutral-500 font-bold flex items-center justify-center">
+                      Selecciona un día
+                    </div>
+                  ) : availableReservationTimes.length > 0 ? (
+                    <select
+                      value={reservationTime}
+                      onChange={(e) => setReservationTime(e.target.value)}
+                      className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-white focus:ring-1 focus:ring-white transition-all font-bold appearance-none"
+                      style={{ backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem top 50%', backgroundSize: '0.65rem auto' }}
+                    >
+                      {availableReservationTimes.map((time) => (
+                        <option key={time} value={time} className="bg-neutral-900 text-white">
+                          {time} hs
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="w-full bg-red-900/20 border border-red-500/30 rounded-xl px-4 py-3 text-sm text-red-400 font-bold flex items-center justify-center">
+                      Sin turnos disponibles
+                    </div>
+                  )}
                 </div>
               </div>
 
