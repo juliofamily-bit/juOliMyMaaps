@@ -3,11 +3,15 @@ import { supabase } from '@/lib/supabase';
 import { Check, Trash2, ShieldAlert, Music, Heart, MessageCircle, Send } from 'lucide-react';
 interface SocialInteraction {
   id: string;
-  type: 'message' | 'song_request' | 'dedication';
+  type: 'message' | 'song_request' | 'dedication' | 'gift' | 'media';
   sender_name: string;
   is_anonymous: boolean;
   content: string;
   status: 'pending' | 'approved' | 'rejected';
+  media_url?: string;
+  media_type?: 'image_live' | 'video_live' | 'audio' | 'meme';
+  view_once?: boolean;
+  expires_at?: string;
   created_at: string;
 }
 
@@ -34,6 +38,41 @@ export default function AnimadorTab({ tenant, isLight = false }: AnimadorTabProp
 
       if (!error && data) {
         setMessages(data);
+        
+        // Auto-cleanup rutinario
+        const now = new Date();
+        const expiredIds: string[] = [];
+        const filesToDelete: string[] = [];
+
+        data.forEach(msg => {
+          if (msg.expires_at && new Date(msg.expires_at) < now) {
+            expiredIds.push(msg.id);
+            if (msg.media_url) {
+              try {
+                const urlObj = new URL(msg.media_url);
+                const pathParts = urlObj.pathname.split('/public/social_media/');
+                if (pathParts.length > 1) {
+                  filesToDelete.push(pathParts[1]);
+                }
+              } catch (e) {}
+            }
+          }
+        });
+
+        if (expiredIds.length > 0) {
+          const cleanup = async () => {
+            try {
+              if (filesToDelete.length > 0) {
+                await supabase.storage.from('social_media').remove(filesToDelete);
+              }
+              await supabase.from('social_interactions').delete().in('id', expiredIds);
+              setMessages(prev => prev.filter(m => !expiredIds.includes(m.id)));
+            } catch (err) {
+              console.error('Error in auto-cleanup:', err);
+            }
+          };
+          cleanup();
+        }
       }
     };
 
@@ -63,6 +102,23 @@ export default function AnimadorTab({ tenant, isLight = false }: AnimadorTabProp
 
   const updateStatus = async (id: string, status: 'approved' | 'rejected') => {
     try {
+      if (status === 'rejected') {
+        const msg = messages.find(m => m.id === id);
+        if (msg && msg.media_url) {
+          try {
+            // Extraer path del URL (lo que está después de /public/social_media/)
+            const urlObj = new URL(msg.media_url);
+            const pathParts = urlObj.pathname.split('/public/social_media/');
+            if (pathParts.length > 1) {
+              const filePath = pathParts[1];
+              await supabase.storage.from('social_media').remove([filePath]);
+            }
+          } catch (e) {
+            console.error('Error deleting file from storage', e);
+          }
+        }
+      }
+
       await supabase.from('social_interactions').update({ status }).eq('id', id);
     } catch (e) {
       console.error(e);
@@ -161,7 +217,18 @@ export default function AnimadorTab({ tenant, isLight = false }: AnimadorTabProp
                     </span>
                   </div>
                   
-                  <p className="text-sm font-medium mb-3">{msg.content}</p>
+                  {msg.media_url && (
+                    <div className="mb-3 rounded-lg overflow-hidden bg-black/20 border border-slate-700/50">
+                      {msg.media_type === 'audio' ? (
+                        <audio controls src={msg.media_url} className="w-full h-10" />
+                      ) : msg.media_type === 'video_live' ? (
+                        <video controls src={msg.media_url} className="w-full max-h-48 object-contain bg-black" />
+                      ) : (
+                        <img src={msg.media_url} alt="Media" className="w-full max-h-48 object-contain bg-black" />
+                      )}
+                    </div>
+                  )}
+                  {msg.content && <p className="text-sm font-medium mb-3">{msg.content}</p>}
                   
                   <div className="flex items-center justify-between mt-4">
                     <div className="flex items-center gap-1">
@@ -209,7 +276,12 @@ export default function AnimadorTab({ tenant, isLight = false }: AnimadorTabProp
                       {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
-                  <p className="text-xs truncate" title={msg.content}>{msg.content}</p>
+                  {msg.media_url && (
+                    <div className="mb-2 text-[10px] text-purple-400 font-bold uppercase flex items-center gap-1">
+                      {msg.media_type === 'audio' ? '🎵 Audio Adjunto' : msg.media_type === 'video_live' ? '🎥 Video Adjunto' : '📸 Foto/Meme Adjunto'}
+                    </div>
+                  )}
+                  {msg.content && <p className="text-xs truncate" title={msg.content}>{msg.content}</p>}
                 </div>
               ))
             )}

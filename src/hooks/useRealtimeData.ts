@@ -77,7 +77,10 @@ export function useRealtimeData(tenantId: string | null, isPublic: boolean = fal
                     case 'order_items': // order_items actualiza la lista de pedidos en la UI
                         if (!isPublic) {
                             const { data: ordData } = await supabase.from('orders').select('*, items:order_items(*)').eq('tenant_id', tenantId).order('created_at', { ascending: false });
-                            if (ordData) setOrders(ordData);
+                            if (ordData) {
+                                const validOrders = ordData.filter(o => !((o.payment_method === 'mercadopago' || o.payment_method === 'credito') && !o.is_approved_for_production && o.payment_status === 'pendiente'));
+                                setOrders(validOrders);
+                            }
                         }
                         break;
                     case 'expenses':
@@ -175,7 +178,10 @@ export function useRealtimeData(tenantId: string | null, isPublic: boolean = fal
                 (async () => {
                     try {
                         const { data } = await supabase.from('orders').select('*, items:order_items(*)').eq('tenant_id', tenantId).order('created_at', { ascending: false });
-                        if (data) setOrders(data);
+                        if (data) {
+                            const validOrders = data.filter(o => !((o.payment_method === 'mercadopago' || o.payment_method === 'credito') && !o.is_approved_for_production && o.payment_status === 'pendiente'));
+                            setOrders(validOrders);
+                        }
                     } catch (err) { /* Silencioso */ }
                 })()
             );

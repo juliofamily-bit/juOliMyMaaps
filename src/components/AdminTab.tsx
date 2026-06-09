@@ -3,7 +3,7 @@ import { supabase as rawSupabase, broadcastTenantChange } from '@/lib/supabase';
 import { Product, Ingredient, Order, Expense, OrderStatus, Category, ProductIngredient, IngredientBatch, ProductOffer } from '@/types/database';
 import { PRESET_IMAGES, NEON_ICONS } from '@/lib/constants';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, ReferenceLine } from 'recharts';
-import { CreditCard, BarChart2, QrCode, FileText, Plus, Trash2, Edit, TrendingUp, DollarSign, Package, Layers, History, ChevronRight, X, Save, Check, Upload, Image as ImageIcon, Wallet, Receipt, ArrowUpCircle, ArrowDownCircle, Calendar, FilterX, Star, StarOff, PieChart, Paintbrush, LayoutGrid, Sun, Moon, CheckCircle, AlertCircle, Loader2, Share2, AlertTriangle, CalendarRange, Trophy, Smartphone, Instagram, Facebook, Phone, Printer, Download, Award, Coins, Search, MessageCircle, Gift, RefreshCw, Settings, ChevronUp, ChevronDown, Users, Truck, Map as MapIcon, Utensils } from 'lucide-react';
+import { CreditCard, BarChart2, QrCode, FileText, Plus, Trash2, Edit, TrendingUp, DollarSign, Package, Layers, History, ChevronRight, X, Save, Check, Upload, Image as ImageIcon, Wallet, Receipt, ArrowUpCircle, ArrowDownCircle, Calendar, FilterX, Star, StarOff, PieChart, Paintbrush, LayoutGrid, Sun, Moon, CheckCircle, AlertCircle, Loader2, Share2, AlertTriangle, CalendarRange, Trophy, Smartphone, Instagram, Facebook, Phone, Printer, Download, Award, Coins, Search, MessageCircle, Gift, RefreshCw, Settings, ChevronUp, ChevronDown, Users, Truck, Map as MapIcon, Utensils, Lock } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { PrintableQRPoster } from './PrintableQRPoster';
 import { AdminEmployeeTab } from './AdminEmployeeTab';
@@ -72,6 +72,97 @@ const getProductIdsArray = (pIds: any): string[] => {
         }
     }
     return [strVal];
+};
+
+const ScheduleEditor = ({ cfg, setCfg, primaryColor }: { cfg: any, setCfg: any, primaryColor: string }) => {
+    const days = [
+        { id: '1', name: 'Lunes' }, { id: '2', name: 'Martes' }, { id: '3', name: 'Miércoles' },
+        { id: '4', name: 'Jueves' }, { id: '5', name: 'Viernes' }, { id: '6', name: 'Sábado' }, { id: '0', name: 'Domingo' }
+    ];
+
+    const addShift = (dayId: string) => {
+        const newSched = { ...cfg.schedule };
+        newSched[dayId] = [...(newSched[dayId] || []), { open: '00:00', close: '23:59' }];
+        setCfg({ ...cfg, schedule: newSched });
+    };
+
+    const removeShift = (dayId: string, index: number) => {
+        const newSched = { ...cfg.schedule };
+        newSched[dayId].splice(index, 1);
+        setCfg({ ...cfg, schedule: newSched });
+    };
+
+    const updateShift = (dayId: string, index: number, field: 'open' | 'close', value: string) => {
+        const newSched = { ...cfg.schedule };
+        newSched[dayId][index][field] = value;
+        setCfg({ ...cfg, schedule: newSched });
+    };
+
+    return (
+        <div className="space-y-4">
+            <label className="flex items-center gap-2 cursor-pointer mb-4 bg-slate-900/60 p-4 rounded-xl border border-white/5 transition-all hover:bg-slate-800/60">
+                <input
+                    type="checkbox"
+                    checked={cfg.enabled}
+                    onChange={(e) => setCfg({ ...cfg, enabled: e.target.checked })}
+                    className="w-5 h-5 rounded border-gray-600 bg-slate-800"
+                />
+                <span className="text-sm font-bold text-white">Activar restricción de horarios</span>
+            </label>
+
+            {cfg.enabled && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                    <p className="text-xs text-slate-400 mb-2">
+                        Puedes añadir múltiples turnos partidos (ej: de 12:00 a 15:00 y de 20:00 a 23:59). Si no hay turnos, se considera cerrado todo el día. Si cruzas la medianoche (ej: 20:00 a 02:00), el sistema lo calculará correctamente.
+                    </p>
+                    {days.map(day => (
+                        <div key={day.id} className="bg-slate-950/40 p-4 rounded-xl border border-white/5">
+                            <div className="flex items-center justify-between mb-3">
+                                <span className="font-bold text-white text-sm">{day.name}</span>
+                                <button 
+                                    onClick={(e) => { e.preventDefault(); addShift(day.id); }}
+                                    className="text-[10px] font-black uppercase text-slate-400 hover:text-white flex items-center gap-1 bg-slate-900 px-2 py-1 rounded-md transition-all hover:scale-105"
+                                >
+                                    <Plus size={12} /> Añadir Turno
+                                </button>
+                            </div>
+                            
+                            {(cfg.schedule[day.id] || []).length === 0 ? (
+                                <p className="text-xs text-red-400/80 italic font-bold">Cerrado todo el día</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {(cfg.schedule[day.id] || []).map((shift: any, idx: number) => (
+                                        <div key={idx} className="flex items-center gap-2">
+                                            <input
+                                                type="time"
+                                                value={shift.open}
+                                                onChange={e => updateShift(day.id, idx, 'open', e.target.value)}
+                                                className="bg-slate-900 text-white border border-slate-700 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-white transition-colors"
+                                            />
+                                            <span className="text-slate-500 text-xs font-black">a</span>
+                                            <input
+                                                type="time"
+                                                value={shift.close}
+                                                onChange={e => updateShift(day.id, idx, 'close', e.target.value)}
+                                                className="bg-slate-900 text-white border border-slate-700 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-white transition-colors"
+                                            />
+                                            <button 
+                                                onClick={(e) => { e.preventDefault(); removeShift(day.id, idx); }}
+                                                className="text-red-400 hover:text-red-300 hover:bg-red-500/10 ml-2 p-1.5 rounded-lg transition-all"
+                                                title="Eliminar turno"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 };
 
 const AdminTab: React.FC<AdminTabProps> = ({
@@ -621,6 +712,30 @@ const AdminTab: React.FC<AdminTabProps> = ({
         sunday: { open: '', close: '' }
     });
 
+    // Business Hours & Delivery Hours State
+    const defaultSchedule = {
+        "1": [{ open: "00:00", close: "23:59" }],
+        "2": [{ open: "00:00", close: "23:59" }],
+        "3": [{ open: "00:00", close: "23:59" }],
+        "4": [{ open: "00:00", close: "23:59" }],
+        "5": [{ open: "00:00", close: "23:59" }],
+        "6": [{ open: "00:00", close: "23:59" }],
+        "0": [{ open: "00:00", close: "23:59" }]
+    };
+    const [cfgBusinessHours, setCfgBusinessHours] = useState<any>({
+        enabled: false,
+        schedule: JSON.parse(JSON.stringify(defaultSchedule))
+    });
+    const [cfgDeliveryHours, setCfgDeliveryHours] = useState<any>({
+        enabled: false,
+        schedule: JSON.parse(JSON.stringify(defaultSchedule))
+    });
+    const [cfgReservationHours, setCfgReservationHours] = useState<any>({
+        enabled: false,
+        schedule: JSON.parse(JSON.stringify(defaultSchedule))
+    });
+    const [cfgDeliveryPanic, setCfgDeliveryPanic] = useState(false);
+
     // Landing Config State
     const [cfgLandingConfig, setCfgLandingConfig] = useState<any>({
         enabled: false,
@@ -869,6 +984,24 @@ const AdminTab: React.FC<AdminTabProps> = ({
                     custom_carousel: (tenant as any).landing_config.custom_carousel || []
                 });
             }
+
+            // Cargar Business Hours & Delivery Hours
+            if ((tenant as any).business_hours) {
+                setCfgBusinessHours((tenant as any).business_hours);
+            } else {
+                setCfgBusinessHours({ enabled: false, schedule: JSON.parse(JSON.stringify(defaultSchedule)) });
+            }
+            if ((tenant as any).delivery_hours) {
+                setCfgDeliveryHours((tenant as any).delivery_hours);
+            } else {
+                setCfgDeliveryHours({ enabled: false, schedule: JSON.parse(JSON.stringify(defaultSchedule)) });
+            }
+            if ((tenant as any).reservation_hours) {
+                setCfgReservationHours((tenant as any).reservation_hours);
+            } else {
+                setCfgReservationHours({ enabled: false, schedule: JSON.parse(JSON.stringify(defaultSchedule)) });
+            }
+            setCfgDeliveryPanic((tenant as any).delivery_panic_button || false);
 
             // Cargar configuraciones de Fidelización (Micro-CRM)
             setLoyConfigEnabled((tenant as any).loyalty_enabled !== false);
@@ -1426,6 +1559,10 @@ const AdminTab: React.FC<AdminTabProps> = ({
                         delivery_apps_markup: cfgDeliveryAppsMarkup,
                         is_delivery_apps_panic_active: cfgDeliveryAppsPanicActive,
                         delivery_apps_schedule: cfgDeliveryAppsSchedule,
+                        business_hours: cfgBusinessHours,
+                        delivery_hours: cfgDeliveryHours,
+                        reservation_hours: cfgReservationHours,
+                        delivery_panic_button: cfgDeliveryPanic,
                         landing_config: cfgLandingConfig
                     })
                     .eq('id', tenant.id)
@@ -3988,6 +4125,41 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             )}
                         </div>
 
+                        {/* Accordion: Horarios de Atención */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => setExpandedConfigSection(prev => prev === 'business_hours' ? null : 'business_hours')}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                    cfgBusinessHours.enabled 
+                                      ? (expandedConfigSection === 'business_hours' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400')
+                                      : (expandedConfigSection === 'business_hours' ? 'bg-slate-800 border-slate-600 text-white' : 'bg-slate-950 border-slate-800 text-slate-500 opacity-80')
+                                }`}
+                                style={{
+                                    borderColor: cfgBusinessHours.enabled ? (expandedConfigSection === 'business_hours' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                    color: cfgBusinessHours.enabled ? (expandedConfigSection === 'business_hours' ? tenant?.theme_colors?.primary : undefined) : undefined,
+                                }}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <CalendarRange className="w-5 h-5" />
+                                    <span className="font-bold uppercase text-sm tracking-wider">{cfgBusinessHours.enabled ? '✅ ' : ''}Horarios de Atención</span>
+                                </div>
+                                {expandedConfigSection === 'business_hours' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                            {expandedConfigSection === 'business_hours' && (
+                                <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 animate-in slide-in-from-top-2">
+                                    <div className="space-y-3 pt-3 border-t border-white/5">
+                                        <label className="text-[10px] font-black uppercase flex items-center gap-1 text-orange-500" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
+                                            <CalendarRange size={12} /> Días y Horarios Operativos
+                                        </label>
+                                        <p className="text-[9px] text-slate-400 leading-relaxed">
+                                            Define los turnos en los que el local acepta pedidos. Fuera de estos horarios, el carrito de compras se bloqueará automáticamente. Las reservas de mesa seguirán funcionando.
+                                        </p>
+                                        <ScheduleEditor cfg={cfgBusinessHours} setCfg={setCfgBusinessHours} primaryColor={tenant?.theme_colors?.primary || '#f97316'} />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         {/* Accordion: Módulo y zonas de envío */}
                         <div className="flex flex-col gap-2">
                             <button
@@ -4105,6 +4277,51 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                 );
                                             })}
                                         </div>
+                                    </div>
+                                    {/* Botón de Pánico de Envíos */}
+                                    <div className="space-y-2 pt-3 border-t border-white/5">
+                                        <label className="text-[10px] font-black uppercase text-red-500 flex items-center gap-1.5">
+                                            <AlertTriangle size={12} /> Emergencia: Suspender Envíos
+                                        </label>
+                                        <p className="text-[9px] text-slate-400 leading-relaxed">
+                                            Usa este botón de pánico si el delivery tiene un problema (ej: se enfermó o rompió la moto). 
+                                            Al activarlo, se desactiva inmediatamente la opción de envíos a domicilio para los clientes. 
+                                            <span className="font-bold text-red-400"> RECUERDA: Si lo activas, debes desactivarlo manualmente para volver a recibir pedidos con envío a domicilio. Es solo para casos de emergencia.</span>
+                                        </p>
+                                        
+                                        <button
+                                            type="button"
+                                            onClick={() => setCfgDeliveryPanic(!cfgDeliveryPanic)}
+                                            className={`w-full p-4 rounded-xl border flex items-center justify-between transition-all ${
+                                                cfgDeliveryPanic 
+                                                ? 'bg-red-500/20 border-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.2)]' 
+                                                : 'bg-slate-900/60 border-white/5 text-slate-400 hover:bg-slate-800'
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2 rounded-full ${cfgDeliveryPanic ? 'bg-red-500 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                                                    <AlertTriangle size={16} />
+                                                </div>
+                                                <div className="text-left">
+                                                    <div className="text-xs font-black uppercase">{cfgDeliveryPanic ? 'Envíos Suspendidos' : 'Suspender Envíos'}</div>
+                                                    <div className="text-[9px] opacity-80">{cfgDeliveryPanic ? 'Desactiva esto para volver a la normalidad' : 'Activar en caso de emergencia'}</div>
+                                                </div>
+                                            </div>
+                                            <div className={`w-12 h-6 rounded-full p-1 transition-colors ${cfgDeliveryPanic ? 'bg-red-500' : 'bg-slate-800'}`}>
+                                                <div className={`w-4 h-4 rounded-full bg-white transition-transform ${cfgDeliveryPanic ? 'translate-x-6' : 'translate-x-0'}`} />
+                                            </div>
+                                        </button>
+                                    </div>
+
+                                    {/* Horarios de Envío */}
+                                    <div className="space-y-3 pt-3 border-t border-white/5">
+                                        <label className="text-[10px] font-black uppercase flex items-center gap-1.5" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
+                                            <Calendar size={12} /> Horarios de Reparto
+                                        </label>
+                                        <p className="text-[9px] text-slate-400 leading-relaxed">
+                                            Define en qué franjas horarias está disponible el servicio de delivery. Si configuras esto, los clientes no podrán elegir envío a domicilio fuera de estos horarios (verán un cartel informativo).
+                                        </p>
+                                        <ScheduleEditor cfg={cfgDeliveryHours} setCfg={setCfgDeliveryHours} primaryColor={tenant?.theme_colors?.primary || '#f97316'} />
                                     </div>
 
                                     {/* Lista de Zonas Agregadas */}
@@ -6096,6 +6313,40 @@ const AdminTab: React.FC<AdminTabProps> = ({
                 </div>
             )}
                         </div>
+                        {/* Accordion: Rockola Multimedia VIP */}
+                        <div className="flex flex-col gap-2">
+                            <button
+                                onClick={() => setExpandedConfigSection(prev => prev === 'rockola_vip' ? null : 'rockola_vip')}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                    expandedConfigSection === 'rockola_vip' ? 'bg-purple-500/10 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.1)]' : 'bg-slate-900/80 border-purple-500/30 text-purple-400'
+                                }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xl">🌟</span>
+                                    <span className="font-bold uppercase text-sm tracking-wider">Muro Interactivo VIP</span>
+                                </div>
+                                {expandedConfigSection === 'rockola_vip' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                            </button>
+                            {expandedConfigSection === 'rockola_vip' && (
+                                <div className="p-6 bg-slate-950/80 border border-purple-500/20 rounded-2xl animate-in slide-in-from-bottom-2 text-center space-y-4">
+                                    <div className="w-16 h-16 mx-auto bg-purple-500/10 text-purple-500 rounded-full flex items-center justify-center mb-2">
+                                        <Lock size={32} />
+                                    </div>
+                                    <h3 className="text-lg font-black uppercase text-purple-400">Función Premium VIP</h3>
+                                    <p className="text-xs text-slate-400 font-medium">
+                                        Esta funcionalidad permite a los clientes compartir fotos, audios y videos en vivo en tu local.<br/>
+                                        Para activarla, debes pasarte al plan <strong className="text-purple-400">Premium VIP</strong>.
+                                    </p>
+                                    <button 
+                                        onClick={() => setExpandedConfigSection('subscription')}
+                                        className="mt-4 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-purple-500/20 active:scale-95"
+                                    >
+                                        Ver Planes
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
                         {/* Accordion: Suscripción y Planes */}
                         <div className="flex flex-col gap-2">
                             <button

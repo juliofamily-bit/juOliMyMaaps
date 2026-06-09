@@ -608,6 +608,36 @@ CREATE POLICY "Update publico interacciones (staff)" ON public.social_interactio
 -- Asignar default tenant_id
 ALTER TABLE public.social_interactions ALTER COLUMN tenant_id SET DEFAULT public.get_tenant_id_header();
 
+-- Nuevas columnas para Rockola Multimedia VIP
+ALTER TABLE public.social_interactions ADD COLUMN IF NOT EXISTS media_url TEXT DEFAULT NULL;
+ALTER TABLE public.social_interactions ADD COLUMN IF NOT EXISTS media_type TEXT DEFAULT NULL;
+ALTER TABLE public.social_interactions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ DEFAULT NULL;
+ALTER TABLE public.social_interactions ADD COLUMN IF NOT EXISTS view_once BOOLEAN DEFAULT FALSE;
+
+-- 12.7. Crear Bucket de Storage para Multimedia Social y configurar políticas (si está disponible el esquema storage)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'storage') THEN
+        -- Insertar el bucket si no existe
+        INSERT INTO storage.buckets (id, name, public) 
+        VALUES ('social_media', 'social_media', true)
+        ON CONFLICT (id) DO NOTHING;
+        
+        -- Configurar políticas de acceso
+        DROP POLICY IF EXISTS "Permitir lectura publica de social_media" ON storage.objects;
+        CREATE POLICY "Permitir lectura publica de social_media" 
+        ON storage.objects FOR SELECT USING (bucket_id = 'social_media');
+        
+        DROP POLICY IF EXISTS "Permitir subida publica a social_media" ON storage.objects;
+        CREATE POLICY "Permitir subida publica a social_media" 
+        ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'social_media');
+        
+        DROP POLICY IF EXISTS "Permitir delete publico a social_media" ON storage.objects;
+        CREATE POLICY "Permitir delete publico a social_media" 
+        ON storage.objects FOR DELETE USING (bucket_id = 'social_media');
+    END IF;
+END $$;
+
 
 -- 13. Habilitar Replicación en Tiempo Real para todas las tablas necesarias
 -- En Supabase, para que los eventos en tiempo real se propaguen, las tablas deben estar en la publicación supabase_realtime.

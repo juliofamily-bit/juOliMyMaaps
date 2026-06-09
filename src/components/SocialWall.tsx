@@ -4,12 +4,18 @@ import { Send, Music, MessageCircle, AlertCircle, Heart, User } from 'lucide-rea
 
 interface SocialInteraction {
   id: string;
-  type: 'message' | 'song_request' | 'dedication';
+  type: 'message' | 'song_request' | 'dedication' | 'gift' | 'media';
   sender_name: string;
   is_anonymous: boolean;
   content: string;
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
+  media_url?: string | null;
+  media_type?: string | null;
+  expires_at?: string | null;
+  view_once?: boolean;
+  reactions?: Record<string, number>;
+  comments?: { sender: string; text: string; timestamp: string }[];
 }
 
   interface SocialWallProps {
@@ -28,8 +34,17 @@ export const SocialWall: React.FC<SocialWallProps> = ({ tenantId, primaryColor, 
   const [targetTable, setTargetTable] = useState('');
   const [giftHint, setGiftHint] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
-  const [type, setType] = useState<'message' | 'song_request' | 'dedication' | 'gift'>('message');
+  const [type, setType] = useState<'message' | 'song_request' | 'dedication' | 'gift' | 'media'>('message');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [viewedMessages, setViewedMessages] = useState<Set<string>>(new Set());
+  const [commentingOn, setCommentingOn] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState('');
+  
+  // Media states
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [mediaType, setMediaType] = useState<'image_live'|'video_live'|'audio'|'meme' | null>(null);
+  const [mediaDuration, setMediaDuration] = useState<'view_once'|'5'|'15'|'30'>('15');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Filtrar la tabla actual
   const availableTables = tables.filter(t => t.name !== currentTable && t.id !== currentTable);
@@ -110,29 +125,118 @@ export const SocialWall: React.FC<SocialWallProps> = ({ tenantId, primaryColor, 
       return;
     }
 
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() && !selectedFile) return;
 
     setIsSubmitting(true);
     try {
+      let mediaUrl = null;
+      if (selectedFile) {
+        const fileExt = selectedFile.name.split('.').pop() || 'tmp';
+        const fileName = `${tenantId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from('social_media')
+          .upload(fileName, selectedFile);
+          
+        if (uploadError) throw uploadError;
+        
+        const { data: { publicUrl } } = supabase.storage
+          .from('social_media')
+          .getPublicUrl(fileName);
+          
+        mediaUrl = publicUrl;
+      }
+
+      let expiresAt = null;
+      if (mediaDuration !== 'view_once') {
+        const expiryDate = new Date();
+        expiryDate.setMinutes(expiryDate.getMinutes() + parseInt(mediaDuration));
+        expiresAt = expiryDate.toISOString();
+      }
+
       const { error } = await supabase.from('social_interactions').insert([{
         tenant_id: tenantId,
-        type,
+        type: selectedFile ? 'media' : type,
         sender_name: resolvedSenderName,
         is_anonymous: isAnonymous,
         content: newMessage.trim(),
-        status: 'pending' // Siempre pending, el Animador debe aprobarlo
+        status: 'pending', // Siempre pending, el Animador debe aprobarlo
+        media_url: mediaUrl,
+        media_type: mediaType,
+        expires_at: expiresAt,
+        view_once: mediaDuration === 'view_once'
       }]);
 
       if (error) throw error;
 
-      alert('¡Enviado! Tu mensaje está pendiente de moderación por el Animador.');
+      alert('¡Enviado! Tu publicación está pendiente de moderación por el Animador.');
       setNewMessage('');
+      setSelectedFile(null);
+      setMediaType(null);
       if (!isAnonymous) setCustomName('');
+
     } catch (err) {
       console.error(err);
       alert('Hubo un error al enviar tu mensaje. Intenta nuevamente.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleReaction = async (interactionId: string, reactionType: string) => {
+    // Optimistic UI update
+    setMessages(prev => prev.map(m => {
+      if (m.id === interactionId) {
+        const currentReactions = m.reactions || { like: 0, haha: 0, love: 0, sad: 0 };
+        return {
+          ...m,
+          reactions: {
+            ...currentReactions,
+            [reactionType]: (currentReactions[reactionType] || 0) + 1
+          }
+        };
+      }
+      return m;
+    }));
+
+    try {
+      await supabase.rpc('increment_social_reaction', {
+        p_interaction_id: interactionId,
+        p_reaction_type: reactionType
+      });
+    } catch (e) {
+      console.error('Error enviando reacción:', e);
+    }
+  };
+
+  const handleAddComment = async (e: React.FormEvent, interactionId: string) => {
+    e.preventDefault();
+    if (!commentText.trim()) return;
+
+    const resolvedSenderName = isAnonymous
+      ? 'Alguien Misterioso'
+      : (customName.trim() ? `${currentTable} ${customName.trim()}` : (currentTable || 'Cliente'));
+
+    const newComment = { sender: resolvedSenderName, text: commentText.trim(), timestamp: new Date().toISOString() };
+
+    // Optimistic update
+    setMessages(prev => prev.map(m => {
+      if (m.id === interactionId) {
+        return { ...m, comments: [...(m.comments || []), newComment] };
+      }
+      return m;
+    }));
+
+    setCommentingOn(null);
+    setCommentText('');
+
+    try {
+      await supabase.rpc('add_social_comment', {
+        p_interaction_id: interactionId,
+        p_comment: newComment.text,
+        p_sender: newComment.sender
+      });
+    } catch (e) {
+      console.error('Error añadiendo comentario:', e);
     }
   };
 
@@ -186,7 +290,44 @@ export const SocialWall: React.FC<SocialWallProps> = ({ tenantId, primaryColor, 
               >
                 🍻 Invitar
               </button>
+              <button
+                type="button"
+                onClick={() => setType('media')}
+                className={`flex-1 min-w-[80px] py-2 text-xs font-bold uppercase rounded-lg transition-all flex justify-center items-center gap-1 ${type === 'media' ? 'bg-violet-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
+              >
+                VIP 📸
+              </button>
             </div>
+
+            {/* Hidden file input for media uploads */}
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept={
+                mediaType === 'image_live' ? 'image/*' : 
+                mediaType === 'video_live' ? 'video/*' : 
+                mediaType === 'audio' ? 'audio/*' : 
+                'image/*,image/gif'
+              }
+              capture={
+                mediaType === 'image_live' ? 'environment' : 
+                mediaType === 'video_live' ? 'environment' : 
+                undefined
+              }
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0]) {
+                  const file = e.target.files[0];
+                  // Limit video/audio size (approximate duration control since JS can't strictly block recording length natively before upload without MediaRecorder)
+                  // 15MB limit to discourage long videos
+                  if (file.size > 15 * 1024 * 1024) {
+                    alert('El archivo es muy pesado. Intenta grabar menos de 30 segundos.');
+                    return;
+                  }
+                  setSelectedFile(file);
+                }
+              }}
+            />
 
             {!isAnonymous && (
               <div 
@@ -239,6 +380,66 @@ export const SocialWall: React.FC<SocialWallProps> = ({ tenantId, primaryColor, 
                   Serás redirigido al menú para elegir qué quieres enviarle a esa mesa. El ticket le llegará al mozo con la indicación.
                 </p>
               </div>
+            ) : type === 'media' ? (
+              <div className="space-y-4 animate-in fade-in zoom-in-95">
+                <div className="grid grid-cols-2 gap-3">
+                  <button type="button" onClick={() => { setMediaType('image_live'); fileInputRef.current?.click(); }} className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border-2 transition-all ${mediaType === 'image_live' ? 'border-violet-500 bg-violet-500/10' : isLight ? 'border-slate-200 bg-white hover:bg-slate-50' : 'border-slate-800 bg-slate-900 hover:bg-slate-800'}`}>
+                    <span className="text-2xl">📸</span>
+                    <span className={`text-[10px] font-bold uppercase ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>Foto en Vivo</span>
+                  </button>
+                  <button type="button" onClick={() => { setMediaType('video_live'); fileInputRef.current?.click(); }} className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border-2 transition-all ${mediaType === 'video_live' ? 'border-violet-500 bg-violet-500/10' : isLight ? 'border-slate-200 bg-white hover:bg-slate-50' : 'border-slate-800 bg-slate-900 hover:bg-slate-800'}`}>
+                    <span className="text-2xl">🎥</span>
+                    <span className={`text-[10px] font-bold uppercase ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>Video (30s)</span>
+                  </button>
+                  <button type="button" onClick={() => { setMediaType('audio'); fileInputRef.current?.click(); }} className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border-2 transition-all ${mediaType === 'audio' ? 'border-violet-500 bg-violet-500/10' : isLight ? 'border-slate-200 bg-white hover:bg-slate-50' : 'border-slate-800 bg-slate-900 hover:bg-slate-800'}`}>
+                    <span className="text-2xl">🎙️</span>
+                    <span className={`text-[10px] font-bold uppercase ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>Grabar Audio</span>
+                  </button>
+                  <button type="button" onClick={() => { setMediaType('meme'); fileInputRef.current?.click(); }} className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-2 border-2 transition-all ${mediaType === 'meme' ? 'border-violet-500 bg-violet-500/10' : isLight ? 'border-slate-200 bg-white hover:bg-slate-50' : 'border-slate-800 bg-slate-900 hover:bg-slate-800'}`}>
+                    <span className="text-2xl">🤡</span>
+                    <span className={`text-[10px] font-bold uppercase ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>Meme / GIF</span>
+                  </button>
+                </div>
+
+                {selectedFile && (
+                  <div className={`p-3 rounded-xl border flex items-center justify-between ${isLight ? 'bg-violet-50 border-violet-100' : 'bg-violet-950/30 border-violet-900/50'}`}>
+                    <span className={`text-xs font-bold truncate pr-4 ${isLight ? 'text-violet-700' : 'text-violet-300'}`}>
+                      {selectedFile.name}
+                    </span>
+                    <button type="button" onClick={() => { setSelectedFile(null); setMediaType(null); fileInputRef.current && (fileInputRef.current.value = ''); }} className="text-red-500 text-xs font-bold uppercase">X</button>
+                  </div>
+                )}
+
+                <div className={`p-4 rounded-xl border space-y-3 ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
+                  <label className={`text-[10px] font-black uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                    Duración de la publicación
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    <button type="button" onClick={() => setMediaDuration('view_once')} className={`py-2 text-[10px] font-bold uppercase rounded-lg border transition-all ${mediaDuration === 'view_once' ? 'bg-red-500 border-red-500 text-white' : isLight ? 'bg-white border-slate-200 text-slate-500' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+                      💣 1 Vez
+                    </button>
+                    <button type="button" onClick={() => setMediaDuration('5')} className={`py-2 text-[10px] font-bold uppercase rounded-lg border transition-all ${mediaDuration === '5' ? 'bg-slate-700 border-slate-700 text-white' : isLight ? 'bg-white border-slate-200 text-slate-500' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+                      5 min
+                    </button>
+                    <button type="button" onClick={() => setMediaDuration('15')} className={`py-2 text-[10px] font-bold uppercase rounded-lg border transition-all ${mediaDuration === '15' ? 'bg-slate-700 border-slate-700 text-white' : isLight ? 'bg-white border-slate-200 text-slate-500' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+                      15 min
+                    </button>
+                    <button type="button" onClick={() => setMediaDuration('30')} className={`py-2 text-[10px] font-bold uppercase rounded-lg border transition-all ${mediaDuration === '30' ? 'bg-slate-700 border-slate-700 text-white' : isLight ? 'bg-white border-slate-200 text-slate-500' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+                      30 min
+                    </button>
+                  </div>
+                </div>
+
+                <textarea
+                  placeholder="Escribe un mensaje para acompañar... (opcional)"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  maxLength={100}
+                  rows={2}
+                  className={`w-full rounded-xl px-4 py-3 outline-none text-sm border focus:ring-2 focus:ring-opacity-50 transition-all resize-none ${isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-slate-900/50 border-slate-800 text-white'}`}
+                  style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
+                />
+              </div>
             ) : (
               <textarea
                 placeholder={
@@ -274,7 +475,7 @@ export const SocialWall: React.FC<SocialWallProps> = ({ tenantId, primaryColor, 
 
               <button
                 type="submit"
-                disabled={isSubmitting || (type !== 'gift' && !newMessage.trim()) || (type === 'gift' && !targetTable.trim())}
+                disabled={isSubmitting || (type === 'message' && !newMessage.trim()) || (type === 'gift' && !targetTable.trim()) || (type === 'media' && !selectedFile)}
                 className="px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider text-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg"
                 style={{ backgroundColor: primaryColor }}
               >
@@ -304,47 +505,152 @@ export const SocialWall: React.FC<SocialWallProps> = ({ tenantId, primaryColor, 
                 Sé el primero en publicar algo en el muro.
               </div>
             ) : (
-              messages.map((msg) => (
-                <div 
-                  key={msg.id} 
-                  className={`p-3 rounded-xl animate-in fade-in slide-in-from-bottom-2 ${
-                    msg.type === 'song_request' ? 'bg-blue-500/10 border border-blue-500/20' :
-                    msg.type === 'dedication' ? 'bg-pink-500/10 border border-pink-500/20' :
-                    'bg-white/5 border border-white/10'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    {msg.is_anonymous ? (
-                      <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center">
-                        <User className="w-3 h-3 text-purple-400" />
+              messages.map((msg) => {
+                // Filtrar expirados localmente por seguridad visual
+                if (msg.expires_at && new Date(msg.expires_at) < new Date()) return null;
+                // Filtrar los view_once ya vistos
+                if (msg.view_once && viewedMessages.has(msg.id)) return null;
+
+                const isMedia = msg.type === 'media';
+
+                return (
+                  <div 
+                    key={msg.id} 
+                    className={`p-3 rounded-xl animate-in fade-in slide-in-from-bottom-2 ${
+                      msg.type === 'song_request' ? 'bg-blue-500/10 border border-blue-500/20' :
+                      msg.type === 'dedication' ? 'bg-pink-500/10 border border-pink-500/20' :
+                      isMedia ? 'bg-violet-500/10 border border-violet-500/20' :
+                      'bg-white/5 border border-white/10'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      {msg.is_anonymous ? (
+                        <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center">
+                          <User className="w-3 h-3 text-purple-400" />
+                        </div>
+                      ) : (
+                        <div className="w-5 h-5 rounded-full bg-slate-700 flex items-center justify-center">
+                          <span className="text-[9px] font-bold text-white uppercase">{msg.sender_name.charAt(0)}</span>
+                        </div>
+                      )}
+                      <span className="text-xs font-bold text-slate-300">
+                        {msg.sender_name}
+                      </span>
+                      <span className="text-[9px] text-slate-500 ml-auto">
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+
+                    {msg.view_once ? (
+                      <div className="my-2 p-4 rounded-xl bg-slate-900 border border-slate-700 flex flex-col items-center justify-center gap-2">
+                        <span className="text-2xl animate-bounce">💣</span>
+                        <button 
+                          onClick={() => setViewedMessages(prev => new Set(prev).add(msg.id))}
+                          className="px-4 py-2 bg-red-500 text-white text-[10px] font-bold uppercase rounded-lg shadow-lg active:scale-95 transition-all"
+                        >
+                          Ver Mensaje Oculto
+                        </button>
+                        <span className="text-[9px] text-slate-500 uppercase">Se autodestruirá al abrir</span>
                       </div>
                     ) : (
-                      <div className="w-5 h-5 rounded-full bg-slate-700 flex items-center justify-center">
-                        <span className="text-[9px] font-bold text-white uppercase">{msg.sender_name.charAt(0)}</span>
+                      <>
+                        {msg.media_url && (
+                          <div className="my-2 rounded-lg overflow-hidden bg-black/20 relative">
+                            {msg.media_type === 'audio' ? (
+                              <audio controls src={msg.media_url} className="w-full h-10" />
+                            ) : msg.media_type === 'video_live' ? (
+                              <video controls src={msg.media_url} className="w-full max-h-48 object-cover rounded-lg" />
+                            ) : (
+                              <img src={msg.media_url} alt="Contenido multimedia" className="w-full max-h-48 object-cover rounded-lg" loading="lazy" />
+                            )}
+                          </div>
+                        )}
+                        {msg.content && (
+                          <p className="text-sm text-white/90 leading-relaxed">
+                            {msg.content}
+                          </p>
+                        )}
+                      </>
+                    )}
+
+                    {msg.type === 'song_request' && (
+                      <div className="mt-2 text-[10px] font-bold text-blue-400 uppercase flex items-center gap-1">
+                        <Music className="w-3 h-3" /> Petición Musical
                       </div>
                     )}
-                    <span className="text-xs font-bold text-slate-300">
-                      {msg.sender_name}
-                    </span>
-                    <span className="text-[9px] text-slate-500 ml-auto">
-                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
+                    {msg.type === 'dedication' && (
+                      <div className="mt-2 text-[10px] font-bold text-pink-400 uppercase flex items-center gap-1">
+                        <Heart className="w-3 h-3" /> Dedicatoria Especial
+                      </div>
+                    )}
+                    {isMedia && (
+                      <div className="mt-2 text-[10px] font-bold text-violet-400 uppercase flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" /> Contenido VIP
+                      </div>
+                    )}
+                    
+                    {/* Reactions Bar */}
+                    <div className="flex items-center gap-3 mt-3 pt-2 border-t border-slate-500/20">
+                      <button onClick={() => handleReaction(msg.id, 'like')} className="flex items-center gap-1 hover:scale-110 active:scale-95 transition-transform">
+                        <span className="text-sm">👍</span>
+                        <span className={`text-[10px] font-bold ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{msg.reactions?.like || 0}</span>
+                      </button>
+                      <button onClick={() => handleReaction(msg.id, 'love')} className="flex items-center gap-1 hover:scale-110 active:scale-95 transition-transform">
+                        <span className="text-sm">❤️</span>
+                        <span className={`text-[10px] font-bold ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{msg.reactions?.love || 0}</span>
+                      </button>
+                      <button onClick={() => handleReaction(msg.id, 'haha')} className="flex items-center gap-1 hover:scale-110 active:scale-95 transition-transform">
+                        <span className="text-sm">😂</span>
+                        <span className={`text-[10px] font-bold ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{msg.reactions?.haha || 0}</span>
+                      </button>
+                      <button onClick={() => handleReaction(msg.id, 'sad')} className="flex items-center gap-1 hover:scale-110 active:scale-95 transition-transform">
+                        <span className="text-sm">😢</span>
+                        <span className={`text-[10px] font-bold ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{msg.reactions?.sad || 0}</span>
+                      </button>
+                      <button onClick={() => handleReaction(msg.id, 'angry')} className="flex items-center gap-1 hover:scale-110 active:scale-95 transition-transform">
+                        <span className="text-sm">😡</span>
+                        <span className={`text-[10px] font-bold ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{msg.reactions?.angry || 0}</span>
+                      </button>
+                      
+                      <div className="ml-auto">
+                        <button onClick={() => setCommentingOn(commentingOn === msg.id ? null : msg.id)} className={`text-[10px] font-bold uppercase hover:underline transition-all ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                          {msg.comments && msg.comments?.length > 0 ? `${msg.comments.length} Comentarios` : 'Comentar'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Comments List */}
+                    {msg.comments && msg.comments.length > 0 && (
+                      <div className="mt-3 space-y-2 pl-2 border-l-2 border-slate-500/20">
+                        {msg.comments.map((comment, idx) => (
+                          <div key={idx} className="text-xs">
+                            <span className={`font-bold mr-1 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>{comment.sender}:</span>
+                            <span className={isLight ? 'text-slate-600' : 'text-slate-400'}>{comment.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Comment Form */}
+                    {commentingOn === msg.id && (
+                      <form onSubmit={(e) => handleAddComment(e, msg.id)} className="mt-3 flex gap-2 animate-in fade-in slide-in-from-top-2">
+                        <input
+                          type="text"
+                          autoFocus
+                          placeholder="Escribe un comentario..."
+                          value={commentText}
+                          onChange={(e) => setCommentText(e.target.value)}
+                          maxLength={100}
+                          className={`flex-1 rounded-lg px-3 py-1.5 outline-none text-xs border focus:ring-1 transition-all ${isLight ? 'bg-white border-slate-200 text-slate-900 focus:ring-slate-400' : 'bg-slate-900 border-slate-700 text-white focus:ring-slate-500'}`}
+                        />
+                        <button type="submit" disabled={!commentText.trim()} className="px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white text-[10px] font-bold uppercase rounded-lg disabled:opacity-50 transition-colors">
+                          Enviar
+                        </button>
+                      </form>
+                    )}
                   </div>
-                  <p className="text-sm text-white/90 leading-relaxed">
-                    {msg.content}
-                  </p>
-                  {msg.type === 'song_request' && (
-                    <div className="mt-2 text-[10px] font-bold text-blue-400 uppercase flex items-center gap-1">
-                      <Music className="w-3 h-3" /> Petición Musical
-                    </div>
-                  )}
-                  {msg.type === 'dedication' && (
-                    <div className="mt-2 text-[10px] font-bold text-pink-400 uppercase flex items-center gap-1">
-                      <Heart className="w-3 h-3" /> Dedicatoria Especial
-                    </div>
-                  )}
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

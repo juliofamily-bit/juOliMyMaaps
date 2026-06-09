@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Category, Product, OrderItem, Ingredient, ProductIngredient, ProductOffer } from '@/types/database';
-import { ShoppingBag, ChevronRight, ChevronLeft, Minus, Plus, X, Search, Utensils, CheckCircle, Loader2, Trash2, ChevronDown, ChevronUp, Star, BellRing, Instagram, Facebook, MessageCircle, MapPin, Map, Sun, Moon, Info, Gift, Home, ArrowLeft, Image as ImageIcon } from 'lucide-react';
+import { ShoppingBag, ChevronRight, ChevronLeft, Minus, Plus, X, Search, Utensils, CheckCircle, Loader2, Trash2, ChevronDown, ChevronUp, Star, BellRing, Instagram, Facebook, MessageCircle, MapPin, Map, Sun, Moon, Info, Gift, Home, ArrowLeft, Image as ImageIcon, Clock } from 'lucide-react';
 import { MaxesLogo } from '@/components/MaxesLogo';
 import { useRealtimeData } from '@/hooks/useRealtimeData';
 import { supabase, broadcastTenantChange } from '@/lib/supabase';
@@ -251,6 +251,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
   
   // Checkout states
   const [customerInfo, setCustomerInfo] = useState('');
@@ -287,10 +288,49 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [tenant?.landing_config?.enabled]);
 
+  // Utilidad para evaluar si estamos dentro del horario operativo
+  const checkIsCurrentlyOpen = (cfg: any) => {
+    if (!cfg || !cfg.enabled || !cfg.schedule) return true; // Si no está habilitado, siempre está abierto
+    
+    const now = new Date();
+    let currentDayStr = String(now.getDay()); // 0 (Dom) a 6 (Sab)
+    
+    const currentHours = now.getHours().toString().padStart(2, '0');
+    const currentMinutes = now.getMinutes().toString().padStart(2, '0');
+    const currentTimeStr = `${currentHours}:${currentMinutes}`;
+    
+    const todayShifts = cfg.schedule[currentDayStr] || [];
+    
+    if (todayShifts.length === 0) return false;
+
+    for (const shift of todayShifts) {
+      if (shift.open <= shift.close) {
+        if (currentTimeStr >= shift.open && currentTimeStr <= shift.close) return true;
+      } else {
+        if (currentTimeStr >= shift.open || currentTimeStr <= shift.close) return true;
+      }
+    }
+    
+    let yesterdayDayStr = String((now.getDay() - 1 + 7) % 7);
+    const yesterdayShifts = cfg.schedule[yesterdayDayStr] || [];
+    for (const shift of yesterdayShifts) {
+      if (shift.open > shift.close) {
+        if (currentTimeStr <= shift.close) return true;
+      }
+    }
+
+    return false;
+  };
+
+  const isBusinessOpen = checkIsCurrentlyOpen(tenant?.business_hours);
+  const isDeliveryHoursOpen = checkIsCurrentlyOpen(tenant?.delivery_hours);
+  const isDeliveryPanicActive = tenant?.delivery_panic_button === true;
+
   // Delivery and Payment State
   const currentDayOfWeek = new Date().getDay();
   const tenantDeliveryDays = tenant?.delivery_days || [0,1,2,3,4,5,6];
-  const isDeliveryActiveToday = tenantDeliveryDays.includes(currentDayOfWeek);
+  const isDeliveryActiveToday = tenantDeliveryDays.includes(currentDayOfWeek) && !isDeliveryPanicActive && isDeliveryHoursOpen;
+
 
   const [deliveryType, setDeliveryType] = useState<'local' | 'llevar' | 'delivery'>('llevar'); // 'local' es salón (con mesa), 'llevar' (Take Away), 'delivery' (Envío)
   const [deliveryAddress, setDeliveryAddress] = useState('');
@@ -695,6 +735,55 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     if (selectedDate > maxDate) {
       alert("⚠️ Solo puedes reservar con un máximo de 1 mes de anticipación.");
       return;
+    }
+
+    // Validar hora pasada para hoy
+    const selectedDateTime = new Date(`${reservationDate}T${reservationTime}:00`);
+    const now = new Date();
+    if (selectedDate.getTime() === today.getTime() && selectedDateTime <= now) {
+      alert("⚠️ El horario seleccionado ya pasó. Por favor elige un horario posterior.");
+      return;
+    }
+
+    // Validar contra reservation_hours
+    const dayOfWeek = selectedDateTime.getDay().toString();
+    const resHours = (tenant as any).reservation_hours;
+    if (resHours && resHours.enabled && resHours.schedule && resHours.schedule[dayOfWeek]) {
+      const timeSlots = resHours.schedule[dayOfWeek];
+      
+      if (timeSlots.length === 0) {
+        alert("⚠️ Lo sentimos, el local no acepta reservas en el día seleccionado.");
+        return;
+      }
+
+      let isValidTime = false;
+      const [selHours, selMins] = reservationTime.split(':').map(Number);
+      const selectedTotalMins = selHours * 60 + selMins;
+
+      for (const slot of timeSlots) {
+        if (!slot.open || !slot.close) continue;
+        const [oH, oM] = slot.open.split(':').map(Number);
+        const [cH, cM] = slot.close.split(':').map(Number);
+        const openMins = oH * 60 + oM;
+        const closeMins = cH * 60 + cM;
+
+        if (closeMins < openMins) { // Cruza medianoche
+          if (selectedTotalMins >= openMins || selectedTotalMins <= closeMins) {
+            isValidTime = true;
+            break;
+          }
+        } else {
+          if (selectedTotalMins >= openMins && selectedTotalMins <= closeMins) {
+            isValidTime = true;
+            break;
+          }
+        }
+      }
+
+      if (!isValidTime) {
+        alert("⚠️ El horario seleccionado no se encuentra dentro del turno de reservas habilitado para ese día.");
+        return;
+      }
     }
 
     setIsSubmittingReservation(true);
@@ -1473,33 +1562,37 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         ? `🔔 Pedido para ${destName} (De: ${finalCustomerInfo}) #${createdOrder.order_number}`
         : `⚠️ Pedido PENDIENTE para ${destName} (De: ${finalCustomerInfo}) #${createdOrder.order_number}`;
 
-      await supabase.from('app_notifications').insert([{
-        message: notifMsg,
-        type: isApproved ? 'info' : 'alert',
-        target_roles: isApproved ? notifyRoles : ['staff', 'admin', ...(deliveryType === 'local' ? ['waiter'] : [])],
-        tenant_id: tenant.id
-      }]);
+      const isOnlinePending = (method === 'mercadopago' || method === 'credito') && !isApproved;
 
-      // 🔥 Disparar Web Push
-      const pushRoles = isApproved ? notifyRoles : ['staff', 'admin'];
-      if (deliveryType === 'delivery') {
-        pushRoles.push('delivery');
+      if (!isOnlinePending) {
+        await supabase.from('app_notifications').insert([{
+          message: notifMsg,
+          type: isApproved ? 'info' : 'alert',
+          target_roles: isApproved ? notifyRoles : ['staff', 'admin', ...(deliveryType === 'local' ? ['waiter'] : [])],
+          tenant_id: tenant.id
+        }]);
+
+        // 🔥 Disparar Web Push
+        const pushRoles = isApproved ? notifyRoles : ['staff', 'admin'];
+        if (deliveryType === 'delivery') {
+          pushRoles.push('delivery');
+        }
+        
+        pushRoles.forEach(role => {
+          fetch('/api/push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenant_id: tenant.id,
+              role,
+              title: 'MyMozo - Nuevo Pedido',
+              body: notifMsg
+            })
+          }).catch(err => console.error('Error enviando push menu público:', err));
+        });
+
+        broadcastTenantChange(tenant.id);
       }
-      
-      pushRoles.forEach(role => {
-        fetch('/api/push', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tenant_id: tenant.id,
-            role,
-            title: 'MyMozo - Nuevo Pedido',
-            body: notifMsg
-          })
-        }).catch(err => console.error('Error enviando push menu público:', err));
-      });
-
-      broadcastTenantChange(tenant.id);
 
       // Notificación Pública de Regalo (Social Dining)
       if (giftMode.isActive) {
@@ -1871,6 +1964,19 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   >
                     <MessageCircle className="w-5 h-5" />
                   </a>
+                )}
+                {tenant?.business_hours?.enabled && (
+                  <button 
+                    onClick={() => setIsHoursModalOpen(true)}
+                    className={`p-2.5 px-4 rounded-2xl border transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2 shadow-lg font-bold text-xs uppercase tracking-widest ${
+                      isLight 
+                        ? 'bg-white border-slate-200 text-slate-700 hover:text-orange-500 hover:border-orange-500/30' 
+                        : 'bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-orange-400 hover:border-orange-500/30'
+                    }`}
+                  >
+                    <Clock className="w-4 h-4" />
+                    <span className="hidden sm:inline">Horarios</span>
+                  </button>
                 )}
               </div>
             </div>
@@ -2783,9 +2889,17 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                             if (!tenant?.has_delivery) {
                               alert("⚠️ Servicio de Envíos no habilitado:\n\nEste local no cuenta con el servicio de envíos a domicilio habilitado en este momento. Por favor, selecciona la opción de Retirar en el Local.");
                             } else if (!isDeliveryActiveToday) {
-                                const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-                                const activeDaysNames = (tenantDeliveryDays as number[]).map(d => dayNames[d]).join(', ');
-                                alert(`⚠️ Envíos no disponibles hoy.\n\nDías de delivery activo:\n${activeDaysNames}`);
+                                let msg = "";
+                                if (isDeliveryPanicActive) {
+                                  msg = "⚠️ Envíos Suspendidos Temporalmente.\n\nEl servicio de delivery ha sido pausado por el local debido a alta demanda o razones de fuerza mayor. Por favor, selecciona la opción de Retirar en el Local.";
+                                } else if (!isDeliveryHoursOpen) {
+                                  msg = "⚠️ Envíos fuera de horario.\n\nEl servicio de envíos a domicilio no está operando en este momento. Por favor, selecciona la opción de Retirar en el Local o intenta más tarde.";
+                                } else {
+                                  const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                                  const activeDaysNames = (tenantDeliveryDays as number[]).map(d => dayNames[d]).join(', ');
+                                  msg = `⚠️ Envíos no disponibles hoy.\n\nDías de delivery activo:\n${activeDaysNames}`;
+                                }
+                                alert(msg);
                             } else {
                               setDeliveryType('delivery');
                             }
@@ -3369,31 +3483,38 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   </div>
                 </div>
               ) : (
-                <div className="flex w-full rounded-xl overflow-hidden shadow-lg transition-all" style={{ boxShadow: cart.length === 0 ? 'none' : `0 8px 30px -10px ${primaryColor}` }}>
-                  <button 
-                    onClick={() => setIsCartOpen(false)}
-                    className={`w-1/2 py-4 font-semibold transition-colors flex justify-center items-center text-xs uppercase tracking-widest ${
-                      isLight ? 'text-slate-600 bg-slate-100 hover:bg-slate-200 active:bg-slate-350' : 'text-neutral-300 bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600'
-                    }`}
-                  >
-                    Seguir Pidiendo
-                  </button>
-                  <button 
-                    onClick={handleCheckout}
-                    disabled={isSubmitting || cart.length === 0}
-                    className={`w-1/2 py-4 font-bold text-white transition-all flex justify-center items-center gap-2 text-xs uppercase tracking-widest ${
-                      cart.length === 0 
-                        ? 'opacity-50 cursor-not-allowed'
-                        : 'hover:brightness-110 active:brightness-90'
-                    }`}
-                    style={{ backgroundColor: cart.length === 0 ? (isLight ? '#94a3b8' : '#52525b') : primaryColor }}
-                  >
-                    {isSubmitting ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      'Confirmar Pedido'
-                    )}
-                  </button>
+                <div className="flex flex-col w-full rounded-xl overflow-hidden shadow-lg transition-all" style={{ boxShadow: cart.length === 0 ? 'none' : `0 8px 30px -10px ${primaryColor}` }}>
+                  {!isBusinessOpen && cart.length > 0 && (
+                    <div className="w-full bg-red-500/20 text-red-500 py-2.5 px-4 text-center text-xs font-black uppercase tracking-widest border-b border-red-500/20 backdrop-blur-sm">
+                      ⚠️ Fuera de Horario de Atención
+                    </div>
+                  )}
+                  <div className="flex w-full">
+                    <button 
+                      onClick={() => setIsCartOpen(false)}
+                      className={`w-1/2 py-4 font-semibold transition-colors flex justify-center items-center text-xs uppercase tracking-widest ${
+                        isLight ? 'text-slate-600 bg-slate-100 hover:bg-slate-200 active:bg-slate-350' : 'text-neutral-300 bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-600'
+                      }`}
+                    >
+                      Seguir Pidiendo
+                    </button>
+                    <button 
+                      onClick={handleCheckout}
+                      disabled={isSubmitting || cart.length === 0 || !isBusinessOpen}
+                      className={`w-1/2 py-4 font-bold text-white transition-all flex justify-center items-center gap-2 text-xs uppercase tracking-widest ${
+                        cart.length === 0 || !isBusinessOpen
+                          ? 'opacity-50 cursor-not-allowed'
+                          : 'hover:brightness-110 active:brightness-90'
+                      }`}
+                      style={{ backgroundColor: (cart.length === 0 || !isBusinessOpen) ? (isLight ? '#94a3b8' : '#52525b') : primaryColor }}
+                    >
+                      {isSubmitting ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        !isBusinessOpen ? 'Cerrado' : 'Confirmar Pedido'
+                      )}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -3521,6 +3642,70 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Horarios de Atención */}
+      {isHoursModalOpen && tenant?.business_hours && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center px-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setIsHoursModalOpen(false)}>
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            className={`w-full max-w-sm rounded-[2.5rem] p-6 border shadow-2xl space-y-6 text-center flex flex-col relative animate-in zoom-in-95 duration-300 backdrop-blur-xl ${
+              isLight 
+                ? 'bg-white/80 border-slate-200 text-slate-900' 
+                : 'bg-neutral-950/80 border-white/5 text-white'
+            }`}
+          >
+            <button 
+              onClick={() => setIsHoursModalOpen(false)} 
+              className={`absolute top-5 right-5 p-1.5 rounded-full border transition-all hover:scale-105 active:scale-95 flex items-center justify-center ${
+                isLight 
+                  ? 'bg-slate-100 border-slate-200/60 text-slate-500 hover:text-slate-900' 
+                  : 'bg-white/5 border-white/5 text-slate-400 hover:text-white'
+              }`}
+            >
+              <X size={14} />
+            </button>
+
+            <div className="flex flex-col items-center space-y-3 mt-2">
+              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-orange-500/20 bg-neutral-900 flex items-center justify-center shrink-0">
+                <Clock className="w-8 h-8 text-orange-500" />
+              </div>
+              <h3 className="text-xl font-black uppercase tracking-tight italic text-orange-500" style={{ color: primaryColor }}>
+                Horarios
+              </h3>
+            </div>
+
+            <div className="space-y-1 text-left w-full mt-4">
+              {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((dayName, index) => {
+                const jsDayMap = [1, 2, 3, 4, 5, 6, 0];
+                const dayIndex = jsDayMap[index];
+                const dayShifts = tenant.business_hours.schedule?.[dayIndex] || [];
+                
+                const currentJsDay = new Date().getDay();
+                const isToday = currentJsDay === dayIndex;
+
+                return (
+                  <div key={dayIndex} className={`flex justify-between items-center py-2 border-b border-white/5 last:border-0 ${isToday ? 'bg-orange-500/10 rounded-lg px-2 -mx-2 border-b-0' : ''}`}>
+                    <span className={`font-bold text-xs uppercase tracking-widest ${isToday ? 'text-orange-500' : isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                      {dayName} {isToday && '(Hoy)'}
+                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      {dayShifts.length > 0 ? (
+                        dayShifts.map((shift: any, sIdx: number) => (
+                          <span key={sIdx} className={`text-[11px] font-black bg-neutral-900/50 px-2 py-0.5 rounded-md border border-white/5 ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
+                            {shift.open} - {shift.close}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[10px] font-bold text-red-500/80 uppercase bg-red-500/10 px-2 py-0.5 rounded-md">Cerrado</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
