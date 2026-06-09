@@ -952,7 +952,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       const { data: resData, error: resError } = await supabase
         .from('reservations')
         .select('deposit_amount')
-        .eq('id', pendingReservationId)
+        .eq('id', reservationId)
         .single();
 
       if (resError || !resData) throw new Error("No se pudo obtener el monto de la seña.");
@@ -962,7 +962,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           accessToken: tenant.mercadopago_access_token,
-          external_reference: pendingReservationId,
+          external_reference: reservationId,
           items: [
             {
               title: `Seña de Reserva - ${tenant.name}`,
