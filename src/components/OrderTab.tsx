@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Category, Product, Ingredient, OrderItem, Order } from '@/types/database';
-import { Minus, Plus, Smartphone, Check, ArrowLeft, ShoppingCart, AlertCircle, X, RefreshCw, ClipboardList, CheckCircle2, Clock, User, Flame, Navigation, AlertTriangle, Printer, Trash2, ShoppingBag } from 'lucide-react';
+import { Minus, Plus, Smartphone, Check, ArrowLeft, ShoppingCart, AlertCircle, X, RefreshCw, ClipboardList, CheckCircle2, Clock, User, Flame, Navigation, AlertTriangle, Printer, Trash2, ShoppingBag, Calendar, Users } from 'lucide-react';
 import { supabase, broadcastTenantChange } from '@/lib/supabase';
 import { useNotifications } from '@/lib/store';
 import { useOfflineStore } from '@/lib/offlineStore';
@@ -67,8 +67,16 @@ const getOrderDisplayName = (order: any, tenant: any) => {
     return tableName;
 };
 
-export default function OrderTab({ products, ingredients, categories, orders = [], tenant, productIngredients = [], productOffers = [], isLight = false, refetchData }: OrderTabProps) {
-    const [subTab, setSubTab] = useState<'new_order' | 'deliveries'>('new_order');
+export default function OrderTab({ products, ingredients, categories: initialCategories, orders = [], tenant, productIngredients = [], productOffers = [], isLight = false, refetchData }: OrderTabProps) {
+    const [subTab, setSubTab] = useState<'new_order' | 'deliveries' | 'reservations'>('new_order');
+    const [calendarReservations, setCalendarReservations] = useState<any[]>([]);
+    const [selectedResDate, setSelectedResDate] = useState<string>(() => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    });
+    
+    // Configuración general
+    const [categories, setCategories] = useState<Category[]>(initialCategories);
     const [clientName, setClientName] = useState('');
     const [phone, setPhone] = useState('');
     const [customerCuit, setCustomerCuit] = useState('');
@@ -163,6 +171,46 @@ export default function OrderTab({ products, ingredients, categories, orders = [
         window.addEventListener('app-go-back', handleGoBack);
         return () => window.removeEventListener('app-go-back', handleGoBack);
     }, [showOfflineQueue, orderToPrint, crossPaymentOrder, showSummary, selectedCategoryId, subTab]);
+
+    React.useEffect(() => {
+        if (!tenant || !tenant.id) return;
+        
+        const fetchReservations = async () => {
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const future = new Date(today);
+            future.setDate(future.getDate() + 35);
+            
+            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            const futureStr = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
+            
+            const { data, error } = await supabase
+                .from('reservations')
+                .select('*')
+                .eq('tenant_id', tenant.id)
+                .in('status', ['confirmed', 'pending_payment', 'completed'])
+                .gte('reservation_date', todayStr)
+                .lte('reservation_date', futureStr)
+                .order('reservation_date', { ascending: true })
+                .order('reservation_time', { ascending: true });
+                
+            if (!error && data) {
+                setCalendarReservations(data);
+            }
+        };
+        
+        fetchReservations();
+        
+        const channel = supabase.channel('order-tab-reservations')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations', filter: `tenant_id=eq.${tenant.id}` }, () => {
+                fetchReservations();
+            })
+            .subscribe();
+            
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [tenant?.id]);
 
     const printComponentRef = useRef<HTMLDivElement>(null);
     const handlePrint = useReactToPrint({
@@ -1183,7 +1231,7 @@ export default function OrderTab({ products, ingredients, categories, orders = [
     return (
         <div className={`space-y-6 transition-colors duration-500 ${isLight ? 'text-slate-900' : 'text-white'}`}>
             {/* Selector Premium Superior de Subpestañas */}
-            <div className={`flex justify-center p-1 border rounded-2xl max-w-sm mx-auto shadow-inner transition-colors ${
+            <div className={`flex justify-center p-1 border rounded-2xl max-w-lg mx-auto shadow-inner transition-colors ${
                 isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-950/80 border-white/5'
             }`}>
                 <button
@@ -1204,13 +1252,26 @@ export default function OrderTab({ products, ingredients, categories, orders = [
                             : (isLight ? 'text-slate-500 hover:text-slate-850' : 'text-slate-400 hover:text-white')
                     }`}
                 >
-                    <CheckCircle2 size={13} /> Entregas de Caja
+                    <CheckCircle2 size={13} /> Entregas
                     {activeOrdersForDeliveries.length > 0 && (
                         <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full shrink-0 ${
                             subTab === 'deliveries' ? 'bg-slate-950 text-orange-400' : 'bg-orange-500 text-slate-950'
                         }`}>
                             {activeOrdersForDeliveries.length}
                         </span>
+                    )}
+                </button>
+                <button
+                    onClick={() => setSubTab('reservations')}
+                    className={`flex-1 py-3.5 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all ${
+                        subTab === 'reservations'
+                            ? 'bg-orange-500 text-slate-950 shadow-md scale-100 font-black'
+                            : (isLight ? 'text-slate-500 hover:text-slate-850' : 'text-slate-400 hover:text-white')
+                    }`}
+                >
+                    <Calendar size={13} /> Reservas
+                    {calendarReservations.filter(r => r.status === 'confirmed' || r.status === 'pending_payment').length > 0 && (
+                        <span className={`w-1.5 h-1.5 rounded-full ${subTab === 'reservations' ? 'bg-slate-950' : 'bg-orange-500 animate-pulse'}`}></span>
                     )}
                 </button>
             </div>
@@ -1409,7 +1470,7 @@ export default function OrderTab({ products, ingredients, categories, orders = [
                         )
                     )}
                 </div>
-            ) : (
+            ) : subTab === 'deliveries' ? (
                 /* Pestaña: ENTREGAS DE CAJA (Implementada Premium, translúcida, interactiva) */
                 <div className="space-y-5 animate-in fade-in duration-300">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-1 shrink-0">
@@ -2014,7 +2075,173 @@ export default function OrderTab({ products, ingredients, categories, orders = [
                         );
                     })()}
                 </div>
-            )}
+            ) : subTab === 'reservations' ? (
+                <div className="space-y-6 animate-in fade-in duration-300">
+                    <div className="flex items-center gap-2 px-1">
+                        <div className="p-2 bg-orange-500/10 border border-orange-500/20 text-orange-400 rounded-xl">
+                            <Calendar size={16} />
+                        </div>
+                        <div>
+                            <h3 className="font-black text-xs uppercase tracking-widest text-white leading-none">Gestión de Reservas</h3>
+                            <p className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">Calendario de disponibilidad y atención</p>
+                        </div>
+                    </div>
+
+                    {/* Calendario Horizontal */}
+                    <div className={`p-3 rounded-3xl border transition-colors ${
+                        isLight ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-950/80 border-white/5'
+                    }`}>
+                        {(() => {
+                            const days = [];
+                            const today = new Date();
+                            today.setHours(0,0,0,0);
+                            
+                            for (let i = 0; i < 30; i++) {
+                                const d = new Date(today);
+                                d.setDate(today.getDate() + i);
+                                const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                
+                                const hasRes = calendarReservations.some(r => r.reservation_date === dateStr && (r.status === 'confirmed' || r.status === 'pending_payment'));
+                                const isSelected = selectedResDate === dateStr;
+                                
+                                const dayName = d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '');
+                                const dayNum = d.getDate();
+                                
+                                days.push(
+                                    <button
+                                        key={dateStr}
+                                        onClick={() => setSelectedResDate(dateStr)}
+                                        className={`flex-shrink-0 flex flex-col items-center justify-center w-[3.5rem] h-16 rounded-2xl border transition-all relative ${
+                                            isSelected 
+                                                ? 'bg-orange-500 border-orange-400 text-white shadow-lg shadow-orange-500/30 scale-105 z-10' 
+                                                : (isLight ? 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100' : 'bg-slate-900 border-white/5 text-slate-400 hover:bg-slate-800')
+                                        }`}
+                                    >
+                                        <span className={`text-[9px] font-black uppercase ${isSelected ? 'text-orange-100' : ''}`}>{dayName}</span>
+                                        <span className={`text-lg font-black ${isSelected ? 'text-white' : ''}`}>{dayNum}</span>
+                                        {hasRes && (
+                                            <span className={`absolute bottom-1.5 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-orange-500 animate-pulse'}`}></span>
+                                        )}
+                                    </button>
+                                );
+                            }
+                            
+                            return (
+                                <div className="flex overflow-x-auto gap-2 pb-2 px-1 snap-x hide-scrollbar">
+                                    {days}
+                                </div>
+                            );
+                        })()}
+                    </div>
+
+                    {/* Lista de Reservas del Día */}
+                    {(() => {
+                        const dayRes = calendarReservations.filter(r => r.reservation_date === selectedResDate);
+                        
+                        if (dayRes.length === 0) {
+                            return (
+                                <div className={`py-16 text-center rounded-[2.5rem] p-8 border-dashed border-2 bg-gradient-to-br transition-all ${
+                                    isLight ? 'bg-white border-slate-200 shadow-sm from-slate-50 to-transparent' : 'glass border-white/5 from-orange-500/5 to-transparent'
+                                }`}>
+                                    <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border ${
+                                        isLight ? 'bg-slate-100 border-slate-200/60' : 'bg-slate-950/80 border-white/5'
+                                    }`}>
+                                        <Calendar size={28} className="text-orange-500 opacity-50" />
+                                    </div>
+                                    <h4 className={`font-black text-xs uppercase tracking-widest mb-1 ${isLight ? 'text-slate-900' : 'text-white'}`}>Sin Reservas</h4>
+                                    <p className="text-slate-500 text-[9px] font-bold uppercase tracking-wider">No hay reservas programadas para este día.</p>
+                                </div>
+                            );
+                        }
+                        
+                        return (
+                            <div className="grid gap-4">
+                                {dayRes.map(res => (
+                                    <div key={res.id} className={`rounded-[2rem] border p-5 transition-all duration-300 shadow-md flex flex-col gap-4 ${
+                                        isLight ? 'bg-white border-slate-200' : 'bg-slate-900/60 border-white/5'
+                                    }`}>
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                    <h4 className={`font-black text-sm uppercase ${isLight ? 'text-slate-900' : 'text-white'}`}>{res.client_name}</h4>
+                                                    <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase ${
+                                                        res.status === 'confirmed' || res.status === 'pending_payment' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 
+                                                        res.status === 'completed' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
+                                                        'bg-red-500/10 text-red-500 border border-red-500/20'
+                                                    }`}>
+                                                        {res.status === 'confirmed' || res.status === 'pending_payment' ? 'Activa' : res.status === 'completed' ? 'Asistió' : 'Cancelada'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5 mt-2">
+                                                    <Clock size={12} className="text-orange-500" /> {res.reservation_time.slice(0, 5)} hs
+                                                    <span className="text-slate-700 mx-1">•</span>
+                                                    <Users size={12} className="text-blue-400" /> {res.party_size} {res.party_size === 1 ? 'persona' : 'personas'}
+                                                </p>
+                                                <p className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5 mt-1">
+                                                    <Smartphone size={12} className="text-emerald-400" /> {res.client_phone}
+                                                </p>
+                                            </div>
+                                            <div className="text-right flex flex-col items-end">
+                                                <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block mb-1">Código de Reserva</span>
+                                                <span className="text-sm font-black text-orange-500 tracking-wider bg-orange-500/10 px-3 py-1 rounded-xl border border-orange-500/20">{res.reservation_code}</span>
+                                                {res.is_deposit_applied && (
+                                                    <span className="text-[7px] font-black uppercase text-emerald-500 mt-2 flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-lg">
+                                                        <CheckCircle2 size={8} /> Seña Descontada
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Botonera de acciones */}
+                                        {(res.status === 'confirmed' || res.status === 'pending_payment') && (
+                                            <div className={`flex flex-wrap gap-2 pt-3 border-t ${isLight ? 'border-slate-100' : 'border-white/5'}`}>
+                                                <button
+                                                    onClick={async () => {
+                                                        if(confirm('¿Seguro que deseas MARCAR COMO CANCELADA esta reserva?')) {
+                                                            await supabase.from('reservations').update({ status: 'cancelled' }).eq('id', res.id);
+                                                            // Optimistic update
+                                                            setCalendarReservations(prev => prev.filter(r => r.id !== res.id));
+                                                        }
+                                                    }}
+                                                    className={`flex-1 min-w-[70px] py-3 rounded-xl text-[8px] font-black uppercase tracking-wider transition-all border flex items-center justify-center gap-1.5 ${
+                                                        isLight ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' : 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20'
+                                                    }`}
+                                                >
+                                                    <X size={12} /> Cancelar
+                                                </button>
+                                                <button
+                                                    onClick={async () => {
+                                                        if(confirm('¿Marcar cliente como ASISTIÓ? (Esto finalizará la reserva)')) {
+                                                            await supabase.from('reservations').update({ status: 'completed' }).eq('id', res.id);
+                                                            // Optimistic update
+                                                            setCalendarReservations(prev => prev.filter(r => r.id !== res.id));
+                                                        }
+                                                    }}
+                                                    className={`flex-1 min-w-[70px] py-3 rounded-xl text-[8px] font-black uppercase tracking-wider transition-all border flex items-center justify-center gap-1.5 ${
+                                                        isLight ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20'
+                                                    }`}
+                                                >
+                                                    <Check size={12} /> Asistió
+                                                </button>
+                                                <a
+                                                    href={`https://wa.me/${cleanArgPhone(res.client_phone)}?text=${encodeURIComponent(
+                                                        `¡Hola ${res.client_name}! Gracias por hacer una reserva con nosotros en ${tenant?.name || 'el local'} para el día ${res.reservation_date.split('-').reverse().join('/')} a las ${res.reservation_time.slice(0,5)} hs.\n\nTu código de reserva/descuento es: *${res.reservation_code}*.\n\nLo tenés que colocar al momento de realizar el pago de tu pedido o presentarlo al llegar. No olvides guardarlo, ya que sin él no podremos aplicar el descuento de la seña que acabas de pagar.\n\n¡Te esperamos!`
+                                                    )}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="w-full sm:w-auto flex-[2] py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-[8px] uppercase tracking-wider shadow-md shadow-emerald-600/25 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                                                >
+                                                    💬 Enviar Código x WhatsApp
+                                                </a>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    })()}
+                </div>
+            ) : null}
                                          {/* Offline Queue Modal (Mantiene funcionalidad al 100%) */}
             {showOfflineQueue && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/80 backdrop-blur-md animate-in fade-in">

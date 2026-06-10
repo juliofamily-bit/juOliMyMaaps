@@ -948,14 +948,9 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         currentDomain = currentDomain.replace('http://', 'https://');
       }
 
-      // Obtener el monto de la seña de la base de datos
-      const { data: resData, error: resError } = await supabase
-        .from('reservations')
-        .select('deposit_amount')
-        .eq('id', reservationId)
-        .single();
-
-      if (resError || !resData) throw new Error("No se pudo obtener el monto de la seña.");
+      if (!depositAmount && !tenant.reservation_deposit_amount) {
+        throw new Error("No se pudo obtener el monto de la seña.");
+      }
 
       const response = await fetch('/api/mercadopago/create-preference', {
         method: 'POST',
@@ -3809,20 +3804,24 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
       {/* MODAL DE RESERVAR MESA */}
       {isReservationModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div 
             className="absolute inset-0 bg-black/70 backdrop-blur-md"
             onClick={() => setIsReservationModalOpen(false)}
           />
-          <div className="relative bg-neutral-950 border border-neutral-900 w-full max-w-md rounded-3xl p-6 space-y-6 shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className={`relative w-full max-w-md rounded-3xl p-6 space-y-6 shadow-2xl animate-in zoom-in-95 duration-200 border ${
+            isLight ? 'bg-white border-slate-200' : 'bg-neutral-950 border-neutral-900'
+          }`}>
             <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-xl font-black text-white">📅 Reservar Mesa</h3>
-                <p className="text-xs text-neutral-400 mt-0.5">Completa los detalles de tu visita.</p>
+                <h3 className={`text-xl font-black ${isLight ? 'text-slate-900' : 'text-white'}`}>📅 Reservar Mesa</h3>
+                <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-500' : 'text-neutral-400'}`}>Completa los detalles de tu visita.</p>
               </div>
               <button 
                 onClick={() => setIsReservationModalOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800 transition-all"
+                className={`w-8 h-8 flex items-center justify-center rounded-full transition-all ${
+                  isLight ? 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900' : 'bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800'
+                }`}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -3833,31 +3832,35 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               {reservationDepositAmount > 0 && (
                 <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-2xl text-center space-y-1">
                   <span className="text-[10px] font-black uppercase text-orange-500 block tracking-wider">Seña Requerida</span>
-                  <span className="text-lg font-black text-white block">${reservationDepositAmount.toLocaleString()}</span>
-                  <span className="text-[7.5px] text-slate-400 uppercase font-bold block">El importe será descontado de tu total en tu pedido final.</span>
+                  <span className={`text-lg font-black block ${isLight ? 'text-slate-900' : 'text-white'}`}>${reservationDepositAmount.toLocaleString()}</span>
+                  <span className="text-[7.5px] text-slate-500 uppercase font-bold block">El importe será descontado de tu total en tu pedido final.</span>
                 </div>
               )}
 
               {/* Nombre */}
               <div className="space-y-1">
-                <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-500 block ml-1">Tu Nombre</label>
+                <label className={`text-[9px] font-bold uppercase tracking-wider block ml-1 ${isLight ? 'text-slate-500' : 'text-neutral-500'}`}>Tu Nombre</label>
                 <input
                   type="text"
                   placeholder="Ej. Juan Pérez"
                   value={reservationName}
                   onChange={(e) => setReservationName(e.target.value)}
-                  className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-white focus:ring-1 focus:ring-white transition-all placeholder:text-neutral-600 font-bold"
+                  className={`w-full border rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold ${
+                    isLight ? 'bg-slate-50 border-slate-200 text-slate-900 focus:border-slate-400 focus:ring-1 focus:ring-slate-400 placeholder:text-slate-400' : 'bg-neutral-900/50 border-neutral-800 text-white focus:border-white focus:ring-1 focus:ring-white placeholder:text-neutral-600'
+                  }`}
                 />
               </div>
 
               {/* Teléfono */}
               <div className="space-y-1">
-                <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-500 block ml-1">Teléfono de Contacto</label>
+                <label className={`text-[9px] font-bold uppercase tracking-wider block ml-1 ${isLight ? 'text-slate-500' : 'text-neutral-500'}`}>Teléfono de Contacto</label>
                 <div className="flex gap-2">
                   <select
                     value={reservationPhonePrefix}
                     onChange={(e) => setReservationPhonePrefix(e.target.value)}
-                    className="bg-neutral-900 border border-neutral-800 rounded-xl px-2.5 py-3 text-xs outline-none text-neutral-300 font-bold focus:border-white transition-all cursor-pointer"
+                    className={`border rounded-xl px-2.5 py-3 text-xs outline-none font-bold transition-all cursor-pointer ${
+                      isLight ? 'bg-slate-50 border-slate-200 text-slate-700 focus:border-slate-400' : 'bg-neutral-900 border-neutral-800 text-neutral-300 focus:border-white'
+                    }`}
                   >
                     <option value="+54">🇦🇷 +54 (AR)</option>
                     <option value="+56">🇨🇱 +56 (CL)</option>
@@ -3875,7 +3878,9 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     placeholder="Celular (ej: 9 11 1234-5678)"
                     value={reservationPhone}
                     onChange={(e) => setReservationPhone(e.target.value)}
-                    className="flex-1 bg-neutral-900/50 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-white focus:ring-1 focus:ring-white transition-all placeholder:text-neutral-600 font-bold"
+                    className={`flex-1 border rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold ${
+                      isLight ? 'bg-slate-50 border-slate-200 text-slate-900 focus:border-slate-400 focus:ring-1 focus:ring-slate-400 placeholder:text-slate-400' : 'bg-neutral-900/50 border-neutral-800 text-white focus:border-white focus:ring-1 focus:ring-white placeholder:text-neutral-600'
+                    }`}
                   />
                 </div>
               </div>
@@ -3883,7 +3888,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               {/* Fecha y Hora en Fila */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-500 block ml-1">Día</label>
+                  <label className={`text-[9px] font-bold uppercase tracking-wider block ml-1 ${isLight ? 'text-slate-500' : 'text-neutral-500'}`}>Día</label>
                   <input
                     type="date"
                     min={reservationDateLimits.min}
@@ -3910,30 +3915,40 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                         }
                       }
                     }}
-                    className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-white focus:ring-1 focus:ring-white transition-all font-bold [color-scheme:dark]"
+                    style={{ colorScheme: isLight ? 'light' : 'dark' }}
+                    className={`w-full border rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold ${
+                      isLight ? 'bg-slate-50 border-slate-200 text-slate-900 focus:border-slate-400 focus:ring-1 focus:ring-slate-400' : 'bg-neutral-900/50 border-neutral-800 text-white focus:border-white focus:ring-1 focus:ring-white'
+                    }`}
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-500 block ml-1">Hora</label>
+                  <label className={`text-[9px] font-bold uppercase tracking-wider block ml-1 ${isLight ? 'text-slate-500' : 'text-neutral-500'}`}>Hora</label>
                   {!reservationDate ? (
-                    <div className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-neutral-500 font-bold flex items-center justify-center">
+                    <div className={`w-full border rounded-xl px-4 py-3 text-sm font-bold flex items-center justify-center ${
+                      isLight ? 'bg-slate-50 border-slate-200 text-slate-400' : 'bg-neutral-900/50 border-neutral-800 text-neutral-500'
+                    }`}>
                       Selecciona un día
                     </div>
                   ) : availableReservationTimes.length > 0 ? (
                     <select
                       value={reservationTime}
                       onChange={(e) => setReservationTime(e.target.value)}
-                      className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-white focus:ring-1 focus:ring-white transition-all font-bold appearance-none"
-                      style={{ backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem top 50%', backgroundSize: '0.65rem auto' }}
+                      className={`w-full border rounded-xl px-4 py-3 text-sm outline-none transition-all font-bold appearance-none ${
+                        isLight ? 'bg-slate-50 border-slate-200 text-slate-900 focus:border-slate-400 focus:ring-1 focus:ring-slate-400' : 'bg-neutral-900/50 border-neutral-800 text-white focus:border-white focus:ring-1 focus:ring-white'
+                      }`}
+                      style={{ backgroundImage: isLight 
+                        ? `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%231e293b%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")`
+                        : `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")`, 
+                        backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem top 50%', backgroundSize: '0.65rem auto' }}
                     >
                       {availableReservationTimes.map((time) => (
-                        <option key={time} value={time} className="bg-neutral-900 text-white">
+                        <option key={time} value={time} className={isLight ? "bg-white text-slate-900" : "bg-neutral-900 text-white"}>
                           {time} hs
                         </option>
                       ))}
                     </select>
                   ) : (
-                    <div className="w-full bg-red-900/20 border border-red-500/30 rounded-xl px-4 py-3 text-sm text-red-400 font-bold flex items-center justify-center">
+                    <div className="w-full bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-sm text-red-500 font-bold flex items-center justify-center">
                       Sin turnos disponibles
                     </div>
                   )}
@@ -3942,22 +3957,28 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
               {/* Cantidad de personas */}
               <div className="space-y-1">
-                <label className="text-[9px] font-bold uppercase tracking-wider text-neutral-500 block ml-1">Cantidad de Personas</label>
+                <label className={`text-[9px] font-bold uppercase tracking-wider block ml-1 ${isLight ? 'text-slate-500' : 'text-neutral-500'}`}>Cantidad de Personas</label>
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
                     onClick={() => setReservationPartySize(prev => Math.max(1, prev - 1))}
-                    className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center font-bold text-white hover:bg-neutral-800 transition-all active:scale-95"
+                    className={`w-10 h-10 rounded-xl border flex items-center justify-center font-bold transition-all active:scale-95 ${
+                      isLight ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200' : 'bg-neutral-900 border-neutral-800 text-white hover:bg-neutral-800'
+                    }`}
                   >
                     -
                   </button>
-                  <div className="flex-1 bg-neutral-900/30 border border-neutral-900 rounded-xl py-2.5 text-center font-bold text-sm text-white">
+                  <div className={`flex-1 border rounded-xl py-2.5 text-center font-bold text-sm ${
+                    isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-neutral-900/30 border-neutral-900 text-white'
+                  }`}>
                     👥 {reservationPartySize} {reservationPartySize === 1 ? 'Persona' : 'Personas'}
                   </div>
                   <button
                     type="button"
                     onClick={() => setReservationPartySize(prev => prev + 1)}
-                    className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center font-bold text-white hover:bg-neutral-800 transition-all active:scale-95"
+                    className={`w-10 h-10 rounded-xl border flex items-center justify-center font-bold transition-all active:scale-95 ${
+                      isLight ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200' : 'bg-neutral-900 border-neutral-800 text-white hover:bg-neutral-800'
+                    }`}
                   >
                     +
                   </button>
@@ -3968,14 +3989,18 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setIsReservationModalOpen(false)}
-                className="flex-1 py-3 rounded-2xl bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800 transition-all font-bold text-sm"
+                className={`flex-1 py-3 rounded-2xl transition-all font-bold text-sm ${
+                  isLight ? 'bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200' : 'bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800'
+                }`}
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSubmitReservation}
                 disabled={isSubmittingReservation}
-                className="flex-1 py-3 rounded-2xl bg-white text-black hover:scale-[1.02] active:scale-[0.98] transition-all font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                className={`flex-1 py-3 rounded-2xl transition-all font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98] ${
+                  isLight ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-black'
+                }`}
               >
                 {isSubmittingReservation ? (
                   <>
