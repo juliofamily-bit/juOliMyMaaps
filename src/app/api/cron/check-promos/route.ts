@@ -50,7 +50,8 @@ export async function GET(req: Request) {
     const processedTenantIds = [];
 
     for (const sub of expiringPromos) {
-      const tenant = sub.tenants;
+      const tenantData = Array.isArray(sub.tenants) ? sub.tenants[0] : sub.tenants;
+      const tenant = tenantData as any;
       if (!tenant || !tenant.email) continue;
 
       const emailData = {
