@@ -99,7 +99,7 @@ export async function POST(req: Request) {
     }
 
     const mpBody = {
-      reason: `Suscripción MyMozo - ${plan.name}`,
+      reason: `Suscripción Mmm TodoLoQueQuiero Comer - ${plan.name}`,
       external_reference: tenantId,
       payer_email: payerEmail,
       back_url: backUrl,

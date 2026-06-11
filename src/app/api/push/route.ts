@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:admin@mymozo.com.ar';
+const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:admin@Mmm TodoLoQueQuiero Comer.com.ar';
 
 if (vapidPublicKey && vapidPrivateKey) {
   webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);

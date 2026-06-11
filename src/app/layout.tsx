@@ -14,13 +14,13 @@ const geistMono = Geist_Mono({
 
 
 export const metadata: Metadata = {
-  title: "MyMozo",
-  description: "El sistema de gestión y control todo en uno para tu restaurante.",
+  title: "Mmm TodoLoQueQuiero Comer",
+  description: "Plataforma Integral de Gestión y Control para Gastronomía",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "MyMozo",
+    title: "Mmm TodoLoQueQuiero Comer",
   },
 };
 

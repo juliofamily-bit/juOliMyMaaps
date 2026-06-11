@@ -56,7 +56,7 @@ export async function GET(req: Request) {
 
       const emailData = {
         to: tenant.email,
-        subject: '¡Tu Promoción Pro de MyMozo está por terminar!',
+        subject: '¡Tu Promoción Pro de Mmm TodoLoQueQuiero Comer está por terminar!',
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
             <h2 style="color: #f97316;">¡Hola, equipo de ${tenant.name}! 👋</h2>
@@ -82,7 +82,7 @@ export async function GET(req: Request) {
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              from: 'MyMozo <soporte@mymfullcontrol.com.ar>',
+              from: 'Mmm TodoLoQueQuiero Comer <soporte@mymfullcontrol.com.ar>',
               to: [emailData.to],
               subject: emailData.subject,
               html: emailData.html

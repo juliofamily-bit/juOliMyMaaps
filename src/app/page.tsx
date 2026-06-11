@@ -239,9 +239,9 @@ export default function WelcomePage() {
       {mode === 'welcome' && (
         <div className="glass p-10 rounded-[2.5rem] w-full max-w-md flex flex-col items-center space-y-10 shadow-2xl border border-white/5 relative z-10 animate-in fade-in zoom-in duration-300">
           
-          {/* Isotipo MyMozo Premium */}
+          {/* Isotipo Mmm TodoLoQueQuiero Comer Premium */}
           <div className="hover:scale-105 transition-transform duration-300 w-32 h-32 flex items-center justify-center">
-            <img src="/logo.png" alt="MyMozo" className="w-full h-full object-cover rounded-full drop-shadow-[0_0_20px_rgba(249,115,22,0.3)]" />
+            <img src="/logo.png" alt="Mmm TodoLoQueQuiero Comer" className="w-full h-full object-cover rounded-full drop-shadow-[0_0_20px_rgba(249,115,22,0.3)]" />
           </div>
 
           {/* Títulos */}

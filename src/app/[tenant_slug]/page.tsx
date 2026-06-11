@@ -147,7 +147,7 @@ export default function TenantApp({ params }: TenantPageProps) {
         
         // Actualizar el título de la pestaña dinámicamente con el nombre del local
         if (data.name) {
-            document.title = `${data.name} | MyMozo`;
+            document.title = `${data.name} | Mmm TodoLoQueQuiero Comer`;
         }
 
         // Usar supabase (con cabecera de tenant) en lugar de supabaseAnon para pasar la política RLS
@@ -722,7 +722,7 @@ export default function TenantApp({ params }: TenantPageProps) {
           <MaxesWatermark />
           <div className="glass p-10 rounded-[2.5rem] w-full max-w-md flex flex-col items-center space-y-6 shadow-2xl border border-red-500/20 relative z-10 overflow-hidden">
             <MaxesCornerFrame color="red" opacity="opacity-50" />
-            <MaxesLogo appName="MyMCeo" scale={1} className="mb-4" />
+            <MaxesLogo appName="Mmm TodoLoQueQuiero CEO" scale={1} className="mb-4" />
             <div className="bg-red-500/10 p-4 rounded-3xl text-red-500 border border-red-500/30">
               <Lock size={48} />
             </div>
@@ -743,7 +743,7 @@ export default function TenantApp({ params }: TenantPageProps) {
         <div className={`relative z-10 p-8 rounded-[2.5rem] w-full max-w-md flex flex-col items-center space-y-7 shadow-2xl border transition-all duration-500 overflow-hidden ${isLight ? 'bg-white border-slate-200/80 shadow-slate-200/80' : 'glass border-white/5 shadow-black/80'}`}>
           {!isLight && <MaxesCornerFrame color="gold" opacity="opacity-50" />}
           <div className="transition-transform hover:scale-110 duration-300 w-32 h-32 flex items-center justify-center relative">
-            <img src="/logo.png" alt="Logo MyMozo" className="w-full h-full object-cover rounded-full drop-shadow-lg z-10" />
+            <img src="/logo.png" alt="Logo Mmm TodoLoQueQuiero Comer" className="w-full h-full object-cover rounded-full drop-shadow-lg z-10" />
           </div>
           
           <div className="text-center">

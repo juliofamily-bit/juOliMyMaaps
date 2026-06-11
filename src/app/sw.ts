@@ -23,13 +23,13 @@ serwist.addEventListeners();
 // Manejo de Notificaciones Web Push
 self.addEventListener('push', (event: PushEvent) => {
   const data = event.data?.json() || {};
-  const title = data.title || 'MyMozo';
+  const title = data.title || 'Mmm TodoLoQueQuiero Comer';
   const options: NotificationOptions = {
     body: data.body || 'Tienes una nueva notificación',
     icon: data.icon || '/icon512_maskable.png',
     badge: '/icon512_maskable.png', // Opcional: icono monocromático pequeño
     data: data.data || { url: '/' },
-    tag: 'mymozo-notification', // Ayuda a que se sobreescriban y no se acumulen miles
+    tag: 'Mmm TodoLoQueQuiero Comer-notification', // Ayuda a que se sobreescriban y no se acumulen miles
     renotify: true, // Vuelve a sonar/vibrar aunque tenga el mismo tag
     vibrate: [200, 100, 200, 100, 200, 100, 200]
   } as any;

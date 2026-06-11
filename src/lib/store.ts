@@ -32,7 +32,7 @@ export const useNotifications = create<NotificationStore>(() => ({
                     body: JSON.stringify({
                         tenant_id: tenantId,
                         role,
-                        title: 'MyMozo',
+                        title: 'Mmm TodoLoQueQuiero Comer',
                         body: message
                     })
                 }).catch(err => console.error('Error enviando push:', err));

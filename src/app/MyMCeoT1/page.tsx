@@ -126,7 +126,7 @@ export default function MasterAdminPage() {
                         <MaxesCornerFrame color="gold" opacity="opacity-50" />
                         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-purple-500"></div>
                         <div className="mb-8">
-                            <MaxesLogo appName="MyMCeo" scale={1.2} />
+                            <MaxesLogo appName="Mmm TodoLoQueQuiero CEO" scale={1.2} />
                         </div>
 
                         {error && (
@@ -182,7 +182,7 @@ export default function MasterAdminPage() {
             {/* Header del Dashboard */}
             <header className="sticky top-0 z-40 glass border-b border-white/5 px-6 py-4 flex items-center justify-between relative">
                 <div className="flex items-center gap-3">
-                    <MaxesLogo appName="MyMCeo" scale={0.7} />
+                    <MaxesLogo appName="Mmm TodoLoQueQuiero CEO" scale={0.7} />
                 </div>
 
                 <div className="flex items-center gap-4">

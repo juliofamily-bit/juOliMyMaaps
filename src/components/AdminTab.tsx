@@ -4328,7 +4328,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                             })}
                                         </div>
                                     </div>
-                                    {/* Botón de Pánico de Envíos */}
+
+                                    {/* Botón de Pánico de Envíos */}
                                     <div className="space-y-2 pt-3 border-t border-white/5">
                                         <label className="text-[10px] font-black uppercase text-red-500 flex items-center gap-1.5">
                                             <AlertTriangle size={12} /> Emergencia: Suspender Envíos
@@ -7436,4 +7437,4 @@ const AdminTab: React.FC<AdminTabProps> = ({
 };
 
 export default AdminTab;
-
+
