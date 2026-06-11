@@ -883,9 +883,66 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       }
     }
 
-    setIsSubmittingReservation(true);
-    try {
-      const depositAmount = tenant.reservation_deposit_amount || 0;
+      // Determine the shift
+      const getShift = (timeStr: string) => {
+        const hour = parseInt(timeStr.split(':')[0], 10);
+        if (hour >= 11 && hour < 16) return 'mediodia';
+        if (hour >= 16 && hour < 20) return 'tarde';
+        return 'noche';
+      };
+      
+      const shift = getShift(reservationTime);
+
+      setIsSubmittingReservation(true);
+      try {
+      // 1. Fetch existing reservations for this day to check table availability
+      const { data: existingReservations, error: fetchError } = await supabase
+        .from('reservations')
+        .select('assigned_tables, reservation_time')
+        .eq('tenant_id', tenant.id)
+        .eq('reservation_date', reservationDate)
+        .in('status', ['pending_payment', 'confirmed']);
+
+      if (fetchError) {
+        setIsSubmittingReservation(false);
+        alert("⚠️ Error al verificar la disponibilidad de mesas. Intenta de nuevo.");
+        return;
+      }
+
+      // 2. Filter reservations that belong to the SAME SHIFT
+      const assignedTableIds = new Set<string>();
+      existingReservations.forEach(res => {
+        if (getShift(res.reservation_time) === shift) {
+          const tables = res.assigned_tables || [];
+          tables.forEach((t: any) => assignedTableIds.add(t.id));
+        }
+      });
+
+      // 3. Find available tables and auto-assign
+      const allTables = tenant.tables || [];
+      const availableTables = allTables.filter((t: any) => !assignedTableIds.has(t.id));
+      
+      // Sort ascending by capacity to try to use the smallest combinations first
+      availableTables.sort((a: any, b: any) => (a.capacity || 2) - (b.capacity || 2));
+
+      let remainingSize = reservationPartySize;
+      const tablesToAssign: any[] = [];
+
+      for (const table of availableTables) {
+        if (remainingSize <= 0) break;
+        tablesToAssign.push(table);
+        remainingSize -= (table.capacity || 2);
+      }
+
+      if (remainingSize > 0) {
+        setIsSubmittingReservation(false);
+        alert(`⚠️ Lo sentimos, el local no tiene capacidad suficiente (${reservationPartySize} personas) en el turno ${shift.toUpperCase()} para esta fecha.`);
+        return;
+      }
+
+      const depositPerTable = tenant.reservation_deposit_amount || 0;
+      const depositAmount = depositPerTable * tablesToAssign.length;
+      
       const status = depositAmount > 0 ? 'pending_payment' : 'confirmed';
       const code = status === 'confirmed' ? generateResCode() : '';
       const finalReservationPhone = reservationPhone ? `${reservationPhonePrefix} ${reservationPhone.trim()}` : '';
@@ -900,7 +957,10 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         status: status,
         deposit_amount: depositAmount,
         reservation_code: code || null,
-        is_deposit_applied: false
+        is_deposit_applied: false,
+        assigned_tables: tablesToAssign,
+        shift: shift,
+        message_sent: false
       };
 
       const { data, error } = await supabase
@@ -918,7 +978,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         handleConfirmReservationPayment(data.id, depositAmount);
       } else {
         setIsReservationModalOpen(false);
-        alert(`🎉 ¡Reserva Confirmada con éxito!\n\nTu Código de Reserva es: ${code}\nTe esperamos.`);
+        alert(`🎉 ¡Reserva Confirmada con éxito!\n\nSe te ha(n) asignado ${tablesToAssign.length} mesa(s) para el turno ${shift.toUpperCase()}.\n\nTu Código de Reserva es: ${code}\nTe esperamos.`);
       }
     } catch (err) {
       console.error('Error al registrar la reserva:', err);
@@ -2741,6 +2801,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                       tenantId={tenant?.id || ''} 
                       primaryColor={primaryColor} 
                       isLight={false}
+                      hasPremiumVIP={tenant?.hasPremiumVIP}
                       currentTable={tableName || tableParamId}
                       tables={tenant?.tables || []}
                       onStartGiftMode={(from, to, anon, hint) => {

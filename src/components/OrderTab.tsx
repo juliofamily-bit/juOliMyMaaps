@@ -74,6 +74,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
         const d = new Date();
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     });
+    const [selectedResShift, setSelectedResShift] = useState<'mediodia' | 'tarde' | 'noche'>('noche');
     
     // Configuración general
     const [categories, setCategories] = useState<Category[]>(initialCategories);
@@ -2134,9 +2135,90 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                         })()}
                     </div>
 
-                    {/* Lista de Reservas del Día */}
+                    {/* Selector de Turnos */}
+                    <div className="flex gap-2 mb-4">
+                        {(['mediodia', 'tarde', 'noche'] as const).map(shift => (
+                            <button
+                                key={shift}
+                                onClick={() => setSelectedResShift(shift)}
+                                className={`flex-1 py-3 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all border shadow-sm ${
+                                    selectedResShift === shift
+                                        ? 'bg-orange-500 text-white border-orange-400 shadow-orange-500/25'
+                                        : (isLight ? 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50' : 'bg-slate-900/40 text-slate-400 border-white/5 hover:bg-slate-800')
+                                }`}
+                            >
+                                Turno {shift}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Mapa de Mesitas del Turno */}
                     {(() => {
-                        const dayRes = calendarReservations.filter(r => r.reservation_date === selectedResDate);
+                        const dayRes = calendarReservations.filter(r => {
+                            if (r.reservation_date !== selectedResDate) return false;
+                            const h = parseInt(r.reservation_time.split(':')[0], 10);
+                            const rShift = h >= 11 && h < 16 ? 'mediodia' : h >= 16 && h < 20 ? 'tarde' : 'noche';
+                            return rShift === selectedResShift && (r.status === 'confirmed' || r.status === 'pending_payment');
+                        });
+
+                        const allTables = tenant?.tables || [];
+                        const assignedTableIds = new Map<string, any>();
+                        dayRes.forEach(res => {
+                            const tArr = res.assigned_tables || [];
+                            tArr.forEach((t: any) => assignedTableIds.set(t.id, res));
+                        });
+
+                        if (allTables.length === 0) return null;
+
+                        return (
+                            <div className={`p-5 rounded-[2.5rem] border shadow-sm transition-all mb-4 ${
+                                isLight ? 'bg-slate-50/50 border-slate-200' : 'bg-slate-950/40 border-white/5'
+                            }`}>
+                                <h4 className={`font-black text-[10px] uppercase tracking-widest mb-4 flex items-center gap-2 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
+                                    Mapa de Mesas - Turno {selectedResShift}
+                                </h4>
+                                <div className="flex flex-wrap gap-3">
+                                    {allTables.map((t: any) => {
+                                        const res = assignedTableIds.get(t.id);
+                                        const isOccupied = !!res;
+                                        return (
+                                            <div
+                                                key={t.id}
+                                                className={`relative w-[4.5rem] h-[4.5rem] rounded-2xl flex flex-col items-center justify-center border-2 transition-all group ${
+                                                    isOccupied 
+                                                        ? 'bg-red-500/10 border-red-500/40 text-red-600 shadow-md shadow-red-500/10 cursor-help' 
+                                                        : (isLight ? 'bg-white border-slate-200 text-slate-400' : 'bg-slate-900/60 border-slate-800 text-slate-500')
+                                                }`}
+                                            >
+                                                <span className={`text-lg font-black ${isOccupied ? '' : (isLight ? 'text-slate-300' : 'text-slate-700')}`}>{t.name}</span>
+                                                <span className={`text-[8px] font-bold uppercase mt-0.5 ${isOccupied ? 'text-red-400' : (isLight ? 'text-slate-400' : 'text-slate-600')}`}>{t.capacity} pax</span>
+                                                {isOccupied && (
+                                                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 p-3 bg-slate-900 border border-white/10 rounded-2xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 text-white pointer-events-none">
+                                                        <div className="flex justify-between items-start mb-1">
+                                                            <p className="text-[9px] font-black uppercase text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded border border-orange-500/20">{res.reservation_time.slice(0,5)} hs</p>
+                                                            {!res.message_sent && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>}
+                                                        </div>
+                                                        <p className="text-xs font-black truncate">{res.client_name}</p>
+                                                        <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{res.party_size} personas</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })()}
+
+                    {/* Lista de Reservas del Día y Turno */}
+                    {(() => {
+                        const dayRes = calendarReservations.filter(r => {
+                            if (r.reservation_date !== selectedResDate) return false;
+                            const h = parseInt(r.reservation_time.split(':')[0], 10);
+                            const rShift = h >= 11 && h < 16 ? 'mediodia' : h >= 16 && h < 20 ? 'tarde' : 'noche';
+                            return rShift === selectedResShift;
+                        });
                         
                         if (dayRes.length === 0) {
                             return (
@@ -2149,7 +2231,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                                         <Calendar size={28} className="text-orange-500 opacity-50" />
                                     </div>
                                     <h4 className={`font-black text-xs uppercase tracking-widest mb-1 ${isLight ? 'text-slate-900' : 'text-white'}`}>Sin Reservas</h4>
-                                    <p className="text-slate-500 text-[9px] font-bold uppercase tracking-wider">No hay reservas programadas para este día.</p>
+                                    <p className="text-slate-500 text-[9px] font-bold uppercase tracking-wider">No hay reservas para el turno {selectedResShift}.</p>
                                 </div>
                             );
                         }
@@ -2157,14 +2239,20 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                         return (
                             <div className="grid gap-4">
                                 {dayRes.map(res => (
-                                    <div key={res.id} className={`rounded-[2rem] border p-5 transition-all duration-300 shadow-md flex flex-col gap-4 ${
+                                    <div key={res.id} className={`rounded-[2.5rem] border p-6 transition-all duration-300 shadow-md flex flex-col gap-4 relative overflow-hidden ${
                                         isLight ? 'bg-white border-slate-200' : 'bg-slate-900/60 border-white/5'
                                     }`}>
-                                        <div className="flex justify-between items-start">
+                                        {/* Indicador de Falta Enviar WhatsApp */}
+                                        {!res.message_sent && (res.status === 'confirmed' || res.status === 'pending_payment') && (
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 -rotate-45 translate-x-16 -translate-y-16 flex items-end justify-center pb-2 z-0 animate-pulse">
+                                                <span className="text-[7px] font-black uppercase text-red-500 tracking-widest">Pendiente Envío</span>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between items-start relative z-10">
                                             <div>
                                                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                                    <h4 className={`font-black text-sm uppercase ${isLight ? 'text-slate-900' : 'text-white'}`}>{res.client_name}</h4>
-                                                    <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase ${
+                                                    <h4 className={`font-black text-base uppercase ${isLight ? 'text-slate-900' : 'text-white'}`}>{res.client_name}</h4>
+                                                    <span className={`text-[8px] font-black px-2.5 py-0.5 rounded-lg uppercase ${
                                                         res.status === 'confirmed' || res.status === 'pending_payment' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 
                                                         res.status === 'completed' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
                                                         'bg-red-500/10 text-red-500 border border-red-500/20'
@@ -2172,21 +2260,42 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                                                         {res.status === 'confirmed' || res.status === 'pending_payment' ? 'Activa' : res.status === 'completed' ? 'Asistió' : 'Cancelada'}
                                                     </span>
                                                 </div>
-                                                <p className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5 mt-2">
-                                                    <Clock size={12} className="text-orange-500" /> {res.reservation_time.slice(0, 5)} hs
-                                                    <span className="text-slate-700 mx-1">•</span>
-                                                    <Users size={12} className="text-blue-400" /> {res.party_size} {res.party_size === 1 ? 'persona' : 'personas'}
-                                                </p>
-                                                <p className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5 mt-1">
-                                                    <Smartphone size={12} className="text-emerald-400" /> {res.client_phone}
-                                                </p>
+                                                <div className="flex items-center gap-3 mt-3 flex-wrap">
+                                                    <p className={`text-[10px] font-bold uppercase flex items-center gap-1.5 px-2 py-1 rounded-lg border ${
+                                                        isLight ? 'bg-slate-50 border-slate-200 text-slate-600' : 'bg-slate-950/50 border-white/5 text-slate-400'
+                                                    }`}>
+                                                        <Clock size={12} className="text-orange-500" /> {res.reservation_time.slice(0, 5)} hs
+                                                    </p>
+                                                    <p className={`text-[10px] font-bold uppercase flex items-center gap-1.5 px-2 py-1 rounded-lg border ${
+                                                        isLight ? 'bg-slate-50 border-slate-200 text-slate-600' : 'bg-slate-950/50 border-white/5 text-slate-400'
+                                                    }`}>
+                                                        <Users size={12} className="text-blue-400" /> {res.party_size} pax
+                                                    </p>
+                                                    <p className={`text-[10px] font-bold uppercase flex items-center gap-1.5 px-2 py-1 rounded-lg border ${
+                                                        isLight ? 'bg-slate-50 border-slate-200 text-slate-600' : 'bg-slate-950/50 border-white/5 text-slate-400'
+                                                    }`}>
+                                                        <Smartphone size={12} className="text-emerald-400" /> {res.client_phone}
+                                                    </p>
+                                                </div>
+                                                
+                                                {/* Mostrar mesas asignadas si tiene */}
+                                                {res.assigned_tables && res.assigned_tables.length > 0 && (
+                                                    <div className="mt-3 flex items-center gap-2 flex-wrap">
+                                                        <span className="text-[8px] font-black uppercase text-slate-400">Mesas Asignadas:</span>
+                                                        {res.assigned_tables.map((t: any) => (
+                                                            <span key={t.id} className="text-[9px] font-black text-red-500 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20 uppercase">
+                                                                {t.name}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="text-right flex flex-col items-end">
-                                                <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block mb-1">Código de Reserva</span>
-                                                <span className="text-sm font-black text-orange-500 tracking-wider bg-orange-500/10 px-3 py-1 rounded-xl border border-orange-500/20">{res.reservation_code}</span>
+                                                <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Código de Reserva</span>
+                                                <span className="text-lg font-black text-orange-500 tracking-wider bg-orange-500/10 px-4 py-1.5 rounded-xl border border-orange-500/20">{res.reservation_code}</span>
                                                 {res.is_deposit_applied && (
-                                                    <span className="text-[7px] font-black uppercase text-emerald-500 mt-2 flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-lg">
-                                                        <CheckCircle2 size={8} /> Seña Descontada
+                                                    <span className="text-[8px] font-black uppercase text-emerald-500 mt-2 flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 shadow-sm">
+                                                        <CheckCircle2 size={10} /> Seña Descontada
                                                     </span>
                                                 )}
                                             </div>
@@ -2194,45 +2303,52 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                                         
                                         {/* Botonera de acciones */}
                                         {(res.status === 'confirmed' || res.status === 'pending_payment') && (
-                                            <div className={`flex flex-wrap gap-2 pt-3 border-t ${isLight ? 'border-slate-100' : 'border-white/5'}`}>
+                                            <div className={`flex flex-col sm:flex-row gap-2 pt-4 mt-2 border-t relative z-10 ${isLight ? 'border-slate-100' : 'border-white/5'}`}>
+                                                <div className="flex gap-2 flex-1">
+                                                    <button
+                                                        onClick={async () => {
+                                                            if(confirm('¿Seguro que deseas MARCAR COMO CANCELADA esta reserva?')) {
+                                                                await supabase.from('reservations').update({ status: 'cancelled' }).eq('id', res.id);
+                                                                setCalendarReservations(prev => prev.filter(r => r.id !== res.id));
+                                                            }
+                                                        }}
+                                                        className={`flex-1 py-3.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all border flex items-center justify-center gap-1.5 ${
+                                                            isLight ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' : 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20'
+                                                        }`}
+                                                    >
+                                                        <X size={14} /> Cancelar
+                                                    </button>
+                                                    <button
+                                                        onClick={async () => {
+                                                            if(confirm('¿Marcar cliente como ASISTIÓ? (Esto finalizará la reserva)')) {
+                                                                await supabase.from('reservations').update({ status: 'completed' }).eq('id', res.id);
+                                                                setCalendarReservations(prev => prev.filter(r => r.id !== res.id));
+                                                            }
+                                                        }}
+                                                        className={`flex-1 py-3.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all border flex items-center justify-center gap-1.5 ${
+                                                            isLight ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20'
+                                                        }`}
+                                                    >
+                                                        <Check size={14} /> Asistió
+                                                    </button>
+                                                </div>
                                                 <button
                                                     onClick={async () => {
-                                                        if(confirm('¿Seguro que deseas MARCAR COMO CANCELADA esta reserva?')) {
-                                                            await supabase.from('reservations').update({ status: 'cancelled' }).eq('id', res.id);
-                                                            // Optimistic update
-                                                            setCalendarReservations(prev => prev.filter(r => r.id !== res.id));
+                                                        const msg = `¡Hola ${res.client_name}! Gracias por hacer una reserva con nosotros en ${tenant?.name || 'el local'} para el día ${res.reservation_date.split('-').reverse().join('/')} a las ${res.reservation_time.slice(0,5)} hs.\n\nTu código de reserva/descuento es: *${res.reservation_code}*.\n\nLo tenés que colocar al momento de realizar el pago de tu pedido o presentarlo al llegar. No olvides guardarlo, ya que sin él no podremos aplicar el descuento de la seña que acabas de pagar.\n\n¡Te esperamos!`;
+                                                        window.open(`https://wa.me/${cleanArgPhone(res.client_phone)}?text=${encodeURIComponent(msg)}`, '_blank');
+                                                        if (!res.message_sent) {
+                                                            await supabase.from('reservations').update({ message_sent: true }).eq('id', res.id);
+                                                            setCalendarReservations(prev => prev.map(r => r.id === res.id ? { ...r, message_sent: true } : r));
                                                         }
                                                     }}
-                                                    className={`flex-1 min-w-[70px] py-3 rounded-xl text-[8px] font-black uppercase tracking-wider transition-all border flex items-center justify-center gap-1.5 ${
-                                                        isLight ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' : 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20'
+                                                    className={`w-full sm:w-auto flex-[2] py-3.5 text-white font-black rounded-xl text-[9.5px] uppercase tracking-wider shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 border ${
+                                                        !res.message_sent 
+                                                            ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30 border-emerald-500 animate-pulse ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-slate-900' 
+                                                            : 'bg-emerald-700/80 hover:bg-emerald-600 border-emerald-600/50'
                                                     }`}
                                                 >
-                                                    <X size={12} /> Cancelar
+                                                    <span className="text-lg">💬</span> {res.message_sent ? 'Reenviar WhatsApp' : 'Enviar Código x WhatsApp'}
                                                 </button>
-                                                <button
-                                                    onClick={async () => {
-                                                        if(confirm('¿Marcar cliente como ASISTIÓ? (Esto finalizará la reserva)')) {
-                                                            await supabase.from('reservations').update({ status: 'completed' }).eq('id', res.id);
-                                                            // Optimistic update
-                                                            setCalendarReservations(prev => prev.filter(r => r.id !== res.id));
-                                                        }
-                                                    }}
-                                                    className={`flex-1 min-w-[70px] py-3 rounded-xl text-[8px] font-black uppercase tracking-wider transition-all border flex items-center justify-center gap-1.5 ${
-                                                        isLight ? 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' : 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20'
-                                                    }`}
-                                                >
-                                                    <Check size={12} /> Asistió
-                                                </button>
-                                                <a
-                                                    href={`https://wa.me/${cleanArgPhone(res.client_phone)}?text=${encodeURIComponent(
-                                                        `¡Hola ${res.client_name}! Gracias por hacer una reserva con nosotros en ${tenant?.name || 'el local'} para el día ${res.reservation_date.split('-').reverse().join('/')} a las ${res.reservation_time.slice(0,5)} hs.\n\nTu código de reserva/descuento es: *${res.reservation_code}*.\n\nLo tenés que colocar al momento de realizar el pago de tu pedido o presentarlo al llegar. No olvides guardarlo, ya que sin él no podremos aplicar el descuento de la seña que acabas de pagar.\n\n¡Te esperamos!`
-                                                    )}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="w-full sm:w-auto flex-[2] py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-[8px] uppercase tracking-wider shadow-md shadow-emerald-600/25 active:scale-95 transition-all flex items-center justify-center gap-1.5"
-                                                >
-                                                    💬 Enviar Código x WhatsApp
-                                                </a>
                                             </div>
                                         )}
                                     </div>

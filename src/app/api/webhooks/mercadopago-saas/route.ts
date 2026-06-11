@@ -78,12 +78,25 @@ export async function POST(req: Request) {
       const newPlanId = sub?.pending_plan_id || sub?.plan_id;
       const newFallbackId = sub?.pending_fallback_plan_id || sub?.fallback_plan_id;
 
+      let promoUpdate = {};
+      // Lógica Promo 1 Mes: Si están suscribiéndose y nunca usaron la promo
+      if (!sub?.promo_pro_ends_at) {
+        const promoEnds = new Date();
+        promoEnds.setDate(promoEnds.getDate() + 30);
+        promoUpdate = {
+          promo_pro_ends_at: promoEnds.toISOString(),
+          promo_warning_email_sent: false
+        };
+        console.log(`Promoción de 1 mes (Pro Ilimitado) activada para el local ${tenantId} hasta ${promoEnds.toISOString()}`);
+      }
+
       const updateData: any = {
         status: 'active',
         current_period_end: periodEnd.toISOString(),
         mp_subscription_id: mpData.id,
         mp_payer_email: mpData.payer_email || sub?.mp_payer_email,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        ...promoUpdate
       };
 
       // Si teníamos un plan pendiente, consolidar los campos

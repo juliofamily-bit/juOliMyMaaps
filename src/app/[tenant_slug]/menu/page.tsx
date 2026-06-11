@@ -31,9 +31,21 @@ export default function MenuPage({ params }: MenuPageProps) {
           return;
         }
 
+        // Obtener el plan del tenant para saber si es Premium VIP
+        const { data: subData } = await supabaseAnon
+          .from('saas_subscriptions')
+          .select('status, saas_plans:saas_plans!saas_subscriptions_plan_id_fkey(name)')
+          .eq('tenant_id', data.id)
+          .maybeSingle();
+
+        let hasPremiumVIP = false;
+        if (subData && (subData.status === 'active' || subData.status === 'trial')) {
+          hasPremiumVIP = (subData.saas_plans as any)?.name === 'Premium VIP';
+        }
+
         // ¡Súper importante! Esto le dice a Supabase que actúe en nombre de este tenant para RLS
         setSupabaseTenant(data.id);
-        setTenant(data);
+        setTenant({ ...data, hasPremiumVIP });
         
         if (data.name) {
             document.title = `${data.name} | Menú Digital`;

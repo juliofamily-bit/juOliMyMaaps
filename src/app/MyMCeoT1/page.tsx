@@ -232,21 +232,118 @@ export default function MasterAdminPage() {
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
                             <h2 className="text-2xl font-black text-white">Resumen Financiero</h2>
                             
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="glass p-6 rounded-2xl border border-white/5 relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 p-4 opacity-10"><Users size={64}/></div>
-                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Locales Totales</h3>
-                                    <p className="text-4xl font-black text-white">{saasData?.tenants?.length || 0}</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="glass p-5 rounded-2xl border border-white/5 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10"><Users size={48}/></div>
+                                    <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Cuentas Registradas</h3>
+                                    <p className="text-3xl font-black text-white">{saasData?.tenants?.length || 0}</p>
+                                    <p className="text-[9px] text-slate-500 mt-2 font-bold uppercase">Totales creadas</p>
                                 </div>
-                                <div className="glass p-6 rounded-2xl border border-white/5 relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 p-4 opacity-10"><Activity size={64}/></div>
-                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Tickets Abiertos</h3>
-                                    <p className="text-4xl font-black text-orange-400">{saasData?.support_tickets?.filter((t:any) => t.status === 'open').length || 0}</p>
+                                <div className="glass p-5 rounded-2xl border border-white/5 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10"><Settings size={48}/></div>
+                                    <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Cargando Datos</h3>
+                                    <p className="text-3xl font-black text-blue-400">
+                                        {saasData?.tenants?.filter((t:any) => t.products_count > 0 && t.orders_count === 0).length || 0}
+                                    </p>
+                                    <p className="text-[9px] text-slate-500 mt-2 font-bold uppercase">Aún no facturan</p>
                                 </div>
-                                <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-6 rounded-2xl border border-orange-400 relative overflow-hidden">
-                                    <h3 className="text-sm font-bold text-orange-100 uppercase tracking-widest mb-1">MRR Proyectado</h3>
-                                    <p className="text-4xl font-black text-white">$ ---</p>
-                                    <p className="text-xs text-orange-200 mt-2">Disponible con integración MercadoPago</p>
+                                <div className="glass p-5 rounded-2xl border border-white/5 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10"><Activity size={48}/></div>
+                                    <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">En Trial (14 días)</h3>
+                                    <p className="text-3xl font-black text-orange-400">
+                                        {saasData?.tenants?.filter((t:any) => t.orders_count > 0 && t.subscription_status === 'trial').length || 0}
+                                    </p>
+                                    <p className="text-[9px] text-slate-500 mt-2 font-bold uppercase">Trial activo</p>
+                                </div>
+                                <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 p-5 rounded-2xl border border-purple-500/30 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10 text-purple-400"><Tag size={48}/></div>
+                                    <h3 className="text-[10px] font-bold text-purple-300 uppercase tracking-widest mb-1">Suscripciones Pagas</h3>
+                                    <p className="text-3xl font-black text-white">
+                                        {saasData?.tenants?.filter((t:any) => t.subscription_status === 'active').length || 0}
+                                    </p>
+                                    <p className="text-[9px] text-purple-400/80 mt-2 font-bold uppercase">Clientes retenidos</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 p-6 rounded-2xl border border-emerald-500/20 relative overflow-hidden">
+                                    <h3 className="text-[11px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Ingresos (MRR Proyectado)</h3>
+                                    <p className="text-4xl font-black text-emerald-400">
+                                        {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(
+                                            saasData?.tenants?.filter((t:any) => t.subscription_status === 'active').reduce((acc: number, t: any) => acc + (parseFloat(t.price_ars) || 0), 0) || 0
+                                        )}
+                                    </p>
+                                    <p className="text-[10px] text-emerald-500/60 mt-2 font-bold uppercase">Suma de cuotas mensuales activas</p>
+                                </div>
+
+                                <div className="glass p-6 rounded-2xl border border-white/5 relative overflow-hidden">
+                                    <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4">Embudo de Conversión Detallado</h3>
+                                    <div className="space-y-4">
+                                        
+                                        {/* Paso 1: Creados */}
+                                        <div className="space-y-1">
+                                            <div className="flex justify-between items-center text-xs">
+                                                <span className="text-slate-400">1. Locales Registrados (Top Funnel)</span>
+                                                <span className="font-black text-white">{saasData?.tenants?.length || 0}</span>
+                                            </div>
+                                            <div className="w-full bg-slate-900 rounded-full h-1.5">
+                                                <div className="bg-slate-500 h-1.5 rounded-full" style={{ width: '100%' }}></div>
+                                            </div>
+                                        </div>
+
+                                        {/* Paso 2: Configurando / No facturan */}
+                                        <div className="space-y-1">
+                                            <div className="flex justify-between items-center text-xs">
+                                                <span className="text-slate-400">2. Pendientes de Activar (Sin Ventas)</span>
+                                                <span className="font-black text-white">
+                                                    {saasData?.tenants?.filter((t:any) => !t.orders_count || t.orders_count === 0).length || 0}
+                                                </span>
+                                            </div>
+                                            <div className="w-full bg-slate-900 rounded-full h-1.5">
+                                                <div className="bg-blue-500/50 h-1.5 rounded-full" style={{ width: `${saasData?.tenants?.length ? (saasData?.tenants?.filter((t:any) => !t.orders_count || t.orders_count === 0).length / saasData?.tenants?.length) * 100 : 0}%` }}></div>
+                                            </div>
+                                        </div>
+
+                                        {/* Paso 3: En Trial Gratis */}
+                                        <div className="space-y-1">
+                                            <div className="flex justify-between items-center text-xs">
+                                                <span className="text-slate-400">3. En Período de Prueba (14 Días)</span>
+                                                <span className="font-black text-white">
+                                                    {saasData?.tenants?.filter((t:any) => t.subscription_status === 'trial').length || 0}
+                                                </span>
+                                            </div>
+                                            <div className="w-full bg-slate-900 rounded-full h-1.5">
+                                                <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: `${saasData?.tenants?.length ? (saasData?.tenants?.filter((t:any) => t.subscription_status === 'trial').length / saasData?.tenants?.length) * 100 : 0}%` }}></div>
+                                            </div>
+                                        </div>
+
+                                        {/* Paso 4: Pagando (Total) */}
+                                        <div className="space-y-1">
+                                            <div className="flex justify-between items-center text-xs">
+                                                <span className="text-slate-400">4. Suscripciones Activas (Promo + Normal)</span>
+                                                <span className="font-black text-white">
+                                                    {saasData?.tenants?.filter((t:any) => t.subscription_status === 'active').length || 0}
+                                                </span>
+                                            </div>
+                                            <div className="w-full bg-slate-900 rounded-full h-1.5">
+                                                <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${saasData?.tenants?.length ? (saasData?.tenants?.filter((t:any) => t.subscription_status === 'active').length / saasData?.tenants?.length) * 100 : 0}%` }}></div>
+                                            </div>
+                                        </div>
+
+                                        {/* Paso 5: Abandonos / Churn */}
+                                        <div className="space-y-1 pt-2 border-t border-white/5">
+                                            <div className="flex justify-between items-center text-xs">
+                                                <span className="text-red-400">Abandonos (Trial Vencido / Cancelado)</span>
+                                                <span className="font-black text-red-400">
+                                                    {saasData?.tenants?.filter((t:any) => ['canceled', 'past_due', 'unpaid'].includes(t.subscription_status)).length || 0}
+                                                </span>
+                                            </div>
+                                            <div className="w-full bg-slate-900 rounded-full h-1.5">
+                                                <div className="bg-red-500 h-1.5 rounded-full" style={{ width: `${saasData?.tenants?.length ? (saasData?.tenants?.filter((t:any) => ['canceled', 'past_due', 'unpaid'].includes(t.subscription_status)).length / saasData?.tenants?.length) * 100 : 0}%` }}></div>
+                                            </div>
+                                        </div>
+
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -458,6 +555,69 @@ export default function MasterAdminPage() {
                                     </div>
                                 )}
                             </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'settings' && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                            <h2 className="text-2xl font-black text-white flex items-center gap-2">
+                                Ajustes de Cobro <Settings className="text-orange-500" />
+                            </h2>
+
+                            {/* Mostrar Planes */}
+                            <div className="glass p-6 rounded-2xl border border-white/5 space-y-4">
+                                <h3 className="text-lg font-bold text-white mb-2">Planes Activos (Suscripciones)</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {saasData?.plans?.map((plan: any) => (
+                                        <div key={plan.id} className="p-4 rounded-xl border border-white/10 bg-slate-900/50">
+                                            <h4 className="font-black text-orange-400 uppercase tracking-widest">{plan.name}</h4>
+                                            <p className="text-2xl font-black text-white mt-2">
+                                                {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(plan.price_ars)}
+                                            </p>
+                                            <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold">Por mes</p>
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-[10px] text-slate-500 italic mt-4">Para modificar los precios de los planes, actualiza la tabla `saas_plans` en Supabase.</p>
+                            </div>
+
+                            {/* Guía de Configuración de Mercado Pago */}
+                            <div className="glass p-6 rounded-2xl border border-blue-500/20 bg-blue-500/5 space-y-4">
+                                <h3 className="text-lg font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
+                                    <ShieldAlert size={20} />
+                                    Guía de Integración con Mercado Pago
+                                </h3>
+                                <div className="text-sm text-slate-300 space-y-4">
+                                    <p>Para que los pagos automáticos (suscripciones mensuales) funcionen correctamente en tu aplicación SaaS, debes configurar tu cuenta de Mercado Pago Vendedor (CEO):</p>
+                                    
+                                    <div className="space-y-2">
+                                        <h4 className="font-bold text-white">Paso 1: Obtener el Access Token (Producción)</h4>
+                                        <ul className="list-disc pl-5 space-y-1 text-xs text-slate-400">
+                                            <li>Ingresa a <a href="https://www.mercadopago.com.ar/developers/panel" target="_blank" className="text-blue-400 underline">Mercado Pago Developers</a> con tu cuenta principal.</li>
+                                            <li>Crea una nueva aplicación en <strong>Tus Integraciones</strong>.</li>
+                                            <li>Ve a <strong>Credenciales de Producción</strong>.</li>
+                                            <li>Copia el <strong>Access Token</strong> (debe empezar con <code className="bg-black/50 px-1 py-0.5 rounded text-orange-400">APP_USR-</code>).</li>
+                                            <li>Pega ese token en las variables de entorno de Vercel/Supabase bajo el nombre: <code className="bg-black/50 px-1 py-0.5 rounded text-white font-mono">MP_SAAS_ACCESS_TOKEN</code>.</li>
+                                        </ul>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <h4 className="font-bold text-white">Paso 2: Configurar los Webhooks (Notificaciones)</h4>
+                                        <ul className="list-disc pl-5 space-y-1 text-xs text-slate-400">
+                                            <li>En la misma app de Mercado Pago, ve a <strong>Notificaciones Webhooks</strong>.</li>
+                                            <li>URL de producción: <code className="bg-black/50 px-1 py-0.5 rounded text-white font-mono">https://tu-dominio.com/api/webhooks/mercadopago-saas</code></li>
+                                            <li>Eventos a escuchar: Activa la casilla de <strong>Suscripciones (Preapproval)</strong>.</li>
+                                        </ul>
+                                    </div>
+
+                                    <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl">
+                                        <p className="text-xs text-blue-300 font-bold">
+                                            ¡Una vez configurado esto, el sistema se encargará de todo! Cuando un local pague desde su panel, se creará una "Suscripción" automática y Mercado Pago le debitará el monto mes a mes sin que tengas que hacer nada más.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
                         </div>
                     )}
 

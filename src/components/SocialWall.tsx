@@ -22,12 +22,13 @@ interface SocialInteraction {
   tenantId: string;
   primaryColor: string;
   isLight: boolean;
+  hasPremiumVIP?: boolean;
   currentTable?: string | null;
   tables?: { id: string; name: string }[];
   onStartGiftMode?: (fromTable: string, toTable: string, isAnonymous: boolean, giftHint: string) => void;
 }
 
-export const SocialWall: React.FC<SocialWallProps> = ({ tenantId, primaryColor, isLight, currentTable, tables = [], onStartGiftMode }) => {
+export const SocialWall: React.FC<SocialWallProps> = ({ tenantId, primaryColor, isLight, hasPremiumVIP, currentTable, tables = [], onStartGiftMode }) => {
   const [messages, setMessages] = useState<SocialInteraction[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [customName, setCustomName] = useState('');
@@ -292,7 +293,13 @@ export const SocialWall: React.FC<SocialWallProps> = ({ tenantId, primaryColor, 
               </button>
               <button
                 type="button"
-                onClick={() => setType('media')}
+                onClick={() => {
+                  if (!hasPremiumVIP) {
+                    alert('⚠️ El local no cuenta con el plan Premium VIP para habilitar la subida de contenido multimedia.');
+                    return;
+                  }
+                  setType('media');
+                }}
                 className={`flex-1 min-w-[80px] py-2 text-xs font-bold uppercase rounded-lg transition-all flex justify-center items-center gap-1 ${type === 'media' ? 'bg-violet-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
               >
                 VIP 📸
