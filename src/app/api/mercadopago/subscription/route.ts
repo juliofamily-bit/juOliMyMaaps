@@ -129,6 +129,23 @@ export async function POST(req: Request) {
 
     const mpData = await mpRes.json();
 
+    // 5.5 Cancelar la suscripción anterior en MP si existía una activa o pendiente
+    if (sub && sub.mp_subscription_id) {
+      try {
+        await fetch(`https://api.mercadopago.com/preapproval/${sub.mp_subscription_id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${mpAccessToken}`
+          },
+          body: JSON.stringify({ status: 'cancelled' })
+        });
+        console.log(`Suscripción anterior ${sub.mp_subscription_id} cancelada automáticamente.`);
+      } catch (err) {
+        console.error('Error al intentar cancelar la suscripción anterior:', err);
+      }
+    }
+
     // 6. Actualizar o insertar la suscripción en estado pendiente
     if (sub) {
       const { error: updateError } = await supabase

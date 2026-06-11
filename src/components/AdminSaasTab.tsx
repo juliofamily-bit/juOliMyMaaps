@@ -110,6 +110,33 @@ export const AdminSaasTab = ({ tenantId }: { tenantId: string }) => {
         }
     };
 
+    const handleCancelSubscription = async () => {
+        if (!window.confirm('¿Estás seguro de que deseas cancelar tu suscripción? Dejarás de tener acceso a las funciones pagas al final de tu período actual.')) return;
+        
+        setLoading(true);
+        try {
+            const res = await fetch('/api/mercadopago/cancel-subscription', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ tenantId })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                alert('Suscripción cancelada exitosamente.');
+                await checkDowngradeAndFetch();
+            } else {
+                alert(data.error || 'Error al cancelar la suscripción.');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error de red al intentar cancelar.');
+        }
+        setLoading(false);
+    };
+
     const formatARS = (amount: number) => {
         return new Intl.NumberFormat('es-AR', {
             style: 'currency',
@@ -177,7 +204,17 @@ export const AdminSaasTab = ({ tenantId }: { tenantId: string }) => {
                     <div className="space-y-4">
                         <div>
                             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Plan Activo</p>
-                            <p className="text-2xl font-black text-white">{sub?.saas_plans?.name || 'Trial (Prueba)'}</p>
+                            <div className="flex items-center justify-between">
+                                <p className="text-2xl font-black text-white">{sub?.saas_plans?.name || 'Trial (Prueba)'}</p>
+                                {sub?.status === 'active' && (
+                                    <button 
+                                        onClick={handleCancelSubscription}
+                                        className="text-[10px] bg-red-500/10 text-red-400 hover:bg-red-500/20 px-3 py-1.5 rounded-lg font-bold transition-colors"
+                                    >
+                                        Cancelar Suscripción
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <div>
                             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Vencimiento</p>
@@ -315,6 +352,12 @@ export const AdminSaasTab = ({ tenantId }: { tenantId: string }) => {
                             </div>
                         );
                     })}
+                </div>
+
+                <div className="mt-8 p-4 border border-white/5 bg-slate-900/50 rounded-xl text-center">
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                        <strong>¿Cómo cancelar mi plan?</strong> Si deseás dar de baja el cobro automático de tu suscripción, podés hacerlo en cualquier momento haciendo clic en el botón <span className="text-red-400 font-bold">"Cancelar Suscripción"</span> que aparece arriba en la sección "Estado Actual" cuando tenés un plan activo, o desde tu panel de Mercado Pago. Al cancelar, seguirás teniendo acceso a tus funciones Pro hasta que finalice tu período de facturación actual. Luego, tu cuenta pasará al plan Básico.
+                    </p>
                 </div>
             </div>
         </div>
