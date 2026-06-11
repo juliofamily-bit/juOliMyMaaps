@@ -1623,7 +1623,7 @@ export default function WaiterTab({
                             <p className={`text-[9px] font-black uppercase tracking-widest mt-1 ${
                                 isLight ? 'text-slate-500' : 'text-slate-400'
                             }`}>
-                                Local: <span style={{ color: primaryColor }}>{tenant?.name || 'MyMapps'}</span> • Atendido por <span className={isLight ? 'text-slate-900 font-extrabold' : 'text-white font-extrabold'}>{activeWaiter}</span>
+                                Local: <span style={{ color: primaryColor }}>{tenant?.name || 'mmmTodoLoQueQuiero'}</span> • Atendido por <span className={isLight ? 'text-slate-900 font-extrabold' : 'text-white font-extrabold'}>{activeWaiter}</span>
                             </p>
                             {tenant?.description && (
                                 <p className={`text-[8.5px] font-medium italic mt-1 leading-normal max-w-sm ${

@@ -100,7 +100,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
 
     const [orderToPrint, setOrderToPrint] = useState<Order | null>(null);
 
-    // Estados y Búsqueda del Club de Clientes y Fidelización en Caja (MyMapps 2026)
+    // Estados y Búsqueda del Club de Clientes y Fidelización en Caja (mmmTodoLoQueQuiero 2026)
     const [loyaltyAccount, setLoyaltyAccount] = useState<any>(null);
     const [useLoyaltyDiscount, setUseLoyaltyDiscount] = useState(false);
 
@@ -582,7 +582,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
 
         setIsSubmitting(true);
 
-        // Calcular descuento por fidelidad (Monedero Virtual MyMapps 2026)
+        // Calcular descuento por fidelidad (Monedero Virtual mmmTodoLoQueQuiero 2026)
         let loyaltyRedemption = 0;
         if (useLoyaltyDiscount && loyaltyAccount && tenant?.loyalty_enabled !== false) {
             const config = tenant?.loyalty_config || {};
@@ -671,7 +671,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
 
             if (orderError) throw orderError;
 
-            // Debitar el saldo usado en el monedero del cliente de forma atómica en Supabase (Caja MyMapps)
+            // Debitar el saldo usado en el monedero del cliente de forma atómica en Supabase (Caja mmmTodoLoQueQuiero)
             if (loyaltyRedemption > 0 && loyaltyAccount) {
                 await supabase
                     .from('loyalty_accounts')
@@ -1660,7 +1660,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                                                 </div>
                                                 
                                                 <div className="mt-2.5 flex justify-between items-center text-[7px] text-slate-500 font-bold uppercase">
-                                                    <span>MyMapps Control</span>
+                                                    <span>mmmTodoLoQueQuiero Control</span>
                                                     <span>Hora: {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                                 </div>
 

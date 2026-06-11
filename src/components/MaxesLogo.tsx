@@ -72,7 +72,7 @@ export const MaxesLogo: React.FC<MaxesLogoProps> = ({
                 {/* Texto Central: Se asienta elegantemente en el vacío del torso borrado */}
                 <div className="absolute z-10 flex flex-col items-center justify-center text-center mt-[-2px]">
                     <span className="text-[9px] font-black tracking-[0.25em] text-[#D4AF37] uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] animate-pulse">
-                        MyMapps
+                        mmmTodoLoQueQuiero
                     </span>
                     <span className="text-lg font-black tracking-widest text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)]" style={{ fontFamily: 'system-ui, sans-serif' }}>
                         {appName.replace('MyM', '')}

@@ -251,7 +251,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
         }
     };
     
-    // Estados para el Programa de Fidelización (Micro-CRM MyMapps 2026)
+    // Estados para el Programa de Fidelización (Micro-CRM mmmTodoLoQueQuiero 2026)
     const [loyaltyAccounts, setLoyaltyAccounts] = useState<any[]>([]);
     const [isFetchingLoyalty, setIsFetchingLoyalty] = useState(false);
     const [loyaltySearch, setLoyaltySearch] = useState('');

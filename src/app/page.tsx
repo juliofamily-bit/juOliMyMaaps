@@ -246,7 +246,7 @@ export default function WelcomePage() {
 
           {/* Títulos */}
           <div className="text-center space-y-2">
-            <h1 className="text-4xl font-black italic text-orange-500 leading-none">MyMapps</h1>
+            <h1 className="text-4xl font-black italic text-orange-500 leading-none">mmmTodoLoQueQuiero</h1>
             <p className="text-slate-400 font-bold tracking-[0.2em] uppercase text-[9px]">
               Plataforma SaaS Multi-Tenant
             </p>
@@ -289,7 +289,7 @@ export default function WelcomePage() {
           </div>
 
           <p className="text-[8px] font-black uppercase text-slate-600 tracking-widest">
-            © 2026 MyMapps Inc. Todos los derechos reservados
+            © 2026 mmmTodoLoQueQuiero Inc. Todos los derechos reservados
           </p>
         </div>
       )}
@@ -491,7 +491,7 @@ export default function WelcomePage() {
                   <div className="space-y-1">
                     <label className="text-[9px] font-bold uppercase text-slate-500 ml-1">Dirección de Enlace (URL Slug)</label>
                     <div className="flex items-center bg-slate-950 border border-slate-800 focus-within:border-white/20 rounded-xl px-3 py-1">
-                      <span className="text-[10px] text-slate-600 font-bold tracking-tight select-none">mymapps.com/</span>
+                      <span className="text-[10px] text-slate-600 font-bold tracking-tight select-none">mmmtodoloquequierocomer.com.ar/</span>
                       <input
                         type="text"
                         required
@@ -820,7 +820,7 @@ export default function WelcomePage() {
                   </h3>
                   <div className="flex items-center gap-1">
                     <img src="/logo.png" alt="Logo" className="w-4 h-4 object-contain" />
-                    <h1 className="text-sm font-black italic">MyMapps</h1>
+                    <h1 className="text-sm font-black italic">mmmTodoLoQueQuiero</h1>
                   </div>
                 </div>
                 <div className="flex gap-1.5 items-center">

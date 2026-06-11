@@ -144,7 +144,7 @@ export default function MasterAdminPage() {
                                     value={loginForm.email}
                                     onChange={e => setLoginForm({...loginForm, email: e.target.value})}
                                     className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition-colors"
-                                    placeholder="ceo@mymapps.com"
+                                    placeholder="ceo@mmmtodoloquequierocomer.com.ar"
                                 />
                             </div>
                             <div>

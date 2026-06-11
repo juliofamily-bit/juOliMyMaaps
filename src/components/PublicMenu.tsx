@@ -446,7 +446,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   const [afipDocType, setAfipDocType] = useState<'DNI' | 'CUIT'>('CUIT');
   const [afipDocNumber, setAfipDocNumber] = useState('');
 
-  // Estados del Club de Clientes y Fidelización (Monedero Virtual MyMapps 2026)
+  // Estados del Club de Clientes y Fidelización (Monedero Virtual mmmTodoLoQueQuiero 2026)
   const [loyaltyAccount, setLoyaltyAccount] = useState<any>(null);
   const [useLoyaltyDiscount, setUseLoyaltyDiscount] = useState(false);
 
@@ -1454,7 +1454,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
       const finalPhoneNumber = deliveryPhone ? `${phonePrefix} ${deliveryPhone.trim()}` : '';
       
-      // Calcular descuento por fidelidad (Monedero Virtual MyMapps 2026)
+      // Calcular descuento por fidelidad (Monedero Virtual mmmTodoLoQueQuiero 2026)
       let loyaltyRedemption = 0;
       if (useLoyaltyDiscount && loyaltyAccount && tenant.loyalty_enabled !== false) {
         const config = tenant.loyalty_config || {};
@@ -1545,7 +1545,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       if (orderError) throw orderError;
       if (!createdOrder) throw new Error("No se pudo obtener el pedido creado");
 
-      // Debitar el saldo usado en el monedero del cliente de forma atómica en Supabase (Club Clientes MyMapps)
+      // Debitar el saldo usado en el monedero del cliente de forma atómica en Supabase (Club Clientes mmmTodoLoQueQuiero)
       if (loyaltyRedemption > 0 && loyaltyAccount) {
         await supabase
           .from('loyalty_accounts')

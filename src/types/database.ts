@@ -74,7 +74,7 @@ export interface Order {
     external_order_id?: string;
     external_raw_data?: any;
 
-    // Campos de Fidelización (Loyalty) MyMapps 2026
+    // Campos de Fidelización (Loyalty) mmmTodoLoQueQuiero 2026
     loyalty_discount_applied?: number;
     is_loyalty_processed?: boolean;
 }
