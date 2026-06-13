@@ -93,6 +93,7 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS delivery_map_link TEXT DEFAUL
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS delivery_lat NUMERIC DEFAULT NULL;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS delivery_lng NUMERIC DEFAULT NULL;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS delivery_fee NUMERIC DEFAULT 0;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS is_delivery_paid BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS is_approved_for_production BOOLEAN DEFAULT TRUE;
 
 -- Columnas opcionales para facturación AFIP a petición del cliente
@@ -100,6 +101,15 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS afip_billing_requested BOOLEA
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS afip_client_type TEXT DEFAULT 'consumidor_final';
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS afip_doc_type TEXT DEFAULT 'DNI';
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS afip_doc_number TEXT DEFAULT '';
+
+-- Nuevas columnas para Propinas y Cubiertos
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS tip_amount NUMERIC DEFAULT 0;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS is_tip_paid BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS table_charge NUMERIC DEFAULT 0;
+
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS tips_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS table_charge_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.tenants ADD COLUMN IF NOT EXISTS table_charge_amount NUMERIC DEFAULT 0;
 
 -- Columna temporal para las notificaciones y estado de preparación
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS preparation_time_minutes INT DEFAULT NULL;

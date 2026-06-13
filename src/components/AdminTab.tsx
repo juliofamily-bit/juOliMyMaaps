@@ -9,7 +9,8 @@ import { PrintableQRPoster } from './PrintableQRPoster';
 import { AdminEmployeeTab } from './AdminEmployeeTab';
 import { AdminSaasTab } from './AdminSaasTab';
 import { AdminSupportFloatingButton } from './AdminSupportFloatingButton';
-
+import AdminDeliverySettlement from './AdminDeliverySettlement';
+import AdminWaiterSettlement from './AdminWaiterSettlement';
 interface AdminTabProps {
     products: Product[];
     categories: Category[];
@@ -686,6 +687,9 @@ const AdminTab: React.FC<AdminTabProps> = ({
     const [cfgReviewsEnabled, setCfgReviewsEnabled] = useState(true);
     const [cfgReservationsEnabled, setCfgReservationsEnabled] = useState(false);
     const [cfgReservationDepositAmount, setCfgReservationDepositAmount] = useState<number>(0);
+    const [cfgTipsEnabled, setCfgTipsEnabled] = useState(false);
+    const [cfgTableChargeEnabled, setCfgTableChargeEnabled] = useState(false);
+    const [cfgTableChargeAmount, setCfgTableChargeAmount] = useState<number>(0);
     const [catImageUrl, setCatImageUrl] = useState('');
     const [tablesList, setTablesList] = useState<any[]>([]);
     const [newTableName, setNewTableName] = useState('');
@@ -961,6 +965,9 @@ const AdminTab: React.FC<AdminTabProps> = ({
             setCfgReviewsEnabled((tenant as any).reviews_enabled !== false);
             setCfgReservationsEnabled((tenant as any).reservations_enabled === true);
             setCfgReservationDepositAmount((tenant as any).reservation_deposit_amount || 0);
+            setCfgTipsEnabled((tenant as any).tips_enabled || false);
+            setCfgTableChargeEnabled((tenant as any).table_charge_enabled || false);
+            setCfgTableChargeAmount((tenant as any).table_charge_amount || 0);
             setTablesList(tenant.tables || []);
             
             // Cargar datos de AFIP
@@ -1564,6 +1571,9 @@ const AdminTab: React.FC<AdminTabProps> = ({
                         reviews_enabled: cfgReviewsEnabled,
                         reservations_enabled: cfgReservationsEnabled,
                         reservation_deposit_amount: cfgReservationDepositAmount,
+                        tips_enabled: cfgTipsEnabled,
+                        table_charge_enabled: cfgTableChargeEnabled,
+                        table_charge_amount: cfgTableChargeAmount,
                         delivery_apps_enabled: cfgDeliveryAppsEnabled,
                         rappi_store_id: cfgRappiStoreId,
                         pedidosya_store_id: cfgPedidosyaStoreId,
@@ -1827,8 +1837,23 @@ const AdminTab: React.FC<AdminTabProps> = ({
             }
         });
 
+        // Subtract today's expenses from daily balance
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const endOfToday = new Date();
+        endOfToday.setHours(23, 59, 59, 999);
+        
+        expenses.forEach(e => {
+            const eDate = new Date(e.date || new Date());
+            if (eDate >= startOfToday && eDate <= endOfToday) {
+                total -= e.amount;
+                // Assuming all expenses are paid in cash (efectivo)
+                efectivo -= e.amount;
+            }
+        });
+
         return { total, efectivo, debito, credito, rappi, pedidosya };
-    }, [filteredOrders]);
+    }, [filteredOrders, expenses]);
 
     const yearlyOrders = useMemo(() => {
         const currentYear = new Date().getFullYear();
@@ -4171,6 +4196,62 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             {expandedConfigSection === 'personal' && (
                                 <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 animate-in slide-in-from-top-2">
                                     <AdminEmployeeTab tenant={tenant} />
+                                    
+                                    <div className="pt-6 mt-6 border-t border-white/10 space-y-4">
+                                        <h4 className="font-black text-white text-[12px] uppercase flex items-center gap-2">
+                                            <DollarSign size={14} className="text-orange-500" /> Configuración de Propinas y Cubiertos
+                                        </h4>
+                                        <p className="text-[10px] text-slate-400">Activa el sistema de propinas para que los clientes o cajeros puedan asignar propinas a los mozos. También puedes cobrar un monto fijo por "Servicio de Mesa" o "Cubierto".</p>
+                                        
+                                        <div className="flex items-center gap-3 bg-slate-900/50 p-4 rounded-2xl border border-white/5">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={cfgTipsEnabled}
+                                                onChange={(e) => setCfgTipsEnabled(e.target.checked)}
+                                                className="w-5 h-5 accent-orange-500"
+                                            />
+                                            <div>
+                                                <p className="text-xs font-bold text-white uppercase">Habilitar Módulo de Propinas</p>
+                                                <p className="text-[9px] text-slate-400">Permite registrar propinas para los mozos y liquidarlas al final del turno.</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-col md:flex-row items-start md:items-center gap-4 bg-slate-900/50 p-4 rounded-2xl border border-white/5">
+                                            <div className="flex items-center gap-3">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={cfgTableChargeEnabled}
+                                                    onChange={(e) => setCfgTableChargeEnabled(e.target.checked)}
+                                                    className="w-5 h-5 accent-orange-500"
+                                                />
+                                                <div>
+                                                    <p className="text-xs font-bold text-white uppercase">Habilitar Servicio de Mesa</p>
+                                                    <p className="text-[9px] text-slate-400">Cobro fijo por cubierto/comensal.</p>
+                                                </div>
+                                            </div>
+                                            {cfgTableChargeEnabled && (
+                                                <div className="flex items-center gap-2 md:ml-auto w-full md:w-auto">
+                                                    <span className="text-xs font-bold text-slate-400">$</span>
+                                                    <input 
+                                                        type="number"
+                                                        value={cfgTableChargeAmount}
+                                                        onChange={(e) => setCfgTableChargeAmount(Number(e.target.value))}
+                                                        className="bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white font-bold w-full md:w-32 focus:border-orange-500 outline-none transition-all"
+                                                        placeholder="Monto"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    {cfgTipsEnabled && (
+                                        <div className="pt-6 mt-6 border-t border-white/10">
+                                            <h4 className="font-black text-white text-[12px] uppercase mb-4 flex items-center gap-2">
+                                                <DollarSign size={14} className="text-orange-500" /> Liquidación de Propinas a Mozos
+                                            </h4>
+                                            <AdminWaiterSettlement tenantId={tenant.id} />
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -4463,9 +4544,9 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                         </button>
                                     </div>
                                 </div>
+                                <AdminDeliverySettlement tenant={tenant} />
                             </div>
                         )}
-                        
                                 </div>
                             )}
                         </div>

@@ -96,6 +96,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
     const [searchQuery, setSearchQuery] = useState('');
     const [crossPaymentOrder, setCrossPaymentOrder] = useState<Order | null>(null);
     const [crossPaymentMethod, setCrossPaymentMethod] = useState<'efectivo' | 'debito' | 'credito'>('efectivo');
+    const [additionalTipAmount, setAdditionalTipAmount] = useState<number>(0);
     const [deliveriesSubTab, setDeliveriesSubTab] = useState<'pending' | 'completed'>('pending');
 
     const [orderToPrint, setOrderToPrint] = useState<Order | null>(null);
@@ -370,13 +371,20 @@ export default function OrderTab({ products, ingredients, categories: initialCat
             // 1. Actualizar el estado de cobro de la orden
             let updateError: any = null;
 
-            // Primer intento: incluir is_approved_for_production
+            const finalTipAmount = (order.tip_amount || 0) + additionalTipAmount;
+            const finalTotalWithExtraTip = order.total_price + additionalTipAmount;
+
+            // Primer intento: incluir is_approved_for_production, tip_amount
             const { error: firstAttemptError } = await supabase
                 .from('orders')
                 .update({ 
                     payment_status: 'pagado', 
                     payment_method: finalMethod,
-                    is_approved_for_production: true
+                    is_approved_for_production: true,
+                    ...(additionalTipAmount > 0 ? {
+                        tip_amount: finalTipAmount,
+                        total_price: finalTotalWithExtraTip
+                    } : {})
                 })
                 .eq('id', order.id);
 
@@ -1965,6 +1973,46 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                                                     );
                                                 })}
                                             </div>
+
+                                            {/* Desglose Financiero de la Comanda */}
+                                            {((order.table_charge || 0) > 0 || (order.tip_amount || 0) > 0 || (order.discount_amount || 0) > 0 || (order.loyalty_discount_applied || 0) > 0) && (
+                                                <div className={`px-5 pb-4 space-y-1 text-[9px] font-bold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                                                    <div className="flex justify-between border-t border-dashed pt-2 dark:border-white/10 border-slate-200">
+                                                        <span>Subtotal Productos</span>
+                                                        <span>{formatARS(order.total_price - (order.table_charge || 0) - (order.tip_amount || 0) + (order.discount_amount || 0) + (order.loyalty_discount_applied || 0) - (order.delivery_fee || 0))}</span>
+                                                    </div>
+                                                    {(order.delivery_fee || 0) > 0 && (
+                                                        <div className="flex justify-between">
+                                                            <span>Envío a domicilio</span>
+                                                            <span>{formatARS(order.delivery_fee || 0)}</span>
+                                                        </div>
+                                                    )}
+                                                    {(order.table_charge || 0) > 0 && (
+                                                        <div className="flex justify-between">
+                                                            <span>Servicio de Mesa (Cubierto)</span>
+                                                            <span>{formatARS(order.table_charge || 0)}</span>
+                                                        </div>
+                                                    )}
+                                                    {(order.tip_amount || 0) > 0 && (
+                                                        <div className="flex justify-between text-orange-500 dark:text-orange-400">
+                                                            <span>Propina ({(order as any).is_tip_paid ? 'Ya Liquidada' : 'Pendiente Pago al Mozo'})</span>
+                                                            <span>{formatARS(order.tip_amount || 0)}</span>
+                                                        </div>
+                                                    )}
+                                                    {(order.discount_amount || 0) > 0 && (
+                                                        <div className="flex justify-between text-green-500">
+                                                            <span>Descuento / Reserva</span>
+                                                            <span>-{formatARS(order.discount_amount || 0)}</span>
+                                                        </div>
+                                                    )}
+                                                    {(order.loyalty_discount_applied || 0) > 0 && (
+                                                        <div className="flex justify-between text-green-500">
+                                                            <span>Descuento Club</span>
+                                                            <span>-{formatARS(order.loyalty_discount_applied || 0)}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
  
                                             {/* SECCIÓN DE ACCIÓN EXCLUSIVA DE COBRO O ARCHIVADO */}
                                             {isPendingPayment && order.origin !== 'rappi' && order.origin !== 'pedidosya' ? (
@@ -1975,6 +2023,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                                                         onClick={() => {
                                                             setCrossPaymentOrder(order);
                                                             setCrossPaymentMethod('efectivo');
+                                                            setAdditionalTipAmount(0);
                                                         }}
                                                         className="w-full py-3.5 bg-red-600 hover:bg-red-500 text-white font-black rounded-xl text-[9.5px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.4)] border border-red-500/30"
                                                     >
@@ -2433,7 +2482,52 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                                 {crossPaymentOrder.table_number && (
                                     <p className="text-[9px] font-black text-blue-400">Mesa: {crossPaymentOrder.table_number}</p>
                                 )}
-                                <p className="text-sm font-black text-orange-500 pt-1">Total a Cobrar: {formatARS(crossPaymentOrder.total_price)}</p>
+                                
+                                {tenant?.tips_enabled && crossPaymentOrder.delivery_type !== 'delivery' && (
+                                    <>
+                                        {(crossPaymentOrder.tip_amount || 0) > 0 && (
+                                            <div className="pt-2 flex items-center justify-between mt-2 border-t border-slate-200/50 dark:border-white/5">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                                                    Propina del Cliente
+                                                    <button 
+                                                        onClick={() => {
+                                                            if(confirm('¿Seguro que deseas eliminar la propina que dejó el cliente?')) {
+                                                                const newTotal = Math.max(0, crossPaymentOrder.total_price - (crossPaymentOrder.tip_amount || 0));
+                                                                setCrossPaymentOrder({
+                                                                    ...crossPaymentOrder,
+                                                                    tip_amount: 0,
+                                                                    total_price: newTotal
+                                                                });
+                                                            }
+                                                        }}
+                                                        className="ml-1 text-[8px] bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded hover:bg-red-500/20 transition-colors"
+                                                    >
+                                                        <Trash2 size={10} className="inline mr-0.5" /> Eliminar
+                                                    </button>
+                                                </label>
+                                                <span className="text-xs font-black text-slate-500">${crossPaymentOrder.tip_amount?.toLocaleString('es-AR')}</span>
+                                            </div>
+                                        )}
+                                        <div className="pt-2 flex items-center justify-between mt-2 border-t border-slate-200/50 dark:border-white/5">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase">Propina (Agregada en Caja)</label>
+                                            <div className="relative w-24">
+                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">$</span>
+                                                <input 
+                                                    type="number" 
+                                                    value={additionalTipAmount || ''} 
+                                                    onChange={(e) => setAdditionalTipAmount(Number(e.target.value))}
+                                                    className={`w-full pl-5 pr-2 py-1 rounded text-xs font-bold outline-none ${
+                                                        isLight ? 'bg-white border border-slate-200 text-slate-900' : 'bg-slate-950 border border-white/10 text-white'
+                                                    }`}
+                                                />
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                                
+                                <p className="text-sm font-black text-orange-500 pt-1 border-t border-slate-200/50 dark:border-white/5 mt-2">
+                                    Total a Cobrar: {formatARS(crossPaymentOrder.total_price + additionalTipAmount)}
+                                </p>
                             </div>
 
                             <div className="space-y-2">

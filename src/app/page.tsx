@@ -44,6 +44,7 @@ export default function WelcomePage() {
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState('');
   const [registerSuccess, setRegisterSuccess] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
 
   // Cargar locales recientes
   useEffect(() => {
@@ -105,11 +106,15 @@ export default function WelcomePage() {
     setSlug(generatedSlug);
   };
 
-  // Enviar registro del nuevo local
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegisterError('');
     
+    if (!acceptTerms) {
+      setRegisterError('Debes aceptar las Condiciones del Servicio y Políticas de Privacidad para continuar.');
+      return;
+    }
+
     // Validaciones básicas
     if (!name.trim() || !slug.trim()) {
       setRegisterError('El nombre y el enlace del local son obligatorios.');
@@ -769,6 +774,27 @@ export default function WelcomePage() {
                     <p className="text-red-500 text-[10px] font-bold uppercase tracking-wide leading-tight">{registerError}</p>
                   </div>
                 )}
+
+                {/* Checkbox de Términos y Condiciones */}
+                <div className="flex items-start gap-3 p-2">
+                  <input
+                    type="checkbox"
+                    id="terms"
+                    checked={acceptTerms}
+                    onChange={(e) => setAcceptTerms(e.target.checked)}
+                    className="mt-1 w-4 h-4 rounded bg-slate-900 border-slate-700 accent-orange-500 cursor-pointer"
+                  />
+                  <label htmlFor="terms" className="text-xs text-slate-400 leading-relaxed cursor-pointer">
+                    He leído y acepto las{' '}
+                    <Link href="/terminos" target="_blank" className="text-orange-500 hover:underline font-bold">
+                      Condiciones del Servicio
+                    </Link>{' '}
+                    y las{' '}
+                    <Link href="/privacidad" target="_blank" className="text-orange-500 hover:underline font-bold">
+                      Políticas de Privacidad
+                    </Link>.
+                  </label>
+                </div>
 
                 <button
                   type="submit"

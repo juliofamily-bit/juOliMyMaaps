@@ -77,6 +77,20 @@ export interface Order {
     // Campos de Fidelización (Loyalty) mmmTodoLoQueQuiero 2026
     loyalty_discount_applied?: number;
     is_loyalty_processed?: boolean;
+    discount_amount?: number;
+    delivery_fee?: number;
+    
+    // Delivery Settlement
+    is_delivery_paid?: boolean;
+    delivery_type?: string;
+    delivery_address?: string;
+    delivery_lat?: number;
+    delivery_lng?: number;
+
+    // Tips and Table Charge
+    tip_amount?: number;
+    is_tip_paid?: boolean;
+    table_charge?: number;
 }
 
 export interface LoyaltyAccount {
@@ -170,6 +184,9 @@ export interface Tenant {
     franchise_id?: string;
     max_devices?: number;
     landing_config?: any;
+    tips_enabled?: boolean;
+    table_charge_enabled?: boolean;
+    table_charge_amount?: number;
 }
 
 export interface SocialInteraction {

@@ -624,7 +624,7 @@ export default function WaiterTab({
         }
     };
 
-    const [activeSubTab, setActiveSubTab] = useState<'my-tables' | 'all-tables' | 'alerts' | 'reservations'>('my-tables');
+    const [activeSubTab, setActiveSubTab] = useState<'my-tables' | 'all-tables' | 'alerts' | 'reservations' | 'my-tips'>('my-tables');
     const [reservations, setReservations] = useState<any[]>([]);
     const [isReservationsLoading, setIsReservationsLoading] = useState(false);
     
@@ -1757,6 +1757,18 @@ export default function WaiterTab({
                             {reservations.filter(r => r.status === 'confirmed').length}
                         </span>
                     )}
+                </button>
+                <button
+                    onClick={() => setActiveSubTab('my-tips')}
+                    className={`flex-1 py-3 px-2.5 rounded-[1.6rem] text-[10px] uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-2 ${
+                        activeSubTab === 'my-tips'
+                            ? 'text-white shadow-lg shadow-black/40 font-black'
+                            : (isLight ? 'text-slate-500 font-black hover:text-slate-850' : 'text-slate-500 font-black hover:text-slate-350')
+                    }`}
+                    style={activeSubTab === 'my-tips' ? { backgroundColor: primaryColor } : {}}
+                >
+                    💰
+                    <span>Mis Propinas</span>
                 </button>
             </div>
 
@@ -3250,6 +3262,76 @@ export default function WaiterTab({
                     </div>
                 );
             })()}
+
+            {/* VISTA: MI BOLSA DE PROPINAS */}
+            {activeSubTab === 'my-tips' && (
+                <div className="space-y-6 animate-in fade-in duration-300">
+                    <div className="flex justify-between items-center px-2">
+                        <div>
+                            <h3 className={`text-xs font-black uppercase tracking-widest flex items-center gap-1.5 ${isLight ? 'text-slate-650' : 'text-slate-400'}`}>
+                                <Sparkles size={14} className="text-orange-500" /> Mi Bolsa de Propinas
+                            </h3>
+                            <p className="text-[9px] font-bold text-slate-500 mt-1 uppercase tracking-wider">
+                                Resumen de propinas generadas
+                            </p>
+                        </div>
+                    </div>
+
+                    {(() => {
+                        const myTipsOrders = orders.filter(o => 
+                            o.waiter_name?.toLowerCase().trim() === activeWaiter?.toLowerCase().trim() && 
+                            (o.tip_amount || 0) > 0
+                        );
+                        
+                        const totalGenerated = myTipsOrders.reduce((sum, o) => sum + (o.tip_amount || 0), 0);
+                        const totalPaid = myTipsOrders.filter(o => (o as any).is_tip_paid).reduce((sum, o) => sum + (o.tip_amount || 0), 0);
+                        const totalPending = totalGenerated - totalPaid;
+
+                        return (
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className={`p-5 rounded-[2rem] border shadow-sm flex flex-col justify-center items-center text-center ${
+                                        isLight ? 'bg-white border-slate-200' : 'bg-slate-900/60 border-white/5'
+                                    }`}>
+                                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">A Cobrar Hoy</p>
+                                        <p className="text-2xl font-black text-orange-500 mt-1">${totalPending.toLocaleString()}</p>
+                                    </div>
+                                    <div className={`p-5 rounded-[2rem] border shadow-sm flex flex-col justify-center items-center text-center ${
+                                        isLight ? 'bg-white border-slate-200' : 'bg-slate-900/60 border-white/5'
+                                    }`}>
+                                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Ya Liquidado</p>
+                                        <p className="text-2xl font-black text-emerald-500 mt-1">${totalPaid.toLocaleString()}</p>
+                                    </div>
+                                </div>
+
+                                <div className={`p-4 rounded-3xl border ${isLight ? 'bg-white border-slate-200' : 'bg-slate-950 border-white/5'}`}>
+                                    <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-3 pl-2">Desglose de Mesas</h4>
+                                    <div className="space-y-2">
+                                        {myTipsOrders.length === 0 ? (
+                                            <p className="text-[9px] font-bold text-center text-slate-500 uppercase py-4">Aún no hay propinas registradas</p>
+                                        ) : (
+                                            myTipsOrders.map(order => (
+                                                <div key={order.id} className={`flex justify-between items-center p-3 rounded-2xl border ${isLight ? 'bg-slate-50 border-slate-100' : 'bg-slate-900/40 border-white/5'}`}>
+                                                    <div>
+                                                        <p className={`text-xs font-black ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>{getOrderDisplayName(order, tenant)}</p>
+                                                        <p className="text-[8px] font-bold text-slate-500 uppercase mt-0.5">{(order as any).is_tip_paid ? 'Liquidado' : 'Pendiente'}</p>
+                                                    </div>
+                                                    <span className={`text-sm font-black ${
+                                                        (order as any).is_tip_paid ? 'text-emerald-500' : 'text-orange-500'
+                                                    }`}>
+                                                        +${order.tip_amount?.toLocaleString()}
+                                                    </span>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+                </div>
+            )}
+
             {/* HIDDEN PRINT TICKET */}
             <PrintableTicket ref={printComponentRef} order={orderToPrint} tenant={tenant} products={products} />
         </div>

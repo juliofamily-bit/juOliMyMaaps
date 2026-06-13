@@ -1,14 +1,8 @@
--- Modificación para soportar Facturación Electrónica de AFIP
--- Ejecutar en el SQL Editor de Supabase
+-- Agregar las columnas de facturación AFIP a la tabla orders si no existen
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS afip_billing_requested boolean DEFAULT false;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS afip_client_type text DEFAULT 'consumidor_final';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS afip_doc_type text DEFAULT 'DNI';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS afip_doc_number text DEFAULT '';
 
-ALTER TABLE "public"."orders" 
-ADD COLUMN IF NOT EXISTS "afip_cae" text,
-ADD COLUMN IF NOT EXISTS "afip_cae_vencimiento" timestamp with time zone,
-ADD COLUMN IF NOT EXISTS "afip_tipo_comprobante" integer,
-ADD COLUMN IF NOT EXISTS "afip_punto_venta" integer,
-ADD COLUMN IF NOT EXISTS "afip_numero_comprobante" integer,
-ADD COLUMN IF NOT EXISTS "afip_facturado_at" timestamp with time zone,
-ADD COLUMN IF NOT EXISTS "afip_error" text;
-
--- Notificar a PostgREST que recargue el esquema para que el frontend vea las nuevas columnas inmediatamente
+-- Refrescar la memoria caché de PostgREST para que los cambios se reflejen inmediatamente
 NOTIFY pgrst, 'reload schema';

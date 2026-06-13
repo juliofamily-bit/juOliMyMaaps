@@ -355,6 +355,10 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [successOrderNumber, setSuccessOrderNumber] = useState<number | null>(null);
+  
+  // Propinas
+  const [tipPercentage, setTipPercentage] = useState<number>(0);
+  const [customTip, setCustomTip] = useState<string>('');
 
   // Navegación e Historial (Botón Atrás físico)
   const goToMenu = () => {
@@ -1279,7 +1283,23 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
   const cartProductsTotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const deliveryFee = deliveryType === 'delivery' && selectedDeliveryZone ? selectedDeliveryZone.fee : 0;
-  const cartTotal = cartProductsTotal + deliveryFee;
+  
+  // Cubierto (Table Charge) - Se cobra si está habilitado y es pedido de mesa
+  const tableCharge = tenant?.table_charge_enabled && deliveryType === 'local' && (tableName || tableParamId) 
+      ? (tenant.table_charge_amount || 0) 
+      : 0;
+
+  // Propina (Tip)
+  let calculatedTip = 0;
+  if (tenant?.tips_enabled) {
+      if (tipPercentage === -1) {
+          calculatedTip = parseFloat(customTip) || 0;
+      } else {
+          calculatedTip = Math.round((cartProductsTotal * tipPercentage) / 100);
+      }
+  }
+
+  const cartTotal = cartProductsTotal + deliveryFee + tableCharge + calculatedTip;
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
   const sortedCategories = useMemo(() => {
@@ -1498,7 +1518,10 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
           afip_client_type: afipBillingRequested ? afipClientType : 'consumidor_final',
           afip_doc_type: afipBillingRequested ? afipDocType : 'DNI',
           afip_doc_number: afipBillingRequested ? afipDocNumber : '',
-          loyalty_discount_applied: loyaltyRedemption
+          loyalty_discount_applied: loyaltyRedemption,
+          tip_amount: calculatedTip,
+          table_charge: tableCharge,
+          is_tip_paid: false
         }])
         .select()
         .single();
@@ -3561,6 +3584,64 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     )}
                   </div>
                 )}
+                {/* Selección de Propinas */}
+                {tenant?.tips_enabled && (
+                  <div className={`space-y-3 pt-3 pb-4 border-b ${isLight ? 'border-slate-100' : 'border-neutral-800/50'}`}>
+                    <div className="flex flex-col space-y-1">
+                      <span className={`text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 ${isLight ? 'text-slate-700' : 'text-neutral-300'}`}>
+                        <Gift size={12} className="text-orange-500" /> Propina para el equipo
+                      </span>
+                      <span className={`text-[9px] font-bold uppercase tracking-widest ${isLight ? 'text-slate-400' : 'text-neutral-500'}`}>
+                        ¡Gracias por tu apoyo! (Opcional)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {[0, 10, 15, 20].map((percent) => (
+                        <button
+                          key={percent}
+                          onClick={() => setTipPercentage(percent)}
+                          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+                            tipPercentage === percent
+                              ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
+                              : isLight
+                                ? 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                : 'bg-neutral-900 text-neutral-400 hover:bg-neutral-800'
+                          }`}
+                        >
+                          {percent}%
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setTipPercentage(-1)}
+                        className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+                          tipPercentage === -1
+                            ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
+                            : isLight
+                              ? 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                              : 'bg-neutral-900 text-neutral-400 hover:bg-neutral-800'
+                        }`}
+                      >
+                        Otro
+                      </button>
+                    </div>
+                    {tipPercentage === -1 && (
+                      <div className="relative">
+                        <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold ${isLight ? 'text-slate-400' : 'text-neutral-500'}`}>$</span>
+                        <input
+                          type="number"
+                          value={customTip}
+                          onChange={(e) => setCustomTip(e.target.value)}
+                          placeholder="Monto exacto en $"
+                          className={`w-full pl-7 pr-3 py-2.5 rounded-xl text-sm font-bold outline-none transition-colors ${
+                            isLight 
+                              ? 'bg-slate-50 border border-slate-200 text-slate-900 focus:border-orange-500' 
+                              : 'bg-neutral-950 border border-neutral-800 text-white focus:border-orange-500'
+                          }`}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Desglose Financiero */}
                 <div className={`space-y-1.5 pb-1 border-b ${isLight ? 'border-slate-100' : 'border-neutral-800/50'}`}>
@@ -3572,6 +3653,18 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     <div className={`flex items-center justify-between text-xs transition-colors duration-500 ${isLight ? 'text-slate-500' : 'text-neutral-400'}`}>
                       <span>Envío a domicilio</span>
                       <span>${deliveryFee.toLocaleString('es-AR')}</span>
+                    </div>
+                  )}
+                  {tableCharge > 0 && (
+                    <div className={`flex items-center justify-between text-xs transition-colors duration-500 ${isLight ? 'text-slate-500' : 'text-neutral-400'}`}>
+                      <span>Servicio de Mesa (Cubierto)</span>
+                      <span>${tableCharge.toLocaleString('es-AR')}</span>
+                    </div>
+                  )}
+                  {calculatedTip > 0 && (
+                    <div className={`flex items-center justify-between text-xs transition-colors duration-500 ${isLight ? 'text-slate-500' : 'text-neutral-400'}`}>
+                      <span>Propina al equipo</span>
+                      <span>${calculatedTip.toLocaleString('es-AR')}</span>
                     </div>
                   )}
                   {appliedDiscount > 0 && (
@@ -3640,6 +3733,11 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   {!isBusinessOpen && cart.length > 0 && (
                     <div className="w-full bg-red-500/20 text-red-500 py-2.5 px-4 text-center text-xs font-black uppercase tracking-widest border-b border-red-500/20 backdrop-blur-sm">
                       ⚠️ Fuera de Horario de Atención
+                    </div>
+                  )}
+                  {isBusinessOpen && tableCharge > 0 && cart.length > 0 && (
+                    <div className="w-full bg-orange-500/10 text-orange-600 py-2.5 px-4 text-center text-[10px] font-black uppercase tracking-widest border-b border-orange-500/20 backdrop-blur-sm">
+                      🍽️ Incluye Servicio de Mesa (${tableCharge.toLocaleString('es-AR')})
                     </div>
                   )}
                   <div className="flex w-full">
