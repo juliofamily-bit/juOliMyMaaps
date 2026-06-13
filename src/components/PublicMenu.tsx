@@ -2352,14 +2352,14 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                 isSoldOut ? 'opacity-70 grayscale-[0.5]' : ''
               } ${
                 isLight 
-                  ? 'bg-white border border-slate-200/60 shadow-sm hover:shadow-md hover:bg-slate-50/50' 
-                  : 'bg-neutral-900/40 border border-neutral-800/60 hover:bg-neutral-900/80'
+                  ? 'bg-white border border-slate-200/60 shadow-sm md:hover:shadow-md md:hover:bg-slate-50/50' 
+                  : 'bg-neutral-900/40 border border-neutral-800/60 md:hover:bg-neutral-900/80'
               }`}
             >
               {/* Imagen (placeholder visual estético si no hay image_url) */}
               <div className="w-1/3 min-h-[120px] bg-neutral-800 relative overflow-hidden">
                 {product.image_url ? (
-                  <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <img src={product.image_url} alt={product.name} className="w-full h-full object-cover md:group-hover:scale-105 transition-transform duration-500" />
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-neutral-800 to-neutral-900">
                     <Utensils className="w-8 h-8 text-neutral-700" />
@@ -2438,8 +2438,8 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   ) : (
                     <button
                       onClick={() => addToCart(product)}
-                      className={`w-8 h-8 rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-md ${
-                        isLight ? 'bg-slate-900 text-white shadow-slate-200/50 hover:bg-slate-800' : 'bg-white text-black hover:bg-slate-100'
+                      className={`w-8 h-8 rounded-full flex items-center justify-center md:hover:scale-110 active:scale-95 transition-all shadow-md ${
+                        isLight ? 'bg-slate-900 text-white shadow-slate-200/50 md:hover:bg-slate-800' : 'bg-white text-black md:hover:bg-slate-100'
                       }`}
                     >
                       <Plus className="w-5 h-5" />
@@ -2879,22 +2879,22 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
       {/* FAB - Botón de Carrito Flotante */}
       {cartCount > 0 && (
-        <div className="fixed bottom-6 inset-x-0 flex justify-center z-40 px-4 animate-in slide-in-from-bottom-10 fade-in duration-300">
+        <div className="fixed bottom-6 inset-x-0 flex justify-center z-40 px-4 animate-in slide-in-from-bottom-10 fade-in duration-300 pointer-events-none">
           <button
             onClick={() => setIsCartOpen(true)}
-            className="w-full max-w-sm flex items-center justify-between px-5 py-4 rounded-2xl shadow-2xl backdrop-blur-md transition-transform hover:scale-[1.02] active:scale-[0.98]"
+            className="w-full max-w-sm flex items-center justify-between px-5 py-4 rounded-2xl shadow-2xl backdrop-blur-md transition-transform md:hover:scale-[1.02] active:scale-[0.98] pointer-events-auto"
             style={{ 
               background: `linear-gradient(135deg, ${primaryColor}, ${primaryColor}dd)`,
               boxShadow: `0 10px 40px -10px ${primaryColor}` 
             }}
           >
             <div className="flex items-center gap-3">
-              <div className="bg-black/20 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">
+              <div key={`count-${cartCount}`} className="bg-black/20 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">
                 {cartCount}
               </div>
               <span className="font-medium">Ver Pedido</span>
             </div>
-            <span className="font-bold">${cartTotal.toLocaleString()}</span>
+            <span key={`total-${cartTotal}`} className="font-bold">${cartTotal.toLocaleString()}</span>
           </button>
         </div>
       )}
