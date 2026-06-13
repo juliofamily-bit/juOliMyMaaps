@@ -37,10 +37,7 @@ export default function WelcomePage() {
   const [secondaryColor, setSecondaryColor] = useState('#1e293b');
   const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
   const [adminPassword, setAdminPassword] = useState('');
-  const [staffPassword, setStaffPassword] = useState('');
-  const [kitchenPassword, setKitchenPassword] = useState('');
-  const [deliveryPassword, setDeliveryPassword] = useState('');
-  const [enabledRoles, setEnabledRoles] = useState<string[]>(['staff', 'kitchen', 'delivery']);
+  const [enabledRoles, setEnabledRoles] = useState<string[]>(['staff', 'kitchen', 'delivery', 'waiter', 'bartender', 'animador']);
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState('');
   const [registerSuccess, setRegisterSuccess] = useState(false);
@@ -132,18 +129,6 @@ export default function WelcomePage() {
       setRegisterError('Debes configurar la contraseña de Administrador.');
       return;
     }
-    if (enabledRoles.includes('staff') && !staffPassword) {
-      setRegisterError('Debes configurar la contraseña para el rol de Caja (Ventas).');
-      return;
-    }
-    if (enabledRoles.includes('kitchen') && !kitchenPassword) {
-      setRegisterError('Debes configurar la contraseña para el rol de Cocina.');
-      return;
-    }
-    if (enabledRoles.includes('delivery') && !deliveryPassword) {
-      setRegisterError('Debes configurar la contraseña para el rol de Despacho (Envíos).');
-      return;
-    }
 
     setRegistering(true);
 
@@ -197,9 +182,8 @@ export default function WelcomePage() {
           theme_colors: { primary: primaryColor, secondary: secondaryColor, mode: themeMode },
           enabled_roles: ['admin', ...enabledRoles],
           admin_password: adminPassword,
-          staff_password: enabledRoles.includes('staff') ? staffPassword : '',
-          kitchen_password: enabledRoles.includes('kitchen') ? kitchenPassword : '',
-          delivery_password: enabledRoles.includes('delivery') ? deliveryPassword : ''
+          terms_accepted: true,
+          terms_accepted_at: new Date().toISOString()
         }])
         .select()
         .single();
@@ -607,164 +591,71 @@ export default function WelcomePage() {
                     Selecciona cuáles de estos roles de trabajo estarán habilitados en tu negocio. Los roles desmarcados no aparecerán como opción al iniciar sesión en tu portal.
                   </p>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                    {/* Caja */}
-                    <label className={`p-4 rounded-2xl border cursor-pointer flex items-center gap-3 transition-all ${
-                      enabledRoles.includes('staff') 
-                        ? 'bg-orange-500/10 border-orange-500/40 text-white' 
-                        : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'
-                    }`}>
-                      <input
-                        type="checkbox"
-                        checked={enabledRoles.includes('staff')}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setEnabledRoles([...enabledRoles, 'staff']);
-                          } else {
-                            setEnabledRoles(enabledRoles.filter(r => r !== 'staff'));
-                          }
-                        }}
-                        className="hidden"
-                      />
-                      <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
-                        enabledRoles.includes('staff') ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-700'
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
+                    {[
+                      { id: 'staff', label: 'Caja (Ventas)', desc: 'Pedidos y cobros' },
+                      { id: 'kitchen', label: 'Cocina', desc: 'Comandas (KDS)' },
+                      { id: 'delivery', label: 'Despacho', desc: 'Envíos y repartos' },
+                      { id: 'waiter', label: 'Mozo', desc: 'Toma en mesa' },
+                      { id: 'bartender', label: 'Barra', desc: 'Bebidas' },
+                      { id: 'animador', label: 'Animador/DJ', desc: 'Música y social' }
+                    ].map(role => (
+                      <label key={role.id} className={`p-3 rounded-2xl border cursor-pointer flex flex-col gap-2 transition-all ${
+                        enabledRoles.includes(role.id) 
+                          ? 'bg-orange-500/10 border-orange-500/40 text-white' 
+                          : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'
                       }`}>
-                        {enabledRoles.includes('staff') && <Check size={10} />}
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs font-black">Caja (Ventas)</span>
-                        <span className="text-[8px] opacity-60">Registrar pedidos</span>
-                      </div>
-                    </label>
-
-                    {/* Cocina */}
-                    <label className={`p-4 rounded-2xl border cursor-pointer flex items-center gap-3 transition-all ${
-                      enabledRoles.includes('kitchen') 
-                        ? 'bg-orange-500/10 border-orange-500/40 text-white' 
-                        : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'
-                    }`}>
-                      <input
-                        type="checkbox"
-                        checked={enabledRoles.includes('kitchen')}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setEnabledRoles([...enabledRoles, 'kitchen']);
-                          } else {
-                            setEnabledRoles(enabledRoles.filter(r => r !== 'kitchen'));
-                          }
-                        }}
-                        className="hidden"
-                      />
-                      <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
-                        enabledRoles.includes('kitchen') ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-700'
-                      }`}>
-                        {enabledRoles.includes('kitchen') && <Check size={10} />}
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs font-black">Cocina</span>
-                        <span className="text-[8px] opacity-60">Preparar comandas</span>
-                      </div>
-                    </label>
-
-                    {/* Despacho */}
-                    <label className={`p-4 rounded-2xl border cursor-pointer flex items-center gap-3 transition-all ${
-                      enabledRoles.includes('delivery') 
-                        ? 'bg-orange-500/10 border-orange-500/40 text-white' 
-                        : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'
-                    }`}>
-                      <input
-                        type="checkbox"
-                        checked={enabledRoles.includes('delivery')}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setEnabledRoles([...enabledRoles, 'delivery']);
-                          } else {
-                            setEnabledRoles(enabledRoles.filter(r => r !== 'delivery'));
-                          }
-                        }}
-                        className="hidden"
-                      />
-                      <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
-                        enabledRoles.includes('delivery') ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-700'
-                      }`}>
-                        {enabledRoles.includes('delivery') && <Check size={10} />}
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs font-black">Despacho / Envíos</span>
-                        <span className="text-[8px] opacity-60">Entregar pedidos</span>
-                      </div>
-                    </label>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-black">{role.label}</span>
+                          <input
+                            type="checkbox"
+                            checked={enabledRoles.includes(role.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) setEnabledRoles([...enabledRoles, role.id]);
+                              else setEnabledRoles(enabledRoles.filter(r => r !== role.id));
+                            }}
+                            className="hidden"
+                          />
+                          <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
+                            enabledRoles.includes(role.id) ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-700'
+                          }`}>
+                            {enabledRoles.includes(role.id) && <Check size={10} />}
+                          </div>
+                        </div>
+                        <span className="text-[8px] opacity-60">{role.desc}</span>
+                      </label>
+                    ))}
                   </div>
                 </div>
 
-                {/* Bloque 3: Claves de Roles */}
-                <div className="space-y-3 bg-slate-900/40 p-5 rounded-3xl border border-white/5">
-                  <p className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1">
-                    <Shield size={12} className="text-orange-500" /> Contraseñas de Seguridad por Rol
-                  </p>
+                {/* Bloque 3: Clave Principal */}
+                <div className="space-y-4 bg-slate-900/40 p-5 rounded-3xl border border-white/5">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-1">
+                      <Shield size={12} className="text-orange-500" /> Contraseña Maestra (Administrador)
+                    </p>
+                    <p className="text-slate-400 text-[10px] leading-relaxed">
+                      Esta es la clave más importante. Te dará acceso a toda la contabilidad, ingresos y configuración del local. Asegúrate de que sea fuerte y no la compartas.
+                    </p>
+                  </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold uppercase text-slate-500 ml-1 flex items-center gap-1">
-                        <Shield size={10} className="text-orange-500" /> Clave Administrador (Siempre Requerido)
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Ej: admin123"
-                        value={adminPassword}
-                        onChange={(e) => setAdminPassword(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-white/20 rounded-xl p-3 text-white text-xs outline-none font-bold"
-                      />
-                    </div>
+                  <div className="space-y-1 pt-2">
+                    <label className="text-[9px] font-bold uppercase text-slate-500 ml-1">Clave Administrador</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ej: AdminFuerte123"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-orange-500/50 rounded-xl p-3 text-white text-xs outline-none font-bold"
+                    />
+                  </div>
 
-                    {enabledRoles.includes('staff') && (
-                      <div className="space-y-1 animate-in zoom-in duration-200">
-                        <label className="text-[9px] font-bold uppercase text-slate-500 ml-1 flex items-center gap-1">
-                          <ShoppingBag size={10} className="text-orange-500" /> Clave Caja (Ventas)
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="Ej: ventas123"
-                          value={staffPassword}
-                          onChange={(e) => setStaffPassword(e.target.value)}
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-white/20 rounded-xl p-3 text-white text-xs outline-none font-bold"
-                        />
-                      </div>
-                    )}
-
-                    {enabledRoles.includes('kitchen') && (
-                      <div className="space-y-1 animate-in zoom-in duration-200">
-                        <label className="text-[9px] font-bold uppercase text-slate-500 ml-1 flex items-center gap-1">
-                          <ChefHat size={10} className="text-orange-500" /> Clave Cocina (Comandas)
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="Ej: cocina123"
-                          value={kitchenPassword}
-                          onChange={(e) => setKitchenPassword(e.target.value)}
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-white/20 rounded-xl p-3 text-white text-xs outline-none font-bold"
-                        />
-                      </div>
-                    )}
-
-                    {enabledRoles.includes('delivery') && (
-                      <div className="space-y-1 animate-in zoom-in duration-200">
-                        <label className="text-[9px] font-bold uppercase text-slate-500 ml-1 flex items-center gap-1">
-                          <Navigation size={10} className="text-orange-500" /> Clave Despacho (Envíos)
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="Ej: envios123"
-                          value={deliveryPassword}
-                          onChange={(e) => setDeliveryPassword(e.target.value)}
-                          className="w-full bg-slate-950 border border-slate-800 focus:border-white/20 rounded-xl p-3 text-white text-xs outline-none font-bold"
-                        />
-                      </div>
-                    )}
+                  <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                    <p className="text-blue-400 text-[9px] font-bold uppercase tracking-wide flex items-start gap-2">
+                      <AlertCircle size={12} className="shrink-0 mt-0.5" />
+                      Nota: Dentro de la aplicación hay un apartado de "Personal" en donde le vas a poder colocar las claves de acceso a los distintos roles que actives.
+                    </p>
                   </div>
                 </div>
 
