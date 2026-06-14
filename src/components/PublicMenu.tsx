@@ -3419,6 +3419,15 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
                       {afipBillingRequested && (
                         <div className="mt-4 p-3 bg-neutral-900/50 border border-neutral-800 rounded-xl space-y-4 animate-in slide-in-from-top-2 duration-200">
+                          
+                          {/* Explicación de tipo de factura según condición del local */}
+                          <div className={`p-2.5 rounded-lg text-[9px] uppercase tracking-wider font-bold border ${isLight ? 'bg-blue-50/50 border-blue-200 text-blue-700' : 'bg-blue-900/20 border-blue-800/50 text-blue-300'}`}>
+                            ℹ️ El local es {(tenant?.afip_condicion_iva || '').toLowerCase().includes('monotribut') ? 'Monotributista' : 'Responsable Inscripto'}.<br/>
+                            {(tenant?.afip_condicion_iva || '').toLowerCase().includes('monotribut') 
+                              ? 'Se emitirá Factura C para todos los casos.' 
+                              : 'Se emitirá Factura B a Consumidores Finales / Monotributistas, y Factura A a Responsables Inscriptos.'}
+                          </div>
+
                           <div>
                             <label className="text-[9px] font-bold uppercase tracking-widest text-neutral-500 mb-2 block">
                               Tipo de Receptor AFIP
@@ -3469,20 +3478,21 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                             </div>
                           </div>
 
-                          {afipClientType !== 'consumidor_final' && (
-                            <div>
-                              <label className="text-[9px] font-bold uppercase tracking-widest text-neutral-500 mb-1.5 block">
-                                CUIT *
-                              </label>
-                              <input
-                                type="number"
-                                value={afipDocNumber}
-                                onChange={(e) => setAfipDocNumber(e.target.value)}
-                                placeholder="Ingresa tu CUIT sin guiones"
-                                className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs outline-none text-neutral-300 transition-all focus:border-white focus:ring-1 focus:ring-white"
-                              />
-                            </div>
-                          )}
+                          <div>
+                            <label className="text-[9px] font-bold uppercase tracking-widest text-neutral-500 mb-1.5 block">
+                              {afipClientType === 'consumidor_final' ? 'DNI / CUIT (Opcional)' : 'CUIT (Obligatorio)'}
+                            </label>
+                            <input
+                              type="number"
+                              value={afipDocNumber}
+                              onChange={(e) => setAfipDocNumber(e.target.value)}
+                              placeholder={afipClientType === 'consumidor_final' ? 'Ingresa tu DNI o dejalo vacío' : 'Ingresa tu CUIT sin guiones'}
+                              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs outline-none text-neutral-300 transition-all focus:border-white focus:ring-1 focus:ring-white"
+                            />
+                            {afipClientType === 'consumidor_final' && (
+                              <p className="text-[8px] text-neutral-500 mt-1 font-medium">Para Consumidor Final, no es obligatorio el DNI para importes menores.</p>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>

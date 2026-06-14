@@ -219,8 +219,16 @@ export default function OrderTab({ products, ingredients, categories: initialCat
         contentRef: printComponentRef,
         onAfterPrint: () => setOrderToPrint(null),
     });
-    const triggerPrint = (order: Order) => {
-        setOrderToPrint(order);
+    const triggerPrint = async (order: Order) => {
+        // JIT Fetch: Traer la orden más fresca de Supabase antes de imprimir
+        // Evita imprimir tickets comunes (sin CAE) si AFIP facturó hace mili-segundos y Realtime no llegó
+        const { data: freshOrder } = await supabase
+            .from('orders')
+            .select('*, items:order_items(*)')
+            .eq('id', order.id)
+            .single();
+
+        setOrderToPrint(freshOrder || order);
         setTimeout(() => handlePrint(), 100);
     };
 

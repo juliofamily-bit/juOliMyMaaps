@@ -123,8 +123,16 @@ export default function WaiterTab({
         contentRef: printComponentRef,
         onAfterPrint: () => setOrderToPrint(null),
     });
-    const triggerPrint = (orderData: Order) => {
-        setOrderToPrint(orderData);
+    const triggerPrint = async (orderData: Order) => {
+        // JIT Fetch: Traer la orden más fresca de Supabase antes de imprimir
+        // Evita imprimir tickets comunes (sin CAE) si AFIP facturó hace mili-segundos y Realtime no llegó
+        const { data: freshOrder } = await supabase
+            .from('orders')
+            .select('*, items:order_items(*)')
+            .eq('id', orderData.id)
+            .single();
+
+        setOrderToPrint(freshOrder || orderData);
         setTimeout(() => handlePrint(), 100);
     };
 
@@ -839,6 +847,32 @@ export default function WaiterTab({
                     .eq('id', orderId);
                 
                 if (ordersError) throw ordersError;
+
+                // Si se solicitó facturación AFIP, hacemos la llamada a la API
+                if (isAfipBilling && (tenant as any)?.afip_enabled) {
+                    try {
+                        addNotification(`⏳ Facturando Pedido...`, ['staff', 'admin'], 'info', tenant?.id);
+                        const response = await fetch('/api/afip/facturar', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                orderId: orderId,
+                                tenantId: tenant.id,
+                                docTipo: afipDocTipo,
+                                docNro: afipDocNro ? parseInt(afipDocNro.replace(/\D/g, '')) : 0
+                            })
+                        });
+                        const afipResult = await response.json();
+                        if (response.ok && afipResult.success) {
+                            addNotification(`✅ Factura AFIP generada con éxito (CAE: ${afipResult.cae})`, ['staff', 'admin'], 'success', tenant?.id);
+                        } else {
+                            throw new Error(afipResult.error || 'Error desconocido al facturar');
+                        }
+                    } catch (afipErr: any) {
+                        console.error("Error al facturar con AFIP:", afipErr);
+                        alert(`El cobro se registró, pero la facturación AFIP del pedido falló:\n${afipErr.message}`);
+                    }
+                }
             }
 
             // JIT Fetch: Evitar condición de carrera
