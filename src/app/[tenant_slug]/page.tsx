@@ -188,8 +188,8 @@ export default function TenantApp({ params }: TenantPageProps) {
   // Pre-seleccionar rol en la carga inicial y recuperar sesión
   useEffect(() => {
     if (tenant) {
-      // 1. Intentar recuperar sesión persistente para evitar deslogueo por pull-to-refresh
-      const savedProfileStr = sessionStorage.getItem(`active_profile_${tenant.id}`);
+      // 1. Intentar recuperar sesión persistente para evitar deslogueo por pull-to-refresh (Usando localStorage para sobrevivir PWA webview recycling)
+      const savedProfileStr = localStorage.getItem(`active_profile_${tenant.id}`);
       if (savedProfileStr && !profile) {
         try {
           const savedProfile = JSON.parse(savedProfileStr);
@@ -227,6 +227,27 @@ export default function TenantApp({ params }: TenantPageProps) {
       }
     }
   }, [tenant, selectedRole, profile]);
+
+  // Sincronizar activeTab con el historial del navegador (URL hash)
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '');
+      const validTabs = ['admin', 'orders', 'kitchen', 'waiter', 'delivery', 'bartender', 'menu', 'animador'];
+      if (validTabs.includes(hash)) {
+        setActiveTab(hash as any);
+      }
+    };
+    
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab && window.location.hash !== `#${activeTab}`) {
+      // Usamos pushState si no es el primer mount para no ensuciar el historial, o si cambia manualmente
+      window.history.pushState(null, '', window.location.pathname + window.location.search + `#${activeTab}`);
+    }
+  }, [activeTab]);
 
   // Suscripción al canal de Broadcast de Tenant para recarga instantánea en tiempo real
   useEffect(() => {
@@ -672,8 +693,8 @@ export default function TenantApp({ params }: TenantPageProps) {
           role: data.role
         };
         
-        // Guardar sesión de forma persistente para resistir pull-to-refresh
-        sessionStorage.setItem(`active_profile_${tenant.id}`, JSON.stringify(newProfile));
+        // Guardar sesión de forma persistente para resistir pull-to-refresh (localStorage sobrevive PWAs en Motorola)
+        localStorage.setItem(`active_profile_${tenant.id}`, JSON.stringify(newProfile));
         
         setProfile(newProfile);
         setSupabaseTenant(tenant.id);
@@ -1049,6 +1070,7 @@ export default function TenantApp({ params }: TenantPageProps) {
                   localStorage.removeItem(`device_fingerprint_${tenant.id}`);
                 }
               }
+              localStorage.removeItem(`active_profile_${tenant.id}`);
               setProfile(null);
               setPassword('');
               setDeviceFingerprint(null);

@@ -30,7 +30,7 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant }: 
   const [orderItems, setOrderItems] = useState<Record<string, any[]>>({});
   const [loadingItems, setLoadingItems] = useState<Record<string, boolean>>({});
   const { addNotification } = useNotifications();
-  const [pendingPaymentOrder, setPendingPaymentOrder] = useState<any | null>(null);
+
 
   const isLight = tenantColors?.mode === 'light';
   const primaryColor = tenantColors?.primary || '#f97316';
@@ -39,7 +39,8 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant }: 
   const activeDeliveries = orders.filter(o => 
     (o as any).delivery_type === 'delivery' && 
     !o.is_archived &&
-    o.status !== 'completed'
+    o.status !== 'completed' &&
+    o.status !== 'delivered'
   );
 
   // Historial de entregados (últimos 7 días)
@@ -49,7 +50,7 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant }: 
 
   const deliveredHistorial = orders.filter(o => 
     (o as any).delivery_type === 'delivery' && 
-    o.status === 'completed' &&
+    (o.status === 'completed' || o.status === 'delivered') &&
     new Date(o.created_at) >= sevenDaysAgo
   );
 
@@ -81,54 +82,27 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant }: 
 
   const handleDeliverOrder = async (orderId: string, clientName: string) => {
     const orderObj = orders.find(o => o.id === orderId);
-    
-    // Si la orden tiene pago pendiente, abrimos el modal de cobro para el repartidor
-    if (orderObj && orderObj.payment_status === 'pendiente') {
-      setPendingPaymentOrder(orderObj);
-      return;
-    }
-
     const items = orderItems[orderId] || [];
     const breakdown = items.map(i => `${i.quantity}x ${i.products?.name || 'Producto'}`).join(', ');
 
-    // Si ya está pagado, el repartidor lo entrega directamente
+    // El repartidor solo marca como entregado. La caja se encarga del cobro.
+    // Si ya estaba pagado desde antes (ej. MercadoPago), lo podemos archivar directamente,
+    // de lo contrario solo cambia a 'delivered' para que Caja lo cobre.
+    const isAlreadyPaid = orderObj?.payment_status === 'pagado';
+    const newStatus = isAlreadyPaid ? 'completed' : 'delivered';
+    const archive = isAlreadyPaid;
+
     const { error } = await supabase
       .from('orders')
-      .update({ status: 'completed', is_archived: true })
+      .update({ status: newStatus, is_archived: archive })
       .eq('id', orderId);
 
     if (error) {
-      alert("Error al completar la entrega: " + error.message);
+      alert("Error al marcar como entregado: " + error.message);
     } else {
-      const message = `🚚 Pedido de ${clientName} ENTREGADO Y COMPLETADO por el Repartidor: ${breakdown}`;
+      const message = `🚚 Pedido de ${clientName} ENTREGADO por el Repartidor: ${breakdown} (Pendiente de cobro en Caja)`;
       addNotification(message, ['staff', 'admin'], 'success', orderObj?.tenant_id);
-      alert("¡Pedido entregado con éxito!");
-    }
-  };
-
-  const handleConfirmDeliveryPayment = async (orderId: string, method: 'efectivo' | 'transferencia' | 'rappi' | 'pedidosya') => {
-    const orderObj = orders.find(o => o.id === orderId);
-    const items = orderItems[orderId] || [];
-    const breakdown = items.map(i => `${i.quantity}x ${i.products?.name || 'Producto'}`).join(', ');
-
-    const { error } = await supabase
-      .from('orders')
-      .update({ 
-        status: 'completed',
-        payment_status: 'pagado',
-        payment_method: method,
-        is_archived: true
-      })
-      .eq('id', orderId);
-
-    if (error) {
-      alert("Error al confirmar el pago y entrega: " + error.message);
-    } else {
-      const methodName = method === 'efectivo' ? 'EFECTIVO' : method === 'rappi' ? 'RAPPI' : method === 'pedidosya' ? 'PEDIDOSYA' : 'MEDIO DIGITAL';
-      const message = `🚚 Pedido de ${orderObj?.client_name || 'Cliente'} ENTREGADO Y COBRADO (${methodName}) por el Repartidor: ${breakdown}`;
-      addNotification(message, ['staff', 'admin', 'delivery'], 'success', orderObj?.tenant_id);
-      alert(`¡Pedido cobrado y entregado con éxito en ${methodName}!`);
-      setPendingPaymentOrder(null);
+      alert("¡Pedido marcado como entregado! Recuerda rendir el dinero en Caja si fue en efectivo.");
     }
   };
 
@@ -443,81 +417,7 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant }: 
         });
       })()}
 
-      {/* Modal Premium de Cobro y Entrega para el Repartidor */}
-      {pendingPaymentOrder && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/95 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="glass w-full max-w-sm rounded-[2.5rem] p-6 space-y-5 border border-red-500/20 shadow-2xl bg-gradient-to-br from-red-950/20 via-slate-900/40 to-slate-950/80 animate-in zoom-in-95 duration-200">
-            
-            <div className="text-center space-y-1.5">
-              <div className="w-14 h-14 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto border border-red-500/20 animate-pulse">
-                <Navigation size={24} className="fill-red-500/5 text-red-400" />
-              </div>
-              <h3 className="text-base font-black uppercase text-red-400 tracking-widest pt-2">💵 Cobro de Envío</h3>
-              <p className="text-[9px] font-black uppercase text-slate-500 tracking-wide">
-                Registra el pago para completar la entrega física de comanda
-              </p>
-            </div>
 
-            <div className="bg-slate-950/60 rounded-3xl p-4 border border-white/5 space-y-2.5 text-xs">
-              <div className="flex justify-between items-center pb-2 border-b border-white/5">
-                <span className="font-extrabold text-slate-400">Cliente:</span>
-                <span className="font-black text-white">{pendingPaymentOrder.client_name}</span>
-              </div>
-              <div className="flex justify-between items-center pb-2 border-b border-white/5">
-                <span className="font-extrabold text-slate-400">Dirección:</span>
-                <span className="font-black text-white text-right max-w-[70%] truncate">{(pendingPaymentOrder as any).delivery_address || 'Sin dirección'}</span>
-              </div>
-              <div className="flex justify-between items-center pt-1.5">
-                <span className="font-extrabold text-slate-400 text-sm">Monto a Cobrar:</span>
-                <span className="font-black text-red-400 text-sm">{formatARS(pendingPaymentOrder.total_price)}</span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-[8px] font-black uppercase text-slate-500 tracking-wider pl-1">Selecciona método de pago definitivo:</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => handleConfirmDeliveryPayment(pendingPaymentOrder.id, 'efectivo')}
-                  className="py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95 flex flex-col items-center justify-center gap-1.5 border border-emerald-500/20"
-                >
-                  <span className="text-xl">💵</span>
-                  <span>Efectivo</span>
-                </button>
-                <button
-                  onClick={() => handleConfirmDeliveryPayment(pendingPaymentOrder.id, 'transferencia')}
-                  className="py-4 bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95 flex flex-col items-center justify-center gap-1.5 border border-blue-500/20"
-                >
-                  <span className="text-xl">📱</span>
-                  <span>Digital</span>
-                </button>
-                <button
-                  onClick={() => handleConfirmDeliveryPayment(pendingPaymentOrder.id, 'rappi')}
-                  className="py-4 bg-orange-500 hover:bg-orange-400 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95 flex flex-col items-center justify-center gap-1.5 border border-orange-500/20"
-                >
-                  <span className="text-xl">🎒</span>
-                  <span>Rappi</span>
-                </button>
-                <button
-                  onClick={() => handleConfirmDeliveryPayment(pendingPaymentOrder.id, 'pedidosya')}
-                  className="py-4 bg-red-600 hover:bg-red-500 text-white font-black text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95 flex flex-col items-center justify-center gap-1.5 border border-red-500/20"
-                >
-                  <span className="text-xl">🎒</span>
-                  <span>PedidosYa</span>
-                </button>
-              </div>
-              <p className="text-[8px] text-slate-500 text-center mt-1">Medio Digital incluye Transferencia y Débito al entregar.</p>
-            </div>
-
-            <button
-              onClick={() => setPendingPaymentOrder(null)}
-              className="w-full py-3 bg-slate-950/80 hover:bg-slate-900 border border-white/5 hover:border-white/10 text-slate-400 hover:text-slate-200 text-[9px] font-black uppercase tracking-widest rounded-2xl transition-all active:scale-95"
-            >
-              Cancelar
-            </button>
-            
-          </div>
-        </div>
-      )}
     </div>
   );
 }

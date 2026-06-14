@@ -1789,8 +1789,12 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                                                                 </span>
                                                             )}
                                                             {order.status === 'delivered' && (
-                                                                <span className="text-[7px] bg-orange-500 text-slate-950 px-2 py-0.5 rounded font-black uppercase animate-pulse">
-                                                                    Todo Preparado
+                                                                <span className={`text-[7px] px-2 py-0.5 rounded font-black uppercase animate-pulse ${
+                                                                    (order as any).delivery_type === 'delivery' 
+                                                                        ? 'bg-purple-500 text-white' 
+                                                                        : 'bg-orange-500 text-slate-950'
+                                                                }`}>
+                                                                    {(order as any).delivery_type === 'delivery' ? 'Entregado al Cliente' : 'Todo Preparado'}
                                                                 </span>
                                                             )}
                                                         </div>
@@ -2035,7 +2039,9 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                                                         }}
                                                         className="w-full py-3.5 bg-red-600 hover:bg-red-500 text-white font-black rounded-xl text-[9.5px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.4)] border border-red-500/30"
                                                     >
-                                                        💵 Confirmar Pago / Cobrar
+                                                        {order.status === 'delivered' && (order as any).delivery_type === 'delivery' 
+                                                            ? '💵 Repartidor Volvió - Confirmar Cobro' 
+                                                            : '💵 Confirmar Pago / Cobrar'}
                                                     </button>
                                                 </div>
                                             ) : (() => {

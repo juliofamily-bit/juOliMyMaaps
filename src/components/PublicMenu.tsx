@@ -379,15 +379,34 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
   useEffect(() => {
     const handlePopState = () => {
-      if (window.location.hash !== '#menu' && tenant?.landing_config?.enabled) {
+      // Si el carrito estaba abierto y el hash ya no es #cart, lo cerramos
+      if (window.location.hash !== '#cart') {
+        setIsCartOpen(false);
+      }
+      // Manejo del landing
+      if (window.location.hash !== '#menu' && window.location.hash !== '#cart' && tenant?.landing_config?.enabled) {
         setShowLanding(true);
-      } else if (window.location.hash === '#menu') {
+      } else if (window.location.hash === '#menu' || window.location.hash === '#cart') {
         setShowLanding(false);
       }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [tenant?.landing_config?.enabled]);
+  }, [tenant?.landing_config?.enabled, setIsCartOpen]);
+
+  // Sincronizar el estado del carrito con el History API para que el botón "Atrás" físico funcione bien
+  useEffect(() => {
+    if (isCartOpen) {
+      if (window.location.hash !== '#cart') {
+        window.history.pushState({ screen: 'cart' }, '', window.location.pathname + window.location.search + '#cart');
+      }
+    } else {
+      // Si se cierra programáticamente (ej. por botón "x") y estábamos en #cart, sacamos el hash
+      if (window.location.hash === '#cart') {
+        window.history.back();
+      }
+    }
+  }, [isCartOpen]);
 
   // Utilidad para evaluar si estamos dentro del horario operativo
   const checkIsCurrentlyOpen = (cfg: any) => {
@@ -1552,7 +1571,8 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             waiter_name: deliveryType === 'local' ? assignedWaiterName : null,
             payment_status: paymentStatus,
             payment_method: method,
-            loyalty_discount_applied: loyaltyRedemption
+            loyalty_discount_applied: loyaltyRedemption,
+            delivery_type: deliveryType
           }])
           .select()
           .single();
