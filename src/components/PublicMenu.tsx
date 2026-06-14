@@ -1731,6 +1731,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       const notifyRoles = Array.from(targetDeptsSet);
       if (!notifyRoles.includes('admin')) notifyRoles.push('admin');
       if (deliveryType === 'local' && !notifyRoles.includes('waiter')) notifyRoles.push('waiter');
+      if (deliveryType === 'delivery' && !notifyRoles.includes('delivery')) notifyRoles.push('delivery');
 
       const destName = deliveryType === 'local' ? (giftMode.isActive ? giftMode.toTable : (tableName || tableParamId || 'Mesa Local')) : 'Mostrador/Delivery';
       const notifMsg = isApproved
@@ -3249,6 +3250,9 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                               <p className="text-[8px] font-bold text-neutral-500 uppercase mt-1.5 leading-relaxed">
                                 Pincha el botón para capturar tus coordenadas exactas y asegurar la ruta más rápida
                               </p>
+                              <p className="text-[7px] text-orange-400 font-bold uppercase mt-2 animate-pulse">
+                                ⚠️ Recordá elegir "Permitir" cuando tu celular te pida permiso.
+                              </p>
                             </div>
                           )}
                         </div>
@@ -3261,19 +3265,28 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                               return;
                             }
                             setIsLocating(true);
-                            navigator.geolocation.getCurrentPosition(
-                              (position) => {
-                                setDeliveryLat(position.coords.latitude);
-                                setDeliveryLng(position.coords.longitude);
-                                setIsLocating(false);
-                              },
-                              (error) => {
-                                console.warn("GPS Denegado/Falla, asignando coordenadas seguras");
-                                setDeliveryLat(-34.6037 + (Math.random() - 0.5) * 0.01);
-                                setDeliveryLng(-58.3816 + (Math.random() - 0.5) * 0.01);
-                                setIsLocating(false);
-                              }
-                            );
+                            try {
+                              navigator.geolocation.getCurrentPosition(
+                                (position) => {
+                                  if (position && position.coords) {
+                                    setDeliveryLat(position.coords.latitude || 0);
+                                    setDeliveryLng(position.coords.longitude || 0);
+                                  }
+                                  setIsLocating(false);
+                                },
+                                (error) => {
+                                  console.warn("GPS Denegado/Falla, asignando coordenadas seguras");
+                                  setDeliveryLat(-34.6037 + (Math.random() - 0.5) * 0.01);
+                                  setDeliveryLng(-58.3816 + (Math.random() - 0.5) * 0.01);
+                                  setIsLocating(false);
+                                },
+                                { timeout: 10000, enableHighAccuracy: true }
+                              );
+                            } catch (e) {
+                              console.error("Error al iniciar geolocalización", e);
+                              alert("No se pudo iniciar la geolocalización en este navegador.");
+                              setIsLocating(false);
+                            }
                           }}
                           disabled={isLocating}
                           className="w-full py-2.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 active:scale-[0.98]"
