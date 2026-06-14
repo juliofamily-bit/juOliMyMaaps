@@ -1744,7 +1744,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         await supabase.from('app_notifications').insert([{
           message: notifMsg,
           type: isApproved ? 'info' : 'alert',
-          target_roles: isApproved ? notifyRoles : ['staff', 'admin', ...(deliveryType === 'local' ? ['waiter'] : [])],
+          target_roles: isApproved ? notifyRoles : ['staff', 'admin', ...(deliveryType === 'local' ? ['waiter'] : []), ...(deliveryType === 'delivery' ? ['delivery'] : [])],
           tenant_id: tenant.id
         }]);
 
@@ -3265,28 +3265,33 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                               return;
                             }
                             setIsLocating(true);
-                            try {
-                              navigator.geolocation.getCurrentPosition(
-                                (position) => {
-                                  if (position && position.coords) {
-                                    setDeliveryLat(position.coords.latitude || 0);
-                                    setDeliveryLng(position.coords.longitude || 0);
-                                  }
-                                  setIsLocating(false);
-                                },
-                                (error) => {
-                                  console.warn("GPS Denegado/Falla, asignando coordenadas seguras");
-                                  setDeliveryLat(-34.6037 + (Math.random() - 0.5) * 0.01);
-                                  setDeliveryLng(-58.3816 + (Math.random() - 0.5) * 0.01);
-                                  setIsLocating(false);
-                                },
-                                { timeout: 10000, enableHighAccuracy: true }
-                              );
-                            } catch (e) {
-                              console.error("Error al iniciar geolocalización", e);
-                              alert("No se pudo iniciar la geolocalización en este navegador.");
-                              setIsLocating(false);
-                            }
+                            
+                            // Envolver en una función asíncrona protectora
+                            const getPos = () => {
+                              try {
+                                navigator.geolocation.getCurrentPosition(
+                                  (position) => {
+                                    if (position && position.coords) {
+                                      setDeliveryLat(position.coords.latitude || 0);
+                                      setDeliveryLng(position.coords.longitude || 0);
+                                    }
+                                    setIsLocating(false);
+                                  },
+                                  (error) => {
+                                    console.warn("GPS Denegado/Falla:", error);
+                                    alert("El celular denegó el acceso al GPS. Por favor, escribí tu dirección y pegá tu link de Google Maps manualmente arriba.");
+                                    setIsLocating(false);
+                                  },
+                                  { timeout: 10000, enableHighAccuracy: false, maximumAge: 60000 }
+                                );
+                              } catch (e) {
+                                console.error("Excepción al intentar llamar al GPS nativo:", e);
+                                alert("Ocurrió un error al intentar abrir el GPS. Por favor, usa la carga manual de Google Maps.");
+                                setIsLocating(false);
+                              }
+                            };
+                            
+                            getPos();
                           }}
                           disabled={isLocating}
                           className="w-full py-2.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 active:scale-[0.98]"

@@ -2095,7 +2095,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                                                                     >
                                                                         📲 Avisar a Repartidor ({(order.origin || 'App').toUpperCase()})
                                                                     </button>
-                                                                ) : order.phone_number ? (
+                                                                ) : order.phone_number && !isDeliveryType ? (
                                                                     <a
                                                                         href={`https://wa.me/${cleanArgPhone(order.phone_number)}?text=${encodeURIComponent(
                                                                             `Hola ${order.client_name}, te escribimos de ${tenant?.name || 'nuestro local'}. ¡Tu pedido ya está LISTO! ✅ Ya puedes pasar a retirarlo.`
@@ -2107,12 +2107,19 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                                                                         💬 Avisar Retiro
                                                                     </a>
                                                                 ) : null}
-                                                                <button
-                                                                    onClick={() => handleCloseAndArchiveOrder(order)}
-                                                                    className="w-full py-3.5 bg-orange-500 hover:bg-orange-400 text-slate-950 font-black rounded-xl text-[9.5px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-lg shadow-orange-500/25 border border-orange-400/30"
-                                                                >
-                                                                    📦 {isExternalApp ? 'Completar y Despachar Pedido' : 'Entregar Todo y Despachar'}
-                                                                </button>
+                                                                
+                                                                {isDeliveryType && !isExternalApp ? (
+                                                                    <div className="w-full py-3.5 bg-purple-500/10 border border-purple-500/20 text-purple-400 font-black rounded-xl text-[9px] uppercase tracking-wider flex items-center justify-center gap-1.5 select-none cursor-not-allowed">
+                                                                        🛵 Despacho a cargo del Repartidor
+                                                                    </div>
+                                                                ) : (
+                                                                    <button
+                                                                        onClick={() => handleCloseAndArchiveOrder(order)}
+                                                                        className="w-full py-3.5 bg-orange-500 hover:bg-orange-400 text-slate-950 font-black rounded-xl text-[9.5px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-lg shadow-orange-500/25 border border-orange-400/30"
+                                                                    >
+                                                                        📦 {isExternalApp ? 'Completar y Despachar Pedido' : 'Entregar Todo y Despachar'}
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         ) : (
                                                             /* Regla: Todo OK, habilitado para cerrar comanda */

@@ -185,23 +185,48 @@ export default function TenantApp({ params }: TenantPageProps) {
     loadTenant();
   }, [loadTenant]);
 
-  // Pre-seleccionar rol en la carga inicial
+  // Pre-seleccionar rol en la carga inicial y recuperar sesión
   useEffect(() => {
-    if (tenant && !selectedRole) {
-      const availableRoles = tenant.enabled_roles || ['admin', 'staff', 'kitchen', 'bartender', 'delivery'];
-      if (availableRoles.includes('staff')) {
-        setSelectedRole('staff');
-      } else if (availableRoles.includes('kitchen')) {
-        setSelectedRole('kitchen');
-      } else if (availableRoles.includes('bartender')) {
-        setSelectedRole('bartender');
-      } else if (availableRoles.includes('delivery')) {
-        setSelectedRole('delivery');
-      } else {
-        setSelectedRole('admin');
+    if (tenant) {
+      // 1. Intentar recuperar sesión persistente para evitar deslogueo por pull-to-refresh
+      const savedProfileStr = sessionStorage.getItem(`active_profile_${tenant.id}`);
+      if (savedProfileStr && !profile) {
+        try {
+          const savedProfile = JSON.parse(savedProfileStr);
+          setProfile(savedProfile);
+          setSupabaseTenant(tenant.id);
+          
+          const role = savedProfile.role;
+          if (role === 'kitchen') setActiveTab('kitchen');
+          else if (role === 'bartender') setActiveTab('bartender');
+          else if (role === 'delivery') setActiveTab('delivery');
+          else if (role === 'waiter') setActiveTab('waiter');
+          else if (role === 'animador') setActiveTab('animador');
+          else if (role === 'admin') setActiveTab('admin');
+          else setActiveTab('orders');
+          return; // Salir si recuperó sesión
+        } catch(e) {
+          console.warn("No se pudo parsear perfil guardado");
+        }
+      }
+
+      // 2. Si no hay sesión, auto-seleccionar el rol principal por defecto
+      if (!selectedRole) {
+        const availableRoles = tenant.enabled_roles || ['admin', 'staff', 'kitchen', 'bartender', 'delivery'];
+        if (availableRoles.includes('staff')) {
+          setSelectedRole('staff');
+        } else if (availableRoles.includes('kitchen')) {
+          setSelectedRole('kitchen');
+        } else if (availableRoles.includes('bartender')) {
+          setSelectedRole('bartender');
+        } else if (availableRoles.includes('delivery')) {
+          setSelectedRole('delivery');
+        } else {
+          setSelectedRole('admin');
+        }
       }
     }
-  }, [tenant, selectedRole]);
+  }, [tenant, selectedRole, profile]);
 
   // Suscripción al canal de Broadcast de Tenant para recarga instantánea en tiempo real
   useEffect(() => {
@@ -641,11 +666,16 @@ export default function TenantApp({ params }: TenantPageProps) {
           p_user_agent: navigator.userAgent
         });
 
-        setProfile({
+        const newProfile = {
           id: selectedEmployeeId,
           full_name: data.name,
           role: data.role
-        });
+        };
+        
+        // Guardar sesión de forma persistente para resistir pull-to-refresh
+        sessionStorage.setItem(`active_profile_${tenant.id}`, JSON.stringify(newProfile));
+        
+        setProfile(newProfile);
         setSupabaseTenant(tenant.id);
         
         const role = data.role;
