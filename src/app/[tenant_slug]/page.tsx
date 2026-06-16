@@ -1092,55 +1092,61 @@ export default function TenantApp({ params }: TenantPageProps) {
       </div>
 
       <main className="animate-in fade-in duration-500">
-        {activeTab === 'orders' && (
-          <OrderTab 
-            products={products} 
-            ingredients={ingredients} 
-            productIngredients={productIngredients} 
-            categories={categories} 
-            orders={orders} 
-            expenses={expenses}
-            tenant={tenant}
-            productOffers={productOffers}
-            isLight={isLight}
-            refetchData={refetch}
-          />
-        )}
-        {activeTab === 'kitchen' && <KitchenTab orders={orders} products={products} tenant={tenant} refetchData={refetch} />}
-        {activeTab === 'bartender' && <BartenderTab orders={orders} products={products} tenant={tenant} refetchData={refetch} />}
-        {activeTab === 'delivery' && <DeliveryTab orders={orders} products={products} tenantColors={tenant?.theme_colors} tenant={tenant} currentEmployee={profile} />}
-        {activeTab === 'waiter' && (
-          <WaiterTab 
-            orders={orders} 
-            products={products} 
-            ingredients={ingredients}
-            productIngredients={productIngredients}
-            categories={categories}
-            notifications={notifications}
-            tenant={tenant}
-            tenantColors={tenant?.theme_colors} 
-            refetchData={refetch}
-            onTenantUpdate={(updatedTenant: any) => setTenant(updatedTenant)}
-            isLight={isLight}
-          />
-        )}
-        {activeTab === 'animador' && <AnimadorTab tenant={tenant} isLight={isLight} />}
-        {activeTab === 'admin' && profile.role === 'admin' && (
-          <AdminTab
-            products={products}
-            categories={categories}
-            ingredients={ingredients}
-            orders={orders}
-            expenses={expenses}
-            productIngredients={productIngredients}
-            ingredientBatches={ingredientBatches}
-            productOffers={productOffers}
-            tenant={tenant}
-            onTenantUpdate={(updatedTenant: any) => setTenant(updatedTenant)}
-            refetchData={refetch}
-            planFeatures={planFeatures}
-          />
-        )}
+        <div>
+          {activeTab === 'orders' && (
+            <OrderTab 
+              products={products} 
+              ingredients={ingredients} 
+              productIngredients={productIngredients} 
+              categories={categories} 
+              orders={orders} 
+              expenses={expenses}
+              tenant={tenant}
+              productOffers={productOffers}
+              isLight={isLight}
+              refetchData={refetch}
+            />
+          )}
+        </div>
+        <div>{activeTab === 'kitchen' && <KitchenTab orders={orders} products={products} tenant={tenant} refetchData={refetch} />}</div>
+        <div>{activeTab === 'bartender' && <BartenderTab orders={orders} products={products} tenant={tenant} refetchData={refetch} />}</div>
+        <div>{activeTab === 'delivery' && <DeliveryTab orders={orders} products={products} tenantColors={tenant?.theme_colors} tenant={tenant} currentEmployee={profile} />}</div>
+        <div>
+          {activeTab === 'waiter' && (
+            <WaiterTab 
+              orders={orders} 
+              products={products} 
+              ingredients={ingredients}
+              productIngredients={productIngredients}
+              categories={categories}
+              notifications={notifications}
+              tenant={tenant}
+              tenantColors={tenant?.theme_colors} 
+              refetchData={refetch}
+              onTenantUpdate={(updatedTenant: any) => setTenant(updatedTenant)}
+              isLight={isLight}
+            />
+          )}
+        </div>
+        <div>{activeTab === 'animador' && <AnimadorTab tenant={tenant} isLight={isLight} />}</div>
+        <div>
+          {activeTab === 'admin' && profile.role === 'admin' && (
+            <AdminTab
+              products={products}
+              categories={categories}
+              ingredients={ingredients}
+              orders={orders}
+              expenses={expenses}
+              productIngredients={productIngredients}
+              ingredientBatches={ingredientBatches}
+              productOffers={productOffers}
+              tenant={tenant}
+              onTenantUpdate={(updatedTenant: any) => setTenant(updatedTenant)}
+              refetchData={refetch}
+              planFeatures={planFeatures}
+            />
+          )}
+        </div>
       </main>
 
         {(profile.role === 'admin' || profile.role === 'staff') && (
