@@ -137,6 +137,9 @@ export default function BartenderTab({ orders, products, tenant, refetchData }: 
                     } else {
                         const msg = `🎉 ¡PEDIDO ${isDelivery ? 'LISTO PARA REPARTO' : 'COMPLETO LISTO'}! ${orderLabel} para ${targetOrder.client_name || 'Cliente'}`;
                         addNotification(msg, ['staff', 'admin'], 'success', targetOrder.tenant_id);
+                        if (isDelivery) {
+                            addNotification('Tienes un pedido para entregar', ['delivery'], 'success', targetOrder.tenant_id);
+                        }
                     }
                 }
             }

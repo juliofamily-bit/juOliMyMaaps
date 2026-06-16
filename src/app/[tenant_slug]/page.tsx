@@ -421,6 +421,11 @@ export default function TenantApp({ params }: TenantPageProps) {
       return true;
     }
 
+    // DELIVERY: Ve notificaciones de 'delivery'
+    if (profile.role === 'delivery') {
+      return n.target_roles.includes('delivery');
+    }
+
     return false;
   });
 
@@ -1050,7 +1055,15 @@ export default function TenantApp({ params }: TenantPageProps) {
             <RefreshCw size={18} className={isManualRefreshing ? 'animate-spin text-orange-500' : ''} />
           </button>
           <button
-            onClick={() => setShowNotificationOverlay(true)}
+            onClick={() => {
+              setShowNotificationOverlay(true);
+              if (profile?.role === 'delivery') {
+                const deliveryNotifs = filteredNotifications.filter(
+                  n => n.message.includes('Tienes un pedido nuevo') || n.message.includes('Tienes un pedido para entregar')
+                );
+                deliveryNotifs.forEach(n => removeNotification(n.id, tenant?.id));
+              }
+            }}
             className={`relative p-2 rounded-xl transition-all active:scale-90 ${
               isLight
                 ? 'text-slate-600 bg-slate-200/50 hover:bg-slate-200 hover:text-slate-900'

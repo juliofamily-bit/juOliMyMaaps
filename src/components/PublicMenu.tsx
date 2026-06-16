@@ -1766,12 +1766,23 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       const isOnlinePending = (method === 'mercadopago' || method === 'credito') && !isApproved;
 
       if (!isOnlinePending) {
-        await supabase.from('app_notifications').insert([{
+        const notifsToInsert = [{
           message: notifMsg,
           type: isApproved ? 'info' : 'alert',
           target_roles: isApproved ? notifyRoles : ['staff', 'admin', ...(deliveryType === 'local' ? ['waiter'] : []), ...(deliveryType === 'delivery' ? ['delivery'] : [])],
           tenant_id: tenant.id
-        }]);
+        }];
+
+        if (deliveryType === 'delivery') {
+          notifsToInsert.push({
+            message: 'Tienes un pedido nuevo',
+            type: 'info',
+            target_roles: ['delivery'] as any,
+            tenant_id: tenant.id
+          });
+        }
+
+        await supabase.from('app_notifications').insert(notifsToInsert);
 
         // 🔥 Disparar Web Push
         const pushRoles = isApproved ? notifyRoles : ['staff', 'admin'];
