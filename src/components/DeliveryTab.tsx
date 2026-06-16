@@ -216,18 +216,20 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
                           {(order as any).delivery_address || 'Sin Dirección'}
                         </h3>
                       {/* Enlace de Google Maps en caso de que esté presente */}
-                      {(order as any).delivery_map_link && (
-                        <div className="mt-1">
-                          <a 
-                            href={(order as any).delivery_map_link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[9px] font-bold text-orange-400 hover:underline"
-                          >
-                            <ExternalLink size={10} /> Ubicación en Google Maps (Cliente)
-                          </a>
-                        </div>
-                      )}
+                      <div>
+                        {(order as any).delivery_map_link && (
+                          <div className="mt-1">
+                            <a 
+                              href={(order as any).delivery_map_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[9px] font-bold text-orange-400 hover:underline"
+                            >
+                              <ExternalLink size={10} /> Ubicación en Google Maps (Cliente)
+                            </a>
+                          </div>
+                        )}
+                      </div>
                       <p className="text-sm font-extrabold text-slate-350">
                         Pedido: <span className="text-orange-500 font-black text-base">#{order.order_number}</span> - Cliente: <span className="text-white font-black text-base">{clientNameClean}</span>
                       </p>
@@ -294,36 +296,40 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
                   </div>
 
                   {/* Botones de Acción Rápida (WhatsApp 1 Clic) */}
-                  {order.phone_number && (
-                    <div className="grid grid-cols-2 gap-3 pt-1">
-                      <a
-                        href={`https://wa.me/${cleanArgPhone(order.phone_number)}?text=${encodeURIComponent(
-                          `Hola ${clientNameClean}, tu pedido de ${tenant?.name || 'nuestro local'} ya va en camino hacia tu domicilio. 🛵 ¡Atento a la puerta!`
-                        )}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-black rounded-2xl text-[9px] uppercase tracking-widest active:scale-95 transition-all text-center flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
-                      >
-                        En Camino 🛵
-                      </a>
-                      <a
-                        href={`https://wa.me/${cleanArgPhone(order.phone_number)}?text=${encodeURIComponent(
-                          `Hola ${clientNameClean}, ¡ya estoy en la puerta con tu pedido! 🏠🍔 Por favor, ¿podrías salir a recibirme?`
-                        )}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black rounded-2xl text-[9px] uppercase tracking-widest active:scale-95 transition-all text-center flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
-                      >
-                        Llegué / Estoy afuera 🏠
-                      </a>
-                    </div>
-                  )}
+                  <div>
+                    {order.phone_number && (
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <a
+                          href={`https://wa.me/${cleanArgPhone(order.phone_number)}?text=${encodeURIComponent(
+                            `Hola ${clientNameClean}, tu pedido de ${tenant?.name || 'nuestro local'} ya va en camino hacia tu domicilio. 🛵 ¡Atento a la puerta!`
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-black rounded-2xl text-[9px] uppercase tracking-widest active:scale-95 transition-all text-center flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+                        >
+                          En Camino 🛵
+                        </a>
+                        <a
+                          href={`https://wa.me/${cleanArgPhone(order.phone_number)}?text=${encodeURIComponent(
+                            `Hola ${clientNameClean}, ¡ya estoy en la puerta con tu pedido! 🏠🍔 Por favor, ¿podrías salir a recibirme?`
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black rounded-2xl text-[9px] uppercase tracking-widest active:scale-95 transition-all text-center flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
+                        >
+                          Llegué / Estoy afuera 🏠
+                        </a>
+                      </div>
+                    )}
+                  </div>
 
-                  {order.phone_number && (
-                    <div className="pt-1 flex items-center gap-1 text-[9px] font-extrabold text-slate-450 uppercase">
-                      <Phone size={10} className="text-orange-500" /> Llama al cliente: <a href={`tel:${order.phone_number}`} className="text-orange-400 hover:underline ml-1">{order.phone_number}</a>
-                    </div>
-                  )}
+                  <div>
+                    {order.phone_number && (
+                      <div className="pt-1 flex items-center gap-1 text-[9px] font-extrabold text-slate-450 uppercase">
+                        <Phone size={10} className="text-orange-500" /> Llama al cliente: <a href={`tel:${order.phone_number}`} className="text-orange-400 hover:underline ml-1">{order.phone_number}</a>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* 2. SECCIÓN DEL PEDIDO: DEBAJO Y SECUNDARIO */}
@@ -361,40 +367,42 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
                     <span className="text-slate-400">Método: <span className="text-white font-black">{(order as any).payment_method === 'efectivo' ? '💵 Efectivo' : '💳 Pago Digital'}</span></span>
                   </div>
  
-                  {!order.waiter_name ? (
-                    <button
-                      key="claim-btn"
-                      onClick={() => handleClaimOrder(order.id)}
-                      className="w-full mt-2 text-white font-black py-4 rounded-2xl shadow-xl hover:shadow-blue-500/20 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 transition-all active:scale-95 text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-white/10 animate-pulse"
-                    >
-                      <User size={14} className="stroke-[3]" />
-                      Seleccionar Pedido (Llevar yo)
-                    </button>
-                  ) : order.waiter_name !== currentEmployee?.full_name ? (
-                    <div key="taken-by-other" className="w-full mt-2 text-slate-400 bg-slate-900 border border-slate-800 font-black py-4 rounded-2xl text-xs uppercase tracking-widest flex items-center justify-center gap-2">
-                      <User size={14} />
-                      Viaje tomado por {order.waiter_name}
-                    </div>
-                  ) : (
-                    <button
-                      key="deliver-btn"
-                      onClick={() => {
-                        if (isPreparing) {
-                          alert("Todavía no está preparado. Tienes que esperar a que Cocina o Barra terminen de preparar el pedido para poder entregarlo.");
-                          return;
-                        }
-                        handleDeliverOrder(order.id, order.client_name);
-                      }}
-                      className={`w-full mt-2 text-white font-black py-4 rounded-2xl shadow-xl transition-all active:scale-95 text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-white/10 ${
-                        isPreparing 
-                          ? 'bg-slate-800 text-slate-400 cursor-not-allowed' 
-                          : 'hover:shadow-orange-500/10 bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700'
-                      }`}
-                    >
-                      <Check size={14} className="stroke-[3]" />
-                      {isPreparing ? '⏳ Preparándose en Cocina / Barra' : 'Entregado / Finalizar Pedido'}
-                    </button>
-                  )}
+                  <div>
+                    {!order.waiter_name ? (
+                      <button
+                        key="claim-btn"
+                        onClick={() => handleClaimOrder(order.id)}
+                        className="w-full mt-2 text-white font-black py-4 rounded-2xl shadow-xl hover:shadow-blue-500/20 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 transition-all active:scale-95 text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-white/10 animate-pulse"
+                      >
+                        <User size={14} className="stroke-[3]" />
+                        Seleccionar Pedido (Llevar yo)
+                      </button>
+                    ) : order.waiter_name !== currentEmployee?.full_name ? (
+                      <div key="taken-by-other" className="w-full mt-2 text-slate-400 bg-slate-900 border border-slate-800 font-black py-4 rounded-2xl text-xs uppercase tracking-widest flex items-center justify-center gap-2">
+                        <User size={14} />
+                        Viaje tomado por {order.waiter_name}
+                      </div>
+                    ) : (
+                      <button
+                        key="deliver-btn"
+                        onClick={() => {
+                          if (isPreparing) {
+                            alert("Todavía no está preparado. Tienes que esperar a que Cocina o Barra terminen de preparar el pedido para poder entregarlo.");
+                            return;
+                          }
+                          handleDeliverOrder(order.id, order.client_name);
+                        }}
+                        className={`w-full mt-2 text-white font-black py-4 rounded-2xl shadow-xl transition-all active:scale-95 text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-white/10 ${
+                          isPreparing 
+                            ? 'bg-slate-800 text-slate-400 cursor-not-allowed' 
+                            : 'hover:shadow-orange-500/10 bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700'
+                        }`}
+                      >
+                        <Check size={14} className="stroke-[3]" />
+                        {isPreparing ? '⏳ Preparándose en Cocina / Barra' : 'Entregado / Finalizar Pedido'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -435,19 +443,21 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
               </div>
               
               {/* Desglose por Repartidor */}
-              {Object.keys(driverBreakdown).length > 0 && (
-                <div className="pt-3 border-t border-white/5 space-y-2">
-                  <span className="text-[8px] font-black uppercase text-slate-500 tracking-widest block">👨‍🏍 Desglose por Repartidor</span>
-                  {Object.entries(driverBreakdown).map(([driver, amount], idx) => (
-                    <div key={idx} className="flex justify-between items-center text-xs">
-                      <span className="text-slate-300 font-bold flex items-center gap-1.5">
-                        <User size={10} className="text-slate-500" /> {driver}
-                      </span>
-                      <span className="text-orange-400 font-black">{formatARS(amount)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div>
+                {Object.keys(driverBreakdown).length > 0 && (
+                  <div className="pt-3 border-t border-white/5 space-y-2">
+                    <span className="text-[8px] font-black uppercase text-slate-500 tracking-widest block">👨‍🏍 Desglose por Repartidor</span>
+                    {Object.entries(driverBreakdown).map(([driver, amount], idx) => (
+                      <div key={idx} className="flex justify-between items-center text-xs">
+                        <span className="text-slate-300 font-bold flex items-center gap-1.5">
+                          <User size={10} className="text-slate-500" /> {driver}
+                        </span>
+                        <span className="text-orange-400 font-black">{formatARS(amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             
             <p className="text-[8px] font-bold text-slate-500 uppercase text-center tracking-wider">

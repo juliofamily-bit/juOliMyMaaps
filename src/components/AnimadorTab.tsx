@@ -209,11 +209,11 @@ export default function AnimadorTab({ tenant, isLight = false }: AnimadorTabProp
                 <div key={msg.id} className={`p-4 rounded-2xl border ${isLight ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-900/50 border-slate-800'} animate-in fade-in`}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] font-black uppercase text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded-md flex items-center gap-1">
-                      {msg.type === 'song_request' ? <Music size={10} /> : msg.type === 'dedication' ? <Heart size={10} /> : <MessageCircle size={10} />}
-                      {msg.type === 'song_request' ? 'Rockola' : msg.type === 'dedication' ? 'Dedicatoria' : 'Mensaje'}
+                      {msg.type === 'song_request' ? <Music size={10} /> : msg.type === 'dedication' ? <Heart size={10} /> : msg.type === 'gift' ? <Heart size={10} className="text-orange-500" /> : <MessageCircle size={10} />}
+                      {msg.type === 'song_request' ? 'Rockola' : msg.type === 'dedication' ? 'Dedicatoria' : msg.type === 'gift' ? 'Regalo / Invitación' : 'Mensaje'}
                     </span>
-                    <span className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-slate-500'}`}>
-                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <span className={`text-[10px] text-right font-medium ${isLight ? 'text-slate-500' : 'text-slate-500'}`}>
+                      {new Date(msg.created_at).toLocaleDateString()} {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                   
@@ -272,8 +272,8 @@ export default function AnimadorTab({ tenant, isLight = false }: AnimadorTabProp
                       {msg.status === 'approved' ? <Check size={10} /> : <Trash2 size={10} />}
                       {msg.status === 'approved' ? 'Aprobado' : 'Rechazado'}
                     </span>
-                    <span className="text-[9px] text-slate-500">
-                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <span className="text-[9px] text-right text-slate-500">
+                      {new Date(msg.created_at).toLocaleDateString()} {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                   {msg.media_url && (

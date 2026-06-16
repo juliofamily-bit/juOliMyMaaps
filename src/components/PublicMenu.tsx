@@ -1800,13 +1800,11 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         try {
           await supabase.from('social_interactions').insert([{
             tenant_id: tenant.id,
-            type: 'announcement',
-            sender_name: 'Sistema',
-            is_anonymous: false,
-            content: giftMode.isAnonymous 
-              ? `🤫 ¡La ${giftMode.toTable} está por recibir un regalo misterioso de otra mesa! 🎁`
-              : `🔥 ¡La mesa ${giftMode.fromTable} le acaba de invitar algo a la ${giftMode.toTable}! 🥂`,
-            status: 'approved'
+            type: 'gift',
+            sender_name: giftMode.isAnonymous ? 'Alguien Misterioso' : giftMode.fromTable,
+            is_anonymous: giftMode.isAnonymous,
+            content: `Regalo para: ${giftMode.toTable}${giftMode.giftHint ? ` | Mensaje: "${giftMode.giftHint}"` : ''}`,
+            status: 'pending'
           }]);
         } catch (e) {
           console.error("Error publicando regalo en muro social", e);
@@ -1957,6 +1955,88 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   };
 
 
+
+  const renderReviewsSection = () => {
+    return (
+      <div className="w-full">
+        {/* SECCIÓN DE RESEÑAS / OPINIONES DE CLIENTES */}
+        {reviewsEnabled && (
+          <section className="mt-12 pt-8 border-t border-neutral-900/60">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  Opiniones de Clientes ⭐
+                </h2>
+                <p className="text-sm text-neutral-400 mt-1">
+                  Lo que dicen nuestros comensales sobre nosotros de forma 100% transparente.
+                </p>
+              </div>
+              
+              <button
+                onClick={() => {
+                  setNewReviewName('');
+                  setNewReviewRating(5);
+                  setNewReviewComment('');
+                  setIsReviewModalOpen(true);
+                }}
+                className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-black font-bold text-sm shadow-xl shadow-white/5 hover:scale-105 active:scale-95 transition-all w-fit"
+              >
+                <Star className="w-4 h-4 fill-current text-amber-500" />
+                Dejar mi Reseña
+              </button>
+            </div>
+
+            {isReviewsLoading ? (
+              <div className="flex justify-center items-center py-8">
+                <Loader2 className="w-6 h-6 text-neutral-400 animate-spin" />
+              </div>
+            ) : reviews.length === 0 ? (
+              <div className="text-center py-12 bg-neutral-900/20 border border-neutral-900/50 rounded-3xl p-6">
+                <p className="text-neutral-500 text-sm">Aún no hay opiniones. ¡Sé el primero en compartir tu experiencia!</p>
+              </div>
+            ) : (
+              /* Lista / Carrusel de Reseñas */
+              <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 snap-x">
+                {reviews.map((rev) => (
+                  <div 
+                    key={rev.id}
+                    className="snap-start flex-shrink-0 w-80 bg-neutral-900/40 border border-neutral-900/60 backdrop-blur-sm p-5 rounded-3xl space-y-3 relative hover:border-neutral-800 transition-all flex flex-col justify-between"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-bold text-white text-sm truncate max-w-[180px]">{rev.client_name}</h4>
+                          <p className="text-[10px] text-neutral-500">
+                            {new Date(rev.created_at).toLocaleDateString('es-ES', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric'
+                            })}
+                          </p>
+                        </div>
+                        {/* Estrellas */}
+                        <div className="flex gap-0.5 text-amber-400 bg-amber-400/5 px-2 py-1 rounded-lg border border-amber-400/10">
+                          {[...Array(5)].map((_, i) => (
+                            <Star 
+                              key={i} 
+                              className={`w-3 h-3 ${i < rev.rating ? 'fill-current' : 'text-neutral-700'}`} 
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-xs text-neutral-300 leading-relaxed italic line-clamp-3">
+                        "{rev.comment || 'Sin comentario, calificado con estrellas.'}"
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -2544,81 +2624,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
           </section>
         )}
 
-        {/* SECCIÓN DE RESEÑAS / OPINIONES DE CLIENTES */}
-        {reviewsEnabled && (
-          <section className="mt-12 pt-8 border-t border-neutral-900/60">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                  Opiniones de Clientes ⭐
-                </h2>
-                <p className="text-sm text-neutral-400 mt-1">
-                  Lo que dicen nuestros comensales sobre nosotros de forma 100% transparente.
-                </p>
-              </div>
-              
-              <button
-                onClick={() => {
-                  setNewReviewName('');
-                  setNewReviewRating(5);
-                  setNewReviewComment('');
-                  setIsReviewModalOpen(true);
-                }}
-                className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-black font-bold text-sm shadow-xl shadow-white/5 hover:scale-105 active:scale-95 transition-all w-fit"
-              >
-                <Star className="w-4 h-4 fill-current text-amber-500" />
-                Dejar mi Reseña
-              </button>
-            </div>
-
-            {isReviewsLoading ? (
-              <div className="flex justify-center items-center py-8">
-                <Loader2 className="w-6 h-6 text-neutral-400 animate-spin" />
-              </div>
-            ) : reviews.length === 0 ? (
-              <div className="text-center py-12 bg-neutral-900/20 border border-neutral-900/50 rounded-3xl p-6">
-                <p className="text-neutral-500 text-sm">Aún no hay opiniones. ¡Sé el primero en compartir tu experiencia!</p>
-              </div>
-            ) : (
-              /* Lista / Carrusel de Reseñas */
-              <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 snap-x">
-                {reviews.map((rev) => (
-                  <div 
-                    key={rev.id}
-                    className="snap-start flex-shrink-0 w-80 bg-neutral-900/40 border border-neutral-900/60 backdrop-blur-sm p-5 rounded-3xl space-y-3 relative hover:border-neutral-800 transition-all flex flex-col justify-between"
-                  >
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-bold text-white text-sm truncate max-w-[180px]">{rev.client_name}</h4>
-                          <p className="text-[10px] text-neutral-500">
-                            {new Date(rev.created_at).toLocaleDateString('es-ES', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric'
-                            })}
-                          </p>
-                        </div>
-                        {/* Estrellas */}
-                        <div className="flex gap-0.5 text-amber-400 bg-amber-400/5 px-2 py-1 rounded-lg border border-amber-400/10">
-                          {[...Array(5)].map((_, i) => (
-                            <Star 
-                              key={i} 
-                              className={`w-3 h-3 ${i < rev.rating ? 'fill-current' : 'text-neutral-700'}`} 
-                            />
-                          ))}
-                        </div>
-                      </div>
-                      <p className="text-xs text-neutral-300 leading-relaxed italic line-clamp-3">
-                        "{rev.comment || 'Sin comentario, calificado con estrellas.'}"
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        )}
+        {renderReviewsSection()}
         {/* Powered by Mmm TodoLoQueQuiero Comer - Footer del Menú */}
         <div className="pt-10 pb-24 flex flex-col items-center justify-center gap-2 select-none pointer-events-none">
           <div className="flex items-center gap-2 opacity-60 hover:opacity-100 transition-opacity duration-300">
@@ -2863,6 +2869,11 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                 </div>
               </section>
             )}
+            
+            {/* RESEÑAS EN LANDING */}
+            <div className="mt-8 pb-12">
+              {renderReviewsSection()}
+            </div>
           </div>
         </main>
       )}
