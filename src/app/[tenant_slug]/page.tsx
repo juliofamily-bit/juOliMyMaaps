@@ -584,11 +584,13 @@ export default function TenantApp({ params }: TenantPageProps) {
           });
 
           if (!rpcError && legacyData?.success) {
-            setProfile({
+            const adminProfile = {
               id: legacyData.tenant_id,
               full_name: 'Administrador',
-              role: 'admin'
-            });
+              role: 'admin' as UserRole
+            };
+            localStorage.setItem(`active_profile_${tenant.id}`, JSON.stringify(adminProfile));
+            setProfile(adminProfile);
             setSupabaseTenant(legacyData.tenant_id);
             setActiveTab('admin');
           } else {
@@ -596,11 +598,13 @@ export default function TenantApp({ params }: TenantPageProps) {
             setPassword('');
           }
         } else if (data.session) {
-          setProfile({
+          const adminProfile = {
             id: tenant.id,
             full_name: 'Administrador',
-            role: 'admin'
-          });
+            role: 'admin' as UserRole
+          };
+          localStorage.setItem(`active_profile_${tenant.id}`, JSON.stringify(adminProfile));
+          setProfile(adminProfile);
           setSupabaseTenant(tenant.id);
           setActiveTab('admin');
         }
@@ -1033,6 +1037,7 @@ export default function TenantApp({ params }: TenantPageProps) {
         </div>
         <div className="flex gap-3 items-center">
           <button
+            id="global-refresh-button"
             onClick={handleManualRefresh}
             disabled={isManualRefreshing}
             className={`p-2 rounded-xl transition-all active:scale-90 ${
@@ -1103,7 +1108,7 @@ export default function TenantApp({ params }: TenantPageProps) {
         )}
         {activeTab === 'kitchen' && <KitchenTab orders={orders} products={products} tenant={tenant} refetchData={refetch} />}
         {activeTab === 'bartender' && <BartenderTab orders={orders} products={products} tenant={tenant} refetchData={refetch} />}
-        {activeTab === 'delivery' && <DeliveryTab orders={orders} products={products} tenantColors={tenant?.theme_colors} tenant={tenant} />}
+        {activeTab === 'delivery' && <DeliveryTab orders={orders} products={products} tenantColors={tenant?.theme_colors} tenant={tenant} currentEmployee={profile} />}
         {activeTab === 'waiter' && (
           <WaiterTab 
             orders={orders} 

@@ -11,10 +11,10 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { tenantId, date } = body;
+    const { tenantId, employeeName } = body;
 
-    if (!tenantId || !date) {
-      return NextResponse.json({ error: 'Faltan parámetros obligatorios (tenantId, date)' }, { status: 400 });
+    if (!tenantId || !employeeName) {
+      return NextResponse.json({ error: 'Faltan parámetros obligatorios (tenantId, employeeName)' }, { status: 400 });
     }
 
     // Obtener las órdenes del delivery completadas, no pagadas
@@ -23,15 +23,11 @@ export async function POST(req: Request) {
       .select('id, delivery_fee')
       .eq('tenant_id', tenantId)
       .eq('delivery_type', 'delivery')
-      .eq('status', 'completed')
+      .in('status', ['completed', 'delivered'])
       .eq('is_delivery_paid', false);
 
-    if (date !== 'all') {
-      const startOfDay = new Date(`${date}T00:00:00.000Z`);
-      const endOfDay = new Date(`${date}T23:59:59.999Z`);
-      query = query
-        .gte('created_at', startOfDay.toISOString())
-        .lte('created_at', endOfDay.toISOString());
+    if (employeeName !== 'all') {
+      query = query.eq('waiter_name', employeeName);
     }
 
     const { data: unpaidOrders, error: fetchError } = await query;
@@ -58,13 +54,17 @@ export async function POST(req: Request) {
     }
 
     // 2. Registrar el gasto en caja
+    const expenseDesc = employeeName === 'all' 
+      ? `Pago a Todos los Repartidores - Liquidación de envíos` 
+      : `Pago a Repartidor: ${employeeName} - Liquidación de envíos`;
+
     const { error: expenseError } = await supabase
       .from('expenses')
       .insert({
         tenant_id: tenantId,
-        description: `Pago a Delivery - Liquidación del ${date}`,
+        description: expenseDesc,
         amount: totalToPay,
-        type: 'service', // Podría ser salary también
+        type: 'salary', // Gasto por honorarios/salarios de envío
         date: new Date().toISOString().split('T')[0] // Fecha actual
       });
 

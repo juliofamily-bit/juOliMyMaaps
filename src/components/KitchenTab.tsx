@@ -130,9 +130,12 @@ export default function KitchenTab({ orders, products, tenant, refetchData }: Ki
                 .eq('order_id', item.order_id);
 
             if (allItems && allItems.length > 0 && allItems.every(i => i.status === 'delivered')) {
+                const isDelivery = targetOrder && (targetOrder as any).delivery_type === 'delivery';
+                const finalStatus = isDelivery ? 'ready' : 'delivered';
+
                 const { error: orderError } = await supabase
                     .from('orders')
-                    .update({ status: 'delivered' })
+                    .update({ status: finalStatus })
                     .eq('id', item.order_id);
 
                 if (!orderError && targetOrder) {
@@ -143,7 +146,7 @@ export default function KitchenTab({ orders, products, tenant, refetchData }: Ki
                         const msg = `🎉 ¡Cocina completó el pedido #${targetOrder.order_number}! - Mesa ${targetOrder.table_number} (${targetOrder.client_name})`;
                         addNotification(msg, ['waiter', 'staff', 'admin'], 'success', targetOrder.tenant_id);
                     } else {
-                        const msg = `🎉 ¡PEDIDO COMPLETO LISTO! ${orderLabel} para ${targetOrder.client_name || 'Cliente'}`;
+                        const msg = `🎉 ¡PEDIDO ${isDelivery ? 'LISTO PARA REPARTO' : 'COMPLETO LISTO'}! ${orderLabel} para ${targetOrder.client_name || 'Cliente'}`;
                         addNotification(msg, ['staff', 'admin'], 'success', targetOrder.tenant_id);
                     }
                 }
@@ -315,7 +318,7 @@ export default function KitchenTab({ orders, products, tenant, refetchData }: Ki
                                                             <p className={`font-black text-sm text-white transition-all ${
                                                                 isDelivered ? 'line-through text-slate-500' : ''
                                                             }`}>
-                                                                {prodName}
+                                                                {item.notes ? `${item.notes} (${prodName})` : prodName}
                                                             </p>
                                                             <p className="text-[7px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">Cocina</p>
                                                         </div>

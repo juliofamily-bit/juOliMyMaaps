@@ -25,7 +25,7 @@ export default function AdminDeliverySettlement({ tenant }: { tenant: any }) {
       .select('*')
       .eq('tenant_id', tenant.id)
       .eq('delivery_type', 'delivery')
-      .eq('status', 'completed')
+      .in('status', ['completed', 'delivered'])
       .eq('is_delivery_paid', false);
 
     if (data) {
@@ -40,11 +40,11 @@ export default function AdminDeliverySettlement({ tenant }: { tenant: any }) {
     }
   }, [tenant?.id]);
 
-  const handlePay = async (dateKey: string, dayOrders: Order[]) => {
-    const isAll = dateKey === 'all';
+  const handlePay = async (employeeName: string, driverOrders: Order[]) => {
+    const isAll = employeeName === 'all';
     const msg = isAll 
-      ? '¿Confirmas el pago a los repartidores por TODOS los viajes pendientes? Se registrará un gasto en tu balance.'
-      : `¿Confirmas el pago a los repartidores por los viajes del ${dateKey}? Se registrará un gasto en tu balance.`;
+      ? '¿Confirmas el pago a TODOS los repartidores por los viajes pendientes? Se registrará un gasto en tu balance.'
+      : `¿Confirmas el pago a ${employeeName} por sus viajes pendientes? Se registrará un gasto en tu balance.`;
 
     if (!confirm(msg)) return;
 
@@ -56,7 +56,7 @@ export default function AdminDeliverySettlement({ tenant }: { tenant: any }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenantId: tenant.id,
-          date: dateKey // yyyy-mm-dd
+          employeeName // Pasamos el nombre del repartidor
         })
       });
 
@@ -74,12 +74,11 @@ export default function AdminDeliverySettlement({ tenant }: { tenant: any }) {
     }
   };
 
-  // Group by date YYYY-MM-DD
+  // Group by employeeName (waiter_name)
   const groupedOrders = unpaidOrders.reduce((acc, order) => {
-    const d = new Date(order.created_at);
-    const dateStr = d.toISOString().split('T')[0]; // "YYYY-MM-DD"
-    if (!acc[dateStr]) acc[dateStr] = [];
-    acc[dateStr].push(order);
+    const driver = order.waiter_name || 'Sin Asignar (Repartidor Externo)';
+    if (!acc[driver]) acc[driver] = [];
+    acc[driver].push(order);
     return acc;
   }, {} as Record<string, Order[]>);
 
@@ -125,28 +124,27 @@ export default function AdminDeliverySettlement({ tenant }: { tenant: any }) {
 
           <div className="grid gap-2 mt-2">
             {Object.entries(groupedOrders)
-              .sort((a, b) => b[0].localeCompare(a[0])) // Descending date
-              .map(([dateKey, dayOrders]) => {
-                const dayIncome = dayOrders.reduce((acc, o) => acc + (Number((o as any).delivery_fee) || 0), 0);
-                const localDate = new Date(dateKey + 'T12:00:00Z').toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+              .sort((a, b) => b[1].length - a[1].length) // Descending by number of orders
+              .map(([driverName, driverOrders]) => {
+                const driverIncome = driverOrders.reduce((acc, o) => acc + (Number((o as any).delivery_fee) || 0), 0);
 
                 return (
-                  <div key={dateKey} className="bg-slate-950/40 border border-white/5 p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div key={driverName} className="bg-slate-950/40 border border-white/5 p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
-                      <h4 className="text-xs font-black text-white capitalize">{localDate}</h4>
+                      <h4 className="text-xs font-black text-white">{driverName}</h4>
                       <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">
-                        {dayOrders.length} viajes a liquidar
+                        {driverOrders.length} viajes a liquidar
                       </p>
                     </div>
                     <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-                      <span className="text-base font-black text-white">{formatARS(dayIncome)}</span>
+                      <span className="text-base font-black text-white">{formatARS(driverIncome)}</span>
                       <button
-                        onClick={() => handlePay(dateKey, dayOrders)}
+                        onClick={() => handlePay(driverName, driverOrders)}
                         disabled={paying}
                         className="py-2 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[9px] uppercase tracking-widest rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-lg"
                       >
                         <CheckCircle2 size={12} />
-                        {paying ? 'Pagando...' : 'Pagar Día'}
+                        {paying ? 'Pagando...' : 'Pagar Repartidor'}
                       </button>
                     </div>
                   </div>

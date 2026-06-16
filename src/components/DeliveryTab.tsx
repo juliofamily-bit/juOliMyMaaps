@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { Order, Product } from '@/types/database';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { Order, Product, Profile } from '@/types/database';
 import { Clock, CheckCircle2, User, Loader2, Navigation, Phone, Check, MapPin, ExternalLink, MessageCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/lib/store';
@@ -16,6 +16,7 @@ interface DeliveryTabProps {
     mode: string;
   };
   tenant?: any;
+  currentEmployee?: Profile;
 }
 
 const formatARS = (amount: number) => {
@@ -26,7 +27,7 @@ const formatARS = (amount: number) => {
   }).format(amount);
 };
 
-export default function DeliveryTab({ orders, products, tenantColors, tenant }: DeliveryTabProps) {
+export default function DeliveryTab({ orders, products, tenantColors, tenant, currentEmployee }: DeliveryTabProps) {
   const [orderItems, setOrderItems] = useState<Record<string, any[]>>({});
   const [loadingItems, setLoadingItems] = useState<Record<string, boolean>>({});
   const { addNotification } = useNotifications();
@@ -35,24 +36,32 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant }: 
   const isLight = tenantColors?.mode === 'light';
   const primaryColor = tenantColors?.primary || '#f97316';
 
+  // Función auxiliar para determinar si es un delivery
+  const isDeliveryOrder = (o: any) => {
+    return o.delivery_type === 'delivery' || (!o.table_number && o.delivery_address && o.delivery_address.trim().length > 0);
+  };
+
   // Pedidos de delivery activos (no archivados)
-  const activeDeliveries = orders.filter(o => 
-    (o as any).delivery_type === 'delivery' && 
-    !o.is_archived &&
-    o.status !== 'completed' &&
-    o.status !== 'delivered'
-  );
+  const activeDeliveries = useMemo(() => {
+    return orders.filter(o => 
+      isDeliveryOrder(o) && 
+      !o.is_archived &&
+      o.status !== 'completed' &&
+      o.status !== 'delivered'
+    );
+  }, [orders]);
 
-  // Historial de entregados (últimos 7 días)
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  sevenDaysAgo.setHours(0,0,0,0);
-
-  const deliveredHistorial = orders.filter(o => 
-    (o as any).delivery_type === 'delivery' && 
-    (o.status === 'completed' || o.status === 'delivered') &&
-    new Date(o.created_at) >= sevenDaysAgo
-  );
+  // Historial de entregados (Últimos 7 días)
+  const deliveredHistorial = useMemo(() => {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+    return orders.filter(o => 
+      isDeliveryOrder(o) && 
+      (o.status === 'completed' || o.status === 'delivered') &&
+      new Date(o.created_at) >= sevenDaysAgo
+    );
+  }, [orders]);
 
   const getTimeAgo = (timestamp: string) => {
     const diff = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000 / 60);
@@ -80,15 +89,51 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant }: 
     deliveredHistorial.forEach(order => fetchItems(order.id));
   }, [activeDeliveries, deliveredHistorial]);
 
+  // Campana de nuevo pedido de delivery
+  const prevDeliveryIdsRef = useRef<string[]>([]);
+  useEffect(() => {
+    const currentIds = activeDeliveries.map(o => o.id);
+    const prevDeliveryIds = prevDeliveryIdsRef.current;
+    if (prevDeliveryIds.length > 0) {
+      const newOrders = currentIds.filter(id => !prevDeliveryIds.includes(id));
+      if (newOrders.length > 0) {
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.play().catch(e => console.log('Campana de delivery bloqueada:', e));
+      }
+    }
+    prevDeliveryIdsRef.current = currentIds;
+  }, [activeDeliveries]);
+
+    const handleClaimOrder = async (orderId: string) => {
+      if (!currentEmployee?.full_name) {
+        alert("Debes ingresar con tu PIN de repartidor para tomar un pedido.");
+        return;
+      }
+      const { error } = await supabase
+        .from('orders')
+        .update({ waiter_name: currentEmployee?.full_name })
+        .eq('id', orderId);
+
+      if (error) {
+        alert("Error al seleccionar pedido: " + error.message);
+      } else {
+        document.getElementById('global-refresh-button')?.click();
+      }
+    };
+
   const handleDeliverOrder = async (orderId: string, clientName: string) => {
     const orderObj = orders.find(o => o.id === orderId);
     const items = orderItems[orderId] || [];
     const breakdown = items.map(i => `${i.quantity}x ${i.products?.name || 'Producto'}`).join(', ');
 
-    // El repartidor solo marca como entregado. La caja se encarga del cobro.
-    // Si ya estaba pagado desde antes (ej. MercadoPago), lo podemos archivar directamente,
-    // de lo contrario solo cambia a 'delivered' para que Caja lo cobre.
-    const isAlreadyPaid = orderObj?.payment_status === 'pagado';
+    // Fetch fresh order status to avoid stale data stalemate
+    const { data: freshOrder } = await supabase
+      .from('orders')
+      .select('payment_status')
+      .eq('id', orderId)
+      .single();
+      
+    const isAlreadyPaid = freshOrder?.payment_status === 'pagado';
     const newStatus = isAlreadyPaid ? 'completed' : 'delivered';
     const archive = isAlreadyPaid;
 
@@ -100,8 +145,9 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant }: 
     if (error) {
       alert("Error al marcar como entregado: " + error.message);
     } else {
-      const message = `🚚 Pedido de ${clientName} ENTREGADO por el Repartidor: ${breakdown} (Pendiente de cobro en Caja)`;
+      const message = `🚚 Pedido de ${clientName} ENTREGADO por el Repartidor: ${currentEmployee?.full_name || 'Local'}: ${breakdown} (Pendiente de cobro en Caja)`;
       addNotification(message, ['staff', 'admin'], 'success', orderObj?.tenant_id);
+      document.getElementById('global-refresh-button')?.click();
       alert("¡Pedido marcado como entregado! Recuerda rendir el dinero en Caja si fue en efectivo.");
     }
   };
@@ -139,7 +185,15 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant }: 
               ? `https://wa.me/${cleanArgPhone(order.phone_number)}`
               : null;
 
-            const isPreparing = order.status !== 'delivered';
+            const items = orderItems[order.id] || [];
+            const hasItems = items.length > 0;
+            const allItemsPrepared = hasItems ? items.every(item => {
+              const needsPrep = item.target_departments?.includes('kitchen') || item.target_departments?.includes('bartender');
+              if (!needsPrep) return true;
+              return item.status === 'delivered';
+            }) : false;
+
+            const isPreparing = hasItems ? !allItemsPrepared : true;
             const deliveryFee = Number((order as any).delivery_fee) || 0;
             const orderSubtotal = order.total_price - deliveryFee;
 
@@ -148,18 +202,19 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant }: 
                 key={order.id}
                 className={`glass rounded-[2.5rem] overflow-hidden border transition-all duration-300 ${
                   isPreparing 
-                    ? 'opacity-40 grayscale border-white/5 pointer-events-none' 
+                    ? 'border-white/5 bg-slate-900/50' 
                     : 'border-white/5 bg-gradient-to-br from-orange-500/5 to-transparent hover:border-orange-500/10'
                 }`}
               >
                 {/* 1. SECCIÓN DE ENVÍO DESTACADA: PRIMERO Y EN GRANDE */}
                 <div className="p-6 bg-slate-950/80 border-b border-white/5 space-y-4">
-                  <div className="flex justify-between items-start gap-4">
-                    <div className="space-y-1">
-                      <span className="text-[8px] font-black uppercase text-orange-500 tracking-widest block">📍 DIRECCIÓN DE ENTREGA</span>
-                      <h3 className="text-xl font-black text-white leading-tight uppercase">
-                        {(order as any).delivery_address || 'Sin Dirección'}
-                      </h3>
+                  <div className={isPreparing ? 'grayscale opacity-40 pointer-events-none space-y-4' : 'space-y-4'}>
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="space-y-1">
+                        <span className="text-[8px] font-black uppercase text-orange-500 tracking-widest block">📍 DIRECCIÓN DE ENTREGA</span>
+                        <h3 className="text-xl font-black text-white leading-tight uppercase">
+                          {(order as any).delivery_address || 'Sin Dirección'}
+                        </h3>
                       {/* Enlace de Google Maps en caso de que esté presente */}
                       {(order as any).delivery_map_link && (
                         <div className="mt-1">
@@ -281,13 +336,15 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant }: 
                       </div>
                     ) : (
                       <div className="grid gap-2.5">
-                        {orderItems[order.id]?.map((item, idx) => (
-                          <div key={idx} className="flex justify-between items-center bg-slate-950/60 p-3.5 rounded-2xl border border-white/5">
+                        {orderItems[order.id]?.map((item) => (
+                          <div key={item.id} className="flex justify-between items-center bg-slate-950/60 p-3.5 rounded-2xl border border-white/5">
                             <div className="flex items-center gap-3">
                               <span className="w-6.5 h-6.5 rounded-lg bg-orange-500/10 text-orange-450 border border-orange-500/20 flex items-center justify-center font-black text-xs shrink-0">
                                 {item.quantity}x
                               </span>
-                              <span className="font-extrabold text-xs text-white">{item.products?.name}</span>
+                              <span className="font-extrabold text-xs text-white">
+                                {item.notes ? `${item.notes} (${item.products?.name || 'Producto'})` : (item.products?.name || 'Producto')}
+                              </span>
                             </div>
                             <span className="text-[10px] font-black text-slate-400">
                               {formatARS(item.unit_price * item.quantity)}
@@ -296,21 +353,48 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant }: 
                         ))}
                       </div>
                     )}
-                  </div>
-
-                  <div className="flex justify-between items-center text-[9px] font-bold text-slate-500 uppercase tracking-wide pt-2 border-t border-white/5">
+                  </div> {/* Cierra el contenido del pedido */}
+                  </div> {/* Cierra el div grayscale */}
+ 
+                  <div className="flex justify-between items-center text-[9px] font-bold text-slate-500 uppercase tracking-wide pt-2 border-t border-white/5 mt-4">
                     <span>Solicitado hace {getTimeAgo(order.created_at)}</span>
                     <span className="text-slate-400">Método: <span className="text-white font-black">{(order as any).payment_method === 'efectivo' ? '💵 Efectivo' : '💳 Pago Digital'}</span></span>
                   </div>
-
-                  <button
-                    onClick={() => handleDeliverOrder(order.id, order.client_name)}
-                    disabled={isPreparing}
-                    className="w-full mt-2 text-white font-black py-4 rounded-2xl shadow-xl hover:shadow-orange-500/10 bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 transition-all active:scale-95 text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-white/10"
-                  >
-                    <Check size={14} className="stroke-[3]" />
-                    {isPreparing ? '⏳ Preparándose en Cocina / Barra' : 'Entregado / Finalizar Pedido'}
-                  </button>
+ 
+                  {!order.waiter_name ? (
+                    <button
+                      key="claim-btn"
+                      onClick={() => handleClaimOrder(order.id)}
+                      className="w-full mt-2 text-white font-black py-4 rounded-2xl shadow-xl hover:shadow-blue-500/20 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 transition-all active:scale-95 text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-white/10 animate-pulse"
+                    >
+                      <User size={14} className="stroke-[3]" />
+                      Seleccionar Pedido (Llevar yo)
+                    </button>
+                  ) : order.waiter_name !== currentEmployee?.full_name ? (
+                    <div key="taken-by-other" className="w-full mt-2 text-slate-400 bg-slate-900 border border-slate-800 font-black py-4 rounded-2xl text-xs uppercase tracking-widest flex items-center justify-center gap-2">
+                      <User size={14} />
+                      Viaje tomado por {order.waiter_name}
+                    </div>
+                  ) : (
+                    <button
+                      key="deliver-btn"
+                      onClick={() => {
+                        if (isPreparing) {
+                          alert("Todavía no está preparado. Tienes que esperar a que Cocina o Barra terminen de preparar el pedido para poder entregarlo.");
+                          return;
+                        }
+                        handleDeliverOrder(order.id, order.client_name);
+                      }}
+                      className={`w-full mt-2 text-white font-black py-4 rounded-2xl shadow-xl transition-all active:scale-95 text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-white/10 ${
+                        isPreparing 
+                          ? 'bg-slate-800 text-slate-400 cursor-not-allowed' 
+                          : 'hover:shadow-orange-500/10 bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700'
+                      }`}
+                    >
+                      <Check size={14} className="stroke-[3]" />
+                      {isPreparing ? '⏳ Preparándose en Cocina / Barra' : 'Entregado / Finalizar Pedido'}
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -322,6 +406,12 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant }: 
       {deliveredHistorial.length > 0 && (() => {
         const unpaidDeliveries = deliveredHistorial.filter(o => !(o as any).is_delivery_paid);
         const totalPendingIncome = unpaidDeliveries.reduce((acc, o) => acc + (Number((o as any).delivery_fee) || 0), 0);
+        const driverBreakdown = unpaidDeliveries.reduce((acc, order) => {
+          const driver = order.waiter_name || 'Sin Asignar (Local)';
+          if (!acc[driver]) acc[driver] = 0;
+          acc[driver] += (Number((order as any).delivery_fee) || 0);
+          return acc;
+        }, {} as Record<string, number>);
 
         return (
           <div className="glass rounded-[2.5rem] border border-orange-500/20 bg-gradient-to-br from-orange-500/10 via-slate-900/60 to-slate-950/80 p-6 shadow-2xl space-y-4">
@@ -335,12 +425,29 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant }: 
               </div>
             </div>
 
-            <div className="bg-slate-950/60 p-4 rounded-2xl border border-orange-500/10 flex items-center justify-between">
-              <div>
-                <span className="text-[8px] font-black text-orange-400 uppercase tracking-widest block">💰 Total a Rendir</span>
-                <span className="text-3xl font-black text-orange-500 block">{formatARS(totalPendingIncome)}</span>
-                <span className="text-[8px] text-slate-400 font-extrabold uppercase">{unpaidDeliveries.length} viajes sin liquidar</span>
+            <div className="bg-slate-950/60 p-4 rounded-2xl border border-orange-500/10 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[8px] font-black text-orange-400 uppercase tracking-widest block">💰 Total a Rendir</span>
+                  <span className="text-3xl font-black text-orange-500 block">{formatARS(totalPendingIncome)}</span>
+                  <span className="text-[8px] text-slate-400 font-extrabold uppercase">{unpaidDeliveries.length} viajes sin liquidar</span>
+                </div>
               </div>
+              
+              {/* Desglose por Repartidor */}
+              {Object.keys(driverBreakdown).length > 0 && (
+                <div className="pt-3 border-t border-white/5 space-y-2">
+                  <span className="text-[8px] font-black uppercase text-slate-500 tracking-widest block">👨‍🏍 Desglose por Repartidor</span>
+                  {Object.entries(driverBreakdown).map(([driver, amount], idx) => (
+                    <div key={idx} className="flex justify-between items-center text-xs">
+                      <span className="text-slate-300 font-bold flex items-center gap-1.5">
+                        <User size={10} className="text-slate-500" /> {driver}
+                      </span>
+                      <span className="text-orange-400 font-black">{formatARS(amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             
             <p className="text-[8px] font-bold text-slate-500 uppercase text-center tracking-wider">

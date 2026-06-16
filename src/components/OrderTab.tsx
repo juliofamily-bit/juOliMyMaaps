@@ -381,6 +381,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
 
             const finalTipAmount = (order.tip_amount || 0) + additionalTipAmount;
             const finalTotalWithExtraTip = order.total_price + additionalTipAmount;
+            const isAlreadyDelivered = order.status === 'delivered' && (order as any).delivery_type === 'delivery';
 
             // Primer intento: incluir is_approved_for_production, tip_amount
             const { error: firstAttemptError } = await supabase
@@ -389,6 +390,10 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                     payment_status: 'pagado', 
                     payment_method: finalMethod,
                     is_approved_for_production: true,
+                    ...(isAlreadyDelivered ? {
+                        status: 'completed',
+                        is_archived: true
+                    } : {}),
                     ...(additionalTipAmount > 0 ? {
                         tip_amount: finalTipAmount,
                         total_price: finalTotalWithExtraTip
@@ -412,7 +417,11 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                     .from('orders')
                     .update({ 
                         payment_status: 'pagado', 
-                        payment_method: finalMethod
+                        payment_method: finalMethod,
+                        ...(isAlreadyDelivered ? {
+                            status: 'completed',
+                            is_archived: true
+                        } : {})
                     })
                     .eq('id', order.id);
 
@@ -528,18 +537,20 @@ export default function OrderTab({ products, ingredients, categories: initialCat
             // Nota: Se removió la autoliberación automática de mesas en Caja al archivar. La mesa
             // sigue ocupada por su respectivo mozo en salón hasta que el mozo la libere manualmente.
             
-            // Archivar todas las órdenes activas vinculadas a esta mesa
-            const activeMesaOrders = orders.filter(o => 
-                o.table_number === order.table_number && 
-                !o.is_archived && 
-                o.id !== order.id
-            );
+            // Archivar todas las órdenes activas vinculadas a esta mesa (solo si es una mesa real)
+            if (order.table_number) {
+                const activeMesaOrders = orders.filter(o => 
+                    o.table_number === order.table_number && 
+                    !o.is_archived && 
+                    o.id !== order.id
+                );
 
-            for (const activeO of activeMesaOrders) {
-                await supabase
-                    .from('orders')
-                    .update({ is_archived: true, payment_status: 'pagado' })
-                    .eq('id', activeO.id);
+                for (const activeO of activeMesaOrders) {
+                    await supabase
+                        .from('orders')
+                        .update({ is_archived: true, payment_status: 'pagado' })
+                        .eq('id', activeO.id);
+                }
             }
 
             addNotification(`📦 Comanda #${order.order_number} despachada y archivada con éxito`, ['staff', 'admin'], 'success', tenant?.id);
@@ -1913,7 +1924,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                                                                             ? 'line-through text-slate-500' 
                                                                             : (isLight ? 'text-slate-900' : 'text-white')
                                                                     }`}>
-                                                                        {prodName}
+                                                                        {item.notes ? `${item.notes} (${prodName})` : prodName}
                                                                     </p>
                                                                     <div className="flex items-center gap-1.5 mt-1 flex-wrap select-none">
                                                                         {item.target_departments?.includes('kitchen') && (
@@ -2456,7 +2467,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                                             const p = products.find(prod => prod.id === item.product_id);
                                             return (
                                                 <div key={idx} className={`flex justify-between text-[10px] ${isLight ? 'text-slate-650' : 'text-slate-400'}`}>
-                                                    <span>{item.quantity}x {p?.name || 'Producto'}</span>
+                                                    <span>{item.quantity}x {(item as any).notes ? `${(item as any).notes} (${p?.name || 'Producto'})` : (p?.name || 'Producto')}</span>
                                                     <span>{formatARS(item.unit_price * item.quantity)}</span>
                                                 </div>
                                             );

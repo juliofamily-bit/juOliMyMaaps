@@ -1983,7 +1983,7 @@ export default function WaiterTab({
                                                                 >
                                                                     <div className="flex flex-col min-w-0 flex-1 pr-2">
                                                                         <span className="font-extrabold truncate uppercase tracking-wide">
-                                                                            {item.quantity}x {item.product?.name || 'Producto'}
+                                                                            {item.quantity}x {item.notes ? `${item.notes} (${item.product?.name || 'Producto'})` : (item.product?.name || 'Producto')}
                                                                         </span>
                                                                         {item.notes && (
                                                                             <span className="text-[7.5px] font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-md mt-0.5 self-start tracking-wider whitespace-normal break-words leading-snug uppercase w-full">
@@ -3036,7 +3036,7 @@ export default function WaiterTab({
                                                                                 {item.quantity}x
                                                                             </div>
                                                                                 <p className={`font-black text-sm leading-tight truncate ${isServed ? 'line-through text-emerald-600 font-bold' : (isLight ? 'text-slate-800' : 'text-slate-100')}`}>
-                                                                                    {item.product?.name || 'Producto'}
+                                                                                    {item.notes ? `${item.notes} (${item.product?.name || 'Producto'})` : (item.product?.name || 'Producto')}
                                                                                 </p>
                                                                                 <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                                                                                     {item.notes && (

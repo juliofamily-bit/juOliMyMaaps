@@ -119,9 +119,12 @@ export default function BartenderTab({ orders, products, tenant, refetchData }: 
                 .eq('order_id', item.order_id);
 
             if (allItems && allItems.length > 0 && allItems.every(i => i.status === 'delivered')) {
+                const isDelivery = targetOrder && (targetOrder as any).delivery_type === 'delivery';
+                const finalStatus = isDelivery ? 'ready' : 'delivered';
+
                 const { error: orderError } = await supabase
                     .from('orders')
-                    .update({ status: 'delivered' })
+                    .update({ status: finalStatus })
                     .eq('id', item.order_id);
 
                 if (!orderError && targetOrder) {
@@ -132,7 +135,7 @@ export default function BartenderTab({ orders, products, tenant, refetchData }: 
                         const msg = `🎉 ¡Barra completó el pedido #${targetOrder.order_number}! - Mesa ${targetOrder.table_number} (${targetOrder.client_name})`;
                         addNotification(msg, ['waiter', 'staff', 'admin'], 'success', targetOrder.tenant_id);
                     } else {
-                        const msg = `🎉 ¡PEDIDO COMPLETO LISTO! ${orderLabel} para ${targetOrder.client_name || 'Cliente'}`;
+                        const msg = `🎉 ¡PEDIDO ${isDelivery ? 'LISTO PARA REPARTO' : 'COMPLETO LISTO'}! ${orderLabel} para ${targetOrder.client_name || 'Cliente'}`;
                         addNotification(msg, ['staff', 'admin'], 'success', targetOrder.tenant_id);
                     }
                 }
@@ -281,15 +284,9 @@ export default function BartenderTab({ orders, products, tenant, refetchData }: 
                                                         </span>
                                                         <div>
                                                             <p className={`font-black text-lg leading-none transition-all ${isDelivered ? 'line-through text-slate-500' : 'text-white'}`}>
-                                                                {item.notes || item.product?.name || products.find(p => p.id === item.product_id)?.name}
+                                                                {item.notes ? `${item.notes} (${item.product?.name || products.find(p => p.id === item.product_id)?.name})` : (item.product?.name || products.find(p => p.id === item.product_id)?.name)}
                                                             </p>
-                                                            {item.notes ? (
-                                                                 <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mt-0.5">
-                                                                    {item.product?.name} • Barra
-                                                                </p>
-                                                            ) : (
-                                                                <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mt-0.5">Barra</p>
-                                                            )}
+                                                            <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mt-0.5">Barra</p>
                                                         </div>
                                                     </div>
 

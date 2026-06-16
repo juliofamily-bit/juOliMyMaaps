@@ -46,7 +46,7 @@ export interface ProductIngredient {
 }
 
 
-export type OrderStatus = 'pending' | 'completed' | 'delivered';
+export type OrderStatus = 'pending' | 'in_preparation' | 'ready' | 'delivering' | 'completed' | 'delivered';
 
 export interface Order {
     id: string;

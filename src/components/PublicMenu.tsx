@@ -1310,7 +1310,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
   // Propina (Tip)
   let calculatedTip = 0;
-  if (tenant?.tips_enabled) {
+  if (tenant?.tips_enabled && deliveryType !== 'delivery') {
       if (tipPercentage === -1) {
           calculatedTip = parseFloat(customTip) || 0;
       } else {
@@ -1572,7 +1572,12 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             payment_status: paymentStatus,
             payment_method: method,
             loyalty_discount_applied: loyaltyRedemption,
-            delivery_type: deliveryType
+            delivery_type: deliveryType,
+            delivery_address: deliveryType === 'delivery' ? `${deliveryAddress} (Zona: ${selectedDeliveryZone?.name || 'General'})` : '',
+            delivery_map_link: deliveryType === 'delivery' ? deliveryMapLink : '',
+            delivery_fee: deliveryType === 'delivery' ? deliveryFee : 0,
+            delivery_lat: deliveryType === 'delivery' ? deliveryLat : null,
+            delivery_lng: deliveryType === 'delivery' ? deliveryLng : null
           }])
           .select()
           .single();
@@ -3633,7 +3638,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   </div>
                 )}
                 {/* Selección de Propinas */}
-                {tenant?.tips_enabled && (
+                {tenant?.tips_enabled && deliveryType !== 'delivery' && (
                   <div className={`space-y-3 pt-3 pb-4 border-b ${isLight ? 'border-slate-100' : 'border-neutral-800/50'}`}>
                     <div className="flex flex-col space-y-1">
                       <span className={`text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 ${isLight ? 'text-slate-700' : 'text-neutral-300'}`}>
