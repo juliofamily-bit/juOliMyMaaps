@@ -411,128 +411,132 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
       )}
 
       {/* Tarjeta Premium de Balance Pendiente de Pago */}
-      {deliveredHistorial.length > 0 && (() => {
-        const unpaidDeliveries = deliveredHistorial.filter(o => !(o as any).is_delivery_paid);
-        const totalPendingIncome = unpaidDeliveries.reduce((acc, o) => acc + (Number((o as any).delivery_fee) || 0), 0);
-        const driverBreakdown = unpaidDeliveries.reduce((acc, order) => {
-          const driver = order.waiter_name || 'Sin Asignar (Local)';
-          if (!acc[driver]) acc[driver] = 0;
-          acc[driver] += (Number((order as any).delivery_fee) || 0);
-          return acc;
-        }, {} as Record<string, number>);
+      <div>
+        {deliveredHistorial.length > 0 && (() => {
+          const unpaidDeliveries = deliveredHistorial.filter(o => !(o as any).is_delivery_paid);
+          const totalPendingIncome = unpaidDeliveries.reduce((acc, o) => acc + (Number((o as any).delivery_fee) || 0), 0);
+          const driverBreakdown = unpaidDeliveries.reduce((acc, order) => {
+            const driver = order.waiter_name || 'Sin Asignar (Local)';
+            if (!acc[driver]) acc[driver] = 0;
+            acc[driver] += (Number((order as any).delivery_fee) || 0);
+            return acc;
+          }, {} as Record<string, number>);
 
-        return (
-          <div className="glass rounded-[2.5rem] border border-orange-500/20 bg-gradient-to-br from-orange-500/10 via-slate-900/60 to-slate-950/80 p-6 shadow-2xl space-y-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="text-[8px] font-black uppercase text-orange-500 tracking-widest block">📊 BOLSA ACUMULADA</span>
-                <h3 className="text-base font-black text-white uppercase tracking-wider">Pendiente de Cobro</h3>
-              </div>
-              <div className="bg-orange-500/10 text-orange-400 border border-orange-500/30 px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest">
-                Acumulado
-              </div>
-            </div>
-
-            <div className="bg-slate-950/60 p-4 rounded-2xl border border-orange-500/10 space-y-4">
-              <div className="flex items-center justify-between">
+          return (
+            <div className="glass rounded-[2.5rem] border border-orange-500/20 bg-gradient-to-br from-orange-500/10 via-slate-900/60 to-slate-950/80 p-6 shadow-2xl space-y-4">
+              <div className="flex justify-between items-center">
                 <div>
-                  <span className="text-[8px] font-black text-orange-400 uppercase tracking-widest block">💰 Total a Rendir</span>
-                  <span className="text-3xl font-black text-orange-500 block">{formatARS(totalPendingIncome)}</span>
-                  <span className="text-[8px] text-slate-400 font-extrabold uppercase">{unpaidDeliveries.length} viajes sin liquidar</span>
+                  <span className="text-[8px] font-black uppercase text-orange-500 tracking-widest block">📊 BOLSA ACUMULADA</span>
+                  <h3 className="text-base font-black text-white uppercase tracking-wider">Pendiente de Cobro</h3>
+                </div>
+                <div className="bg-orange-500/10 text-orange-400 border border-orange-500/30 px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest">
+                  Acumulado
+                </div>
+              </div>
+
+              <div className="bg-slate-950/60 p-4 rounded-2xl border border-orange-500/10 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[8px] font-black text-orange-400 uppercase tracking-widest block">💰 Total a Rendir</span>
+                    <span className="text-3xl font-black text-orange-500 block">{formatARS(totalPendingIncome)}</span>
+                    <span className="text-[8px] text-slate-400 font-extrabold uppercase">{unpaidDeliveries.length} viajes sin liquidar</span>
+                  </div>
+                </div>
+                
+                {/* Desglose por Repartidor */}
+                <div>
+                  {Object.keys(driverBreakdown).length > 0 && (
+                    <div className="pt-3 border-t border-white/5 space-y-2">
+                      <span className="text-[8px] font-black uppercase text-slate-500 tracking-widest block">👨‍🏍 Desglose por Repartidor</span>
+                      {Object.entries(driverBreakdown).map(([driver, amount], idx) => (
+                        <div key={idx} className="flex justify-between items-center text-xs">
+                          <span className="text-slate-300 font-bold flex items-center gap-1.5">
+                            <User size={10} className="text-slate-500" /> {driver}
+                          </span>
+                          <span className="text-orange-400 font-black">{formatARS(amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
               
-              {/* Desglose por Repartidor */}
-              <div>
-                {Object.keys(driverBreakdown).length > 0 && (
-                  <div className="pt-3 border-t border-white/5 space-y-2">
-                    <span className="text-[8px] font-black uppercase text-slate-500 tracking-widest block">👨‍🏍 Desglose por Repartidor</span>
-                    {Object.entries(driverBreakdown).map(([driver, amount], idx) => (
-                      <div key={idx} className="flex justify-between items-center text-xs">
-                        <span className="text-slate-300 font-bold flex items-center gap-1.5">
-                          <User size={10} className="text-slate-500" /> {driver}
-                        </span>
-                        <span className="text-orange-400 font-black">{formatARS(amount)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            <p className="text-[8px] font-bold text-slate-500 uppercase text-center tracking-wider">
-              💡 Nota: Este balance suma las tarifas de envío de los últimos 7 días que el administrador aún no te ha liquidado.
-            </p>
-          </div>
-        );
-      })()}
-
-      {/* Historial de Envíos Agrupado por Día (Últimos 7 días) */}
-      {deliveredHistorial.length > 0 && (() => {
-        // Agrupar por fecha
-        const grouped = deliveredHistorial.reduce((acc, order) => {
-          // Usamos la fecha local de creacion de la orden para agrupar
-          const d = new Date(order.created_at);
-          const dateStr = d.toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
-          if (!acc[dateStr]) acc[dateStr] = [];
-          acc[dateStr].push(order);
-          return acc;
-        }, {} as Record<string, typeof deliveredHistorial>);
-
-        return Object.entries(grouped).map(([dateLabel, dayOrders], groupIdx) => {
-          const totalDayDeliveries = dayOrders.length;
-          const totalDayIncome = dayOrders.reduce((acc, o) => acc + (Number((o as any).delivery_fee) || 0), 0);
-          
-          return (
-            <div key={groupIdx} className="space-y-4 pt-6 border-t border-white/5">
-              <div className="flex justify-between items-end px-2">
-                <div>
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 leading-none capitalize">{dateLabel}</h3>
-                  <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">{totalDayDeliveries} viajes realizados</p>
-                </div>
-                <div className="text-right">
-                  <span className="text-sm font-black text-orange-400">{formatARS(totalDayIncome)}</span>
-                </div>
-              </div>
-              <div className="grid gap-3">
-                {dayOrders.map(order => {
-                  const clientNameClean = order.client_name?.split('(')[0]?.trim() || 'Cliente';
-                  const deliveryFee = Number((order as any).delivery_fee) || 0;
-                  const isPaid = (order as any).is_delivery_paid;
-                  
-                  return (
-                    <div
-                      key={order.id}
-                      className="p-4 rounded-2xl border border-white/5 bg-slate-900/20 flex justify-between items-center transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-green-550/10 text-green-550 flex items-center justify-center shrink-0 border border-green-500/20">
-                          <Check size={14} className="stroke-[3]" />
-                        </div>
-                        <div>
-                          <p className="font-extrabold text-xs text-white">
-                            <span className="text-orange-500 font-black mr-1.5">#{order.order_number}</span>
-                            {clientNameClean}
-                          </p>
-                          <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
-                            Dirección: {(order as any).delivery_address || 'Entregado en local'}
-                          </p>
-                          <p className="text-[8.5px] font-extrabold text-slate-450 uppercase mt-0.5">
-                            Envío: <span className="text-orange-450">{formatARS(deliveryFee)}</span> | Total: <span className="text-white">{formatARS(order.total_price)}</span>
-                          </p>
-                        </div>
-                      </div>
-                      <span className={`text-[8px] font-black uppercase border px-3 py-1 rounded-full shrink-0 ${isPaid ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-orange-400 bg-orange-500/10 border-orange-500/20'}`}>
-                        {isPaid ? 'Liquidado' : 'Pendiente'}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+              <p className="text-[8px] font-bold text-slate-500 uppercase text-center tracking-wider">
+                💡 Nota: Este balance suma las tarifas de envío de los últimos 7 días que el administrador aún no te ha liquidado.
+              </p>
             </div>
           );
-        });
-      })()}
+        })()}
+      </div>
+
+      {/* Historial de Envíos Agrupado por Día (Últimos 7 días) */}
+      <div>
+        {deliveredHistorial.length > 0 && (() => {
+          // Agrupar por fecha
+          const grouped = deliveredHistorial.reduce((acc, order) => {
+            // Usamos la fecha local de creacion de la orden para agrupar
+            const d = new Date(order.created_at);
+            const dateStr = d.toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+            if (!acc[dateStr]) acc[dateStr] = [];
+            acc[dateStr].push(order);
+            return acc;
+          }, {} as Record<string, typeof deliveredHistorial>);
+
+          return Object.entries(grouped).map(([dateLabel, dayOrders], groupIdx) => {
+            const totalDayDeliveries = dayOrders.length;
+            const totalDayIncome = dayOrders.reduce((acc, o) => acc + (Number((o as any).delivery_fee) || 0), 0);
+            
+            return (
+              <div key={groupIdx} className="space-y-4 pt-6 border-t border-white/5">
+                <div className="flex justify-between items-end px-2">
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 leading-none capitalize">{dateLabel}</h3>
+                    <p className="text-[9px] text-slate-500 font-bold uppercase mt-1">{totalDayDeliveries} viajes realizados</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-black text-orange-400">{formatARS(totalDayIncome)}</span>
+                  </div>
+                </div>
+                <div className="grid gap-3">
+                  {dayOrders.map(order => {
+                    const clientNameClean = order.client_name?.split('(')[0]?.trim() || 'Cliente';
+                    const deliveryFee = Number((order as any).delivery_fee) || 0;
+                    const isPaid = (order as any).is_delivery_paid;
+                    
+                    return (
+                      <div
+                        key={order.id}
+                        className="p-4 rounded-2xl border border-white/5 bg-slate-900/20 flex justify-between items-center transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-green-550/10 text-green-550 flex items-center justify-center shrink-0 border border-green-500/20">
+                            <Check size={14} className="stroke-[3]" />
+                          </div>
+                          <div>
+                            <p className="font-extrabold text-xs text-white">
+                              <span className="text-orange-500 font-black mr-1.5">#{order.order_number}</span>
+                              {clientNameClean}
+                            </p>
+                            <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                              Dirección: {(order as any).delivery_address || 'Entregado en local'}
+                            </p>
+                            <p className="text-[8.5px] font-extrabold text-slate-450 uppercase mt-0.5">
+                              Envío: <span className="text-orange-450">{formatARS(deliveryFee)}</span> | Total: <span className="text-white">{formatARS(order.total_price)}</span>
+                            </p>
+                          </div>
+                        </div>
+                        <span className={`text-[8px] font-black uppercase border px-3 py-1 rounded-full shrink-0 ${isPaid ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-orange-400 bg-orange-500/10 border-orange-500/20'}`}>
+                          {isPaid ? 'Liquidado' : 'Pendiente'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          });
+        })()}
+      </div>
 
 
     </div>
