@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Order, Product, Profile } from '@/types/database';
-import { Clock, CheckCircle2, User, Loader2, Navigation, Phone, Check, MapPin, ExternalLink, MessageCircle } from 'lucide-react';
+import { Clock, CheckCircle2, User, Loader2, Navigation, Phone, Check, MapPin, ExternalLink, MessageCircle, ChefHat } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/lib/store';
 import { cleanArgPhone } from '@/lib/phoneUtils';
@@ -28,8 +28,6 @@ const formatARS = (amount: number) => {
 };
 
 export default function DeliveryTab({ orders, products, tenantColors, tenant, currentEmployee }: DeliveryTabProps) {
-  const [orderItems, setOrderItems] = useState<Record<string, any[]>>({});
-  const [loadingItems, setLoadingItems] = useState<Record<string, boolean>>({});
   const { addNotification } = useNotifications();
 
 
@@ -68,27 +66,6 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
     return diff < 0 ? '0m' : `${diff}m`;
   };
 
-  // Traer los productos asociados a la orden
-  useEffect(() => {
-    const fetchItems = async (orderId: string) => {
-      if (orderItems[orderId] || loadingItems[orderId]) return;
-
-      setLoadingItems(prev => ({ ...prev, [orderId]: true }));
-      const { data, error } = await supabase
-        .from('order_items')
-        .select('*, products(*)')
-        .eq('order_id', orderId);
-
-      if (data) {
-        setOrderItems(prev => ({ ...prev, [orderId]: data }));
-      }
-      setLoadingItems(prev => ({ ...prev, [orderId]: false }));
-    };
-
-    activeDeliveries.forEach(order => fetchItems(order.id));
-    deliveredHistorial.forEach(order => fetchItems(order.id));
-  }, [activeDeliveries, deliveredHistorial]);
-
   // Campana de nuevo pedido de delivery
   const prevDeliveryIdsRef = useRef<string[]>([]);
   useEffect(() => {
@@ -123,8 +100,11 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
 
   const handleDeliverOrder = async (orderId: string, clientName: string) => {
     const orderObj = orders.find(o => o.id === orderId);
-    const items = orderItems[orderId] || [];
-    const breakdown = items.map(i => `${i.quantity}x ${i.products?.name || 'Producto'}`).join(', ');
+    const items = orderObj?.items || [];
+    const breakdown = items.map(i => {
+      const pName = products.find(p => p.id === i.product_id)?.name || 'Producto';
+      return `${i.quantity}x ${pName}`;
+    }).join(', ');
 
     // Fetch fresh order status to avoid stale data stalemate
     const { data: freshOrder } = await supabase
@@ -185,7 +165,7 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
               ? `https://wa.me/${cleanArgPhone(order.phone_number)}`
               : null;
 
-            const items = orderItems[order.id] || [];
+            const items = order.items || [];
             const hasItems = items.length > 0;
             const allItemsPrepared = hasItems ? items.every(item => {
               const needsPrep = item.target_departments?.includes('kitchen') || item.target_departments?.includes('bartender');
@@ -336,20 +316,45 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
                 <div className="p-6 space-y-4">
                   <div className="space-y-3">
                     <span className="text-[8.5px] font-black uppercase text-slate-500 tracking-widest block">📦 Desglose de Productos</span>
-                    {loadingItems[order.id] ? (
-                      <div className="flex items-center gap-2 text-slate-550 font-bold text-[10px] uppercase">
-                        <Loader2 className="animate-spin text-orange-500" size={13} /> Cargando comanda...
+                    {items.length === 0 ? (
+                      <div className="flex justify-center items-center h-16 w-full animate-pulse">
+                        <div className="flex gap-1.5 items-center bg-slate-900/50 px-4 py-2 rounded-full border border-white/5">
+                          <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                          <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                          <div className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce"></div>
+                          <span className="text-[9px] font-black uppercase text-orange-500 ml-2 tracking-widest">Cargando Productos...</span>
+                        </div>
                       </div>
                     ) : (
-                      <div className="grid gap-2.5">
-                        {orderItems[order.id]?.map((item) => (
-                          <div key={item.id} className="flex justify-between items-center bg-slate-950/60 p-3.5 rounded-2xl border border-white/5">
-                            <div className="flex items-center gap-3">
-                              <span className="w-6.5 h-6.5 rounded-lg bg-orange-500/10 text-orange-450 border border-orange-500/20 flex items-center justify-center font-black text-xs shrink-0">
-                                {item.quantity}x
+                      <div className="grid gap-2 relative">
+                        {/* Status general badge */}
+                        <div className="absolute -top-3 -right-3 z-10">
+                          {isPreparing ? (
+                            <span className="bg-orange-500 text-slate-950 px-2 py-1.5 rounded-xl text-[9px] font-black uppercase shadow-lg border-2 border-slate-950 flex items-center gap-1 animate-pulse tracking-widest">
+                              <ChefHat size={10} className="fill-slate-950" /> Producción
+                            </span>
+                          ) : (
+                            <span className="bg-emerald-500 text-slate-950 px-2 py-1.5 rounded-xl text-[9px] font-black uppercase shadow-lg border-2 border-slate-950 flex items-center gap-1 tracking-widest">
+                              <Check size={10} className="stroke-[3]" /> Listo
+                            </span>
+                          )}
+                        </div>
+
+                        {items.map((item) => (
+                          <div key={item.id} className="flex justify-between items-center bg-slate-900/60 p-2.5 rounded-xl border border-white/5 relative overflow-hidden group">
+                            {/* Indicador de estado por producto */}
+                            <div className={`absolute top-0 bottom-0 left-0 w-1 ${
+                              (item.target_departments?.includes('kitchen') || item.target_departments?.includes('bartender'))
+                                ? item.status === 'delivered' ? 'bg-emerald-500' : 'bg-orange-500 animate-pulse'
+                                : 'bg-slate-700'
+                            }`} />
+                            
+                            <div className="flex items-center gap-2 pl-2">
+                              <span className="bg-slate-950/80 w-6 h-6 rounded-lg text-orange-500 font-black text-[10px] flex items-center justify-center shadow-inner border border-white/5 shrink-0">
+                                {item.quantity}
                               </span>
                               <span className="font-extrabold text-xs text-white">
-                                {item.notes ? `${item.notes} (${item.products?.name || 'Producto'})` : (item.products?.name || 'Producto')}
+                                {item.notes ? `${item.notes} (${products.find(p => p.id === item.product_id)?.name || 'Producto'})` : (products.find(p => p.id === item.product_id)?.name || 'Producto')}
                               </span>
                             </div>
                             <span className="text-[10px] font-black text-slate-400">
