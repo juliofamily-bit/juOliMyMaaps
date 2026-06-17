@@ -4195,24 +4195,32 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => setReservationPartySize(prev => Math.max(1, prev - 1))}
-                    className={`w-10 h-10 rounded-xl border flex items-center justify-center font-bold transition-all active:scale-95 ${
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setReservationPartySize(prev => Math.max(1, prev - 1));
+                    }}
+                    className={`w-12 h-12 rounded-xl border flex items-center justify-center font-bold transition-all active:scale-95 ${
                       isLight ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200' : 'bg-neutral-900 border-neutral-800 text-white hover:bg-neutral-800'
                     }`}
+                    style={{ touchAction: 'manipulation' }}
                   >
                     -
                   </button>
-                  <div className={`flex-1 border rounded-xl py-2.5 text-center font-bold text-sm ${
+                  <div className={`flex-1 border rounded-xl py-3 text-center font-bold text-sm ${
                     isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-neutral-900/30 border-neutral-900 text-white'
                   }`}>
                     👥 {reservationPartySize} {reservationPartySize === 1 ? 'Persona' : 'Personas'}
                   </div>
                   <button
                     type="button"
-                    onClick={() => setReservationPartySize(prev => prev + 1)}
-                    className={`w-10 h-10 rounded-xl border flex items-center justify-center font-bold transition-all active:scale-95 ${
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setReservationPartySize(prev => prev + 1);
+                    }}
+                    className={`w-12 h-12 rounded-xl border flex items-center justify-center font-bold transition-all active:scale-95 ${
                       isLight ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200' : 'bg-neutral-900 border-neutral-800 text-white hover:bg-neutral-800'
                     }`}
+                    style={{ touchAction: 'manipulation' }}
                   >
                     +
                   </button>
@@ -4270,7 +4278,9 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                 </div>
                 <div className="space-y-1">
                   <h3 className="text-lg font-black text-white uppercase tracking-wide">¡Seña Acreditada!</h3>
-                  <p className="text-xs text-neutral-400">Tu reserva ha sido confirmada con éxito.</p>
+                  <p className="text-xs text-neutral-300 font-bold px-2 leading-relaxed">
+                    Tu reserva fue tomada correctamente, en breve recibirás un mensaje con todos los datos de tu reserva.
+                  </p>
                 </div>
 
                 <div className="w-full p-4 bg-neutral-900/40 border border-neutral-900 rounded-2xl space-y-2 mt-4">
@@ -4279,31 +4289,11 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   <span className="text-[7px] text-slate-500 uppercase font-bold block leading-relaxed">Presenta este código al mozo o ingrésalo en el carrito de compras para descontar tu seña.</span>
                 </div>
 
-                <a
-                  href={`https://wa.me/${formatWhatsAppNumber(socialLinks.whatsapp || '5491122334455')}?text=${encodeURIComponent(
-                    `*¡Hola! Acabo de registrar una Reserva con Seña Pagada en ${tenant.name}!*\n\n` +
-                    `*Detalles de la Reserva:*\n` +
-                    `• *Nombre:* ${reservationName}\n` +
-                    `• *Teléfono:* ${reservationPhonePrefix} ${reservationPhone}\n` +
-                    `• *Día y Hora:* ${reservationDate} a las ${reservationTime} hs\n` +
-                    `• *Personas:* ${reservationPartySize} comensales\n` +
-                    `• *Seña Pagada:* $${reservationToPayAmount.toLocaleString()}\n` +
-                    `• *CÓDIGO ÚNICO:* ${generatedReservationCode}\n\n` +
-                    `_Por favor, confirmen la recepción. ¡Muchas gracias!_`
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-3 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg"
-                >
-                  <MessageCircle size={14} />
-                  Enviar comprobante a mi WhatsApp
-                </a>
-
                 <button
                   onClick={() => setIsMpReservationModalOpen(false)}
-                  className="text-xs text-neutral-500 hover:text-white uppercase tracking-wider font-bold pt-2"
+                  className="w-full py-4 mt-2 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-xl text-sm uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)]"
                 >
-                  Cerrar Ventana
+                  OK, lo leí todo
                 </button>
               </div>
             )}

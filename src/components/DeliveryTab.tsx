@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Order, Product, Profile } from '@/types/database';
-import { Clock, CheckCircle2, User, Loader2, Navigation, Phone, Check, MapPin, ExternalLink, MessageCircle, ChefHat } from 'lucide-react';
+import { Clock, CheckCircle2, User, Loader2, Navigation, Phone, Check, MapPin, ExternalLink, MessageCircle, ChefHat, Bell } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/lib/store';
 import { cleanArgPhone } from '@/lib/phoneUtils';
@@ -68,9 +68,12 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
 
   // Campana de nuevo pedido de delivery y cuando está listo
   const prevDeliveryStateRef = useRef<Record<string, boolean>>({});
+  const [localAlert, setLocalAlert] = useState<{message: string, type: 'new' | 'ready'} | null>(null);
+
   useEffect(() => {
     const currentState: Record<string, boolean> = {};
     let shouldPlaySound = false;
+    let alertMsg: {message: string, type: 'new' | 'ready'} | null = null;
 
     activeDeliveries.forEach(o => {
       // Un pedido está listo si todos sus items están "delivered" (listos de cocina/barra)
@@ -87,15 +90,22 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
       if (prevState === undefined) {
         // Es un pedido nuevo
         shouldPlaySound = true;
+        alertMsg = { message: `¡NUEVO PEDIDO DE DELIVERY! (#${o.order_number})`, type: 'new' };
       } else if (prevState === false && isReady === true) {
         // El pedido acaba de marcarse como listo en cocina/barra
         shouldPlaySound = true;
+        alertMsg = { message: `¡PEDIDO #${o.order_number} LISTO PARA REPARTIR!`, type: 'ready' };
       }
     });
 
     if (shouldPlaySound && Object.keys(prevDeliveryStateRef.current).length > 0) {
       const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
       audio.play().catch(e => console.log('Campana de delivery bloqueada:', e));
+      
+      if (alertMsg) {
+        setLocalAlert(alertMsg);
+        setTimeout(() => setLocalAlert(null), 15000); // Ocultar después de 15 segundos
+      }
     }
 
     prevDeliveryStateRef.current = currentState;
@@ -154,6 +164,26 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
+      {/* ALERTA VISUAL DE NUEVO PEDIDO O PEDIDO LISTO */}
+      {localAlert && (
+        <div 
+          onClick={() => setLocalAlert(null)}
+          className={`cursor-pointer p-6 rounded-3xl border-2 shadow-[0_0_50px_rgba(249,115,22,0.4)] animate-pulse flex flex-col items-center justify-center text-center ${
+            localAlert.type === 'new' 
+              ? 'bg-gradient-to-r from-orange-500 to-rose-500 border-orange-300' 
+              : 'bg-gradient-to-r from-emerald-500 to-teal-500 border-emerald-300'
+          }`}
+        >
+          <Bell size={48} className="text-white mb-2 animate-bounce" />
+          <h2 className="text-2xl font-black uppercase tracking-widest text-white drop-shadow-md">
+            {localAlert.message}
+          </h2>
+          <p className="text-white/80 text-xs font-bold uppercase tracking-wider mt-2">
+            Toca para ocultar este aviso
+          </p>
+        </div>
+      )}
+
       {/* Sección 1: Envíos Activos */}
       <div className="flex justify-between items-center px-2">
         <div>

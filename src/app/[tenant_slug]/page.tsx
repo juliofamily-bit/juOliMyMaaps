@@ -1060,29 +1060,31 @@ export default function TenantApp({ params }: TenantPageProps) {
           >
             <RefreshCw size={18} className={isManualRefreshing ? 'animate-spin text-orange-500' : ''} />
           </button>
-          <button
-            onClick={() => {
-              setShowNotificationOverlay(true);
-              if (profile?.role === 'delivery') {
-                const deliveryNotifs = filteredNotifications.filter(
-                  n => n.message.includes('Tienes un pedido nuevo') || n.message.includes('Tienes un pedido para entregar')
-                );
-                deliveryNotifs.forEach(n => removeNotification(n.id, tenant?.id));
-              }
-            }}
-            className={`relative p-2 rounded-xl transition-all active:scale-90 ${
-              isLight
-                ? 'text-slate-600 bg-slate-200/50 hover:bg-slate-200 hover:text-slate-900'
-                : 'text-slate-500 bg-slate-900/50 hover:bg-slate-900 hover:text-white'
-            }`}
-          >
-            <Bell size={18} />
-            {filteredNotifications.length > 0 && (
-              <span className="absolute -top-1 -right-1 text-slate-900 text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-bounce bg-yellow-500">
-                {filteredNotifications.length}
-              </span>
-            )}
-          </button>
+          {activeTab !== 'delivery' && (
+            <button
+              onClick={() => {
+                setShowNotificationOverlay(true);
+                if (profile?.role === 'delivery') {
+                  const deliveryNotifs = filteredNotifications.filter(
+                    n => n.message.includes('Tienes un pedido nuevo') || n.message.includes('Tienes un pedido para entregar')
+                  );
+                  deliveryNotifs.forEach(n => removeNotification(n.id, tenant?.id));
+                }
+              }}
+              className={`relative p-2 rounded-xl transition-all active:scale-90 ${
+                isLight
+                  ? 'text-slate-600 bg-slate-200/50 hover:bg-slate-200 hover:text-slate-900'
+                  : 'text-slate-500 bg-slate-900/50 hover:bg-slate-900 hover:text-white'
+              }`}
+            >
+              <Bell size={18} />
+              {filteredNotifications.length > 0 && (
+                <span className="absolute -top-1 -right-1 text-slate-900 text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-bounce bg-yellow-500">
+                  {filteredNotifications.length}
+                </span>
+              )}
+            </button>
+          )}
           {isOnline ? <Wifi size={16} className="text-green-500" /> : <WifiOff size={16} className="text-red-500" />}
           <button
             onClick={async () => {
