@@ -432,7 +432,7 @@ export default function TenantApp({ params }: TenantPageProps) {
   // Stock Alert logic (Grouped)
   const stockAlertTriggered = useRef(false);
   useEffect(() => {
-    if (!profile || profile.role === 'kitchen' || profile.role === 'bartender') return;
+    if (!profile || profile.role === 'kitchen' || profile.role === 'bartender' || profile.role === 'delivery') return;
     
     const lowStockIngs = ingredients.filter(ing => ing.stock_level <= ing.min_stock_alert);
     if (lowStockIngs.length > 0) {
