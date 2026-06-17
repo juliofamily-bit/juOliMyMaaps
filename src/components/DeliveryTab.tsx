@@ -66,19 +66,39 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
     return diff < 0 ? '0m' : `${diff}m`;
   };
 
-  // Campana de nuevo pedido de delivery
-  const prevDeliveryIdsRef = useRef<string[]>([]);
+  // Campana de nuevo pedido de delivery y cuando está listo
+  const prevDeliveryStateRef = useRef<Record<string, boolean>>({});
   useEffect(() => {
-    const currentIds = activeDeliveries.map(o => o.id);
-    const prevDeliveryIds = prevDeliveryIdsRef.current;
-    if (prevDeliveryIds.length > 0) {
-      const newOrders = currentIds.filter(id => !prevDeliveryIds.includes(id));
-      if (newOrders.length > 0) {
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-        audio.play().catch(e => console.log('Campana de delivery bloqueada:', e));
+    const currentState: Record<string, boolean> = {};
+    let shouldPlaySound = false;
+
+    activeDeliveries.forEach(o => {
+      // Un pedido está listo si todos sus items están "delivered" (listos de cocina/barra)
+      const isReady = o.items?.every((item: any) => {
+        const needsPrep = item.target_departments?.includes('kitchen') || item.target_departments?.includes('bartender');
+        if (!needsPrep) return true;
+        return item.status === 'delivered';
+      }) ?? true;
+      
+      currentState[o.id] = isReady;
+
+      // Evaluar si es un pedido nuevo, o si acaba de pasar a estar "listo"
+      const prevState = prevDeliveryStateRef.current[o.id];
+      if (prevState === undefined) {
+        // Es un pedido nuevo
+        shouldPlaySound = true;
+      } else if (prevState === false && isReady === true) {
+        // El pedido acaba de marcarse como listo en cocina/barra
+        shouldPlaySound = true;
       }
+    });
+
+    if (shouldPlaySound && Object.keys(prevDeliveryStateRef.current).length > 0) {
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audio.play().catch(e => console.log('Campana de delivery bloqueada:', e));
     }
-    prevDeliveryIdsRef.current = currentIds;
+
+    prevDeliveryStateRef.current = currentState;
   }, [activeDeliveries]);
 
     const handleClaimOrder = async (orderId: string) => {

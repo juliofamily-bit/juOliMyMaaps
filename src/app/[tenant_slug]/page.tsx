@@ -342,6 +342,12 @@ export default function TenantApp({ params }: TenantPageProps) {
   const filteredNotifications = notifications.filter(n => {
     if (!profile) return false;
 
+    // REGLA ESTRICTA: Si estamos en la pestaña de delivery, SOLO mostramos notificaciones de delivery, 
+    // sin importar si somos admin o staff.
+    if (activeTab === 'delivery') {
+      return n.target_roles.includes('delivery');
+    }
+
     // ADMIN: Ve todo SIEMPRE en su campana principal
     if (profile.role === 'admin') {
       return true;
