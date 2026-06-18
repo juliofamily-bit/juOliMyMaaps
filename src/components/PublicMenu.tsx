@@ -817,10 +817,60 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   // (El control automático de ocupación por QR fue eliminado a pedido del usuario)
 
   // 2. Mesas Libres ahora
+  const [reservedTablesForToday, setReservedTablesForToday] = useState<number>(0);
+
+  useEffect(() => {
+    const fetchTodayReservations = async () => {
+      if (!tenant?.id) return;
+      try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const { data, error } = await supabase
+          .from('reservations')
+          .select('assigned_tables')
+          .eq('tenant_id', tenant.id)
+          .eq('reservation_date', todayStr)
+          .in('status', ['confirmed', 'pending_payment']);
+
+        if (error) throw error;
+
+        let reservedCount = 0;
+        data?.forEach((res: any) => {
+          if (res.assigned_tables && Array.isArray(res.assigned_tables)) {
+            reservedCount += res.assigned_tables.length;
+          }
+        });
+        setReservedTablesForToday(reservedCount);
+      } catch (err) {
+        console.error('Error fetching today reservations:', err);
+      }
+    };
+    
+    fetchTodayReservations();
+    
+    // Subscribe to changes in reservations for this tenant to keep count updated
+    const channel = supabase.channel(`public_menu_reservations_${tenant?.id}`)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'reservations',
+        filter: `tenant_id=eq.${tenant?.id}`
+      }, () => {
+        fetchTodayReservations();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [tenant?.id]);
+
   const freeTablesCount = useMemo(() => {
     const tables = tenant?.tables || [];
-    return tables.filter((t: any) => !t.is_occupied).length;
-  }, [tenant?.tables]);
+    const physicallyFreeCount = tables.filter((t: any) => !t.is_occupied).length;
+    // Restamos las mesas que están físicamente libres pero reservadas para hoy.
+    // Usamos Math.max para que nunca sea negativo en caso de desajustes.
+    return Math.max(0, physicallyFreeCount - reservedTablesForToday);
+  }, [tenant?.tables, reservedTablesForToday]);
 
   // Generador de Código de Reserva (6 caracteres en mayúsculas)
   const generateResCode = () => {
@@ -4195,14 +4245,12 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onPointerDown={(e) => {
-                      e.preventDefault(); // Prevent default touch behavior
+                    onClick={() => {
                       setReservationPartySize(prev => Math.max(1, prev - 1));
                     }}
                     className={`w-12 h-12 rounded-xl border flex items-center justify-center font-bold transition-all active:scale-95 ${
                       isLight ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200' : 'bg-neutral-900 border-neutral-800 text-white hover:bg-neutral-800'
                     }`}
-                    style={{ touchAction: 'none' }} // Ensure no browser pan/zoom interferes
                   >
                     -
                   </button>
@@ -4213,14 +4261,12 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   </div>
                   <button
                     type="button"
-                    onPointerDown={(e) => {
-                      e.preventDefault(); // Prevent default touch behavior
+                    onClick={() => {
                       setReservationPartySize(prev => prev + 1);
                     }}
                     className={`w-12 h-12 rounded-xl border flex items-center justify-center font-bold transition-all active:scale-95 ${
                       isLight ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200' : 'bg-neutral-900 border-neutral-800 text-white hover:bg-neutral-800'
                     }`}
-                    style={{ touchAction: 'none' }} // Ensure no browser pan/zoom interferes
                   >
                     +
                   </button>
