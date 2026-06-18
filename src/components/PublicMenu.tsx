@@ -4248,7 +4248,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     onClick={() => {
                       setReservationPartySize(prev => Math.max(1, prev - 1));
                     }}
-                    className={`w-12 h-12 rounded-xl border flex items-center justify-center font-bold transition-all active:scale-95 ${
+                    className={`w-12 h-12 rounded-xl border flex items-center justify-center font-bold transition-colors ${
                       isLight ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200' : 'bg-neutral-900 border-neutral-800 text-white hover:bg-neutral-800'
                     }`}
                   >
@@ -4264,7 +4264,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     onClick={() => {
                       setReservationPartySize(prev => prev + 1);
                     }}
-                    className={`w-12 h-12 rounded-xl border flex items-center justify-center font-bold transition-all active:scale-95 ${
+                    className={`w-12 h-12 rounded-xl border flex items-center justify-center font-bold transition-colors ${
                       isLight ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200' : 'bg-neutral-900 border-neutral-800 text-white hover:bg-neutral-800'
                     }`}
                   >
