@@ -4257,7 +4257,9 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   <div className={`flex-1 border rounded-xl py-3 text-center font-bold text-sm ${
                     isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-neutral-900/30 border-neutral-900 text-white'
                   }`}>
-                    👥 {reservationPartySize} {reservationPartySize === 1 ? 'Persona' : 'Personas'}
+                    <span key={`party-size-${reservationPartySize}`} className="inline-block animate-in fade-in duration-200">
+                      👥 {reservationPartySize} {reservationPartySize === 1 ? 'Persona' : 'Personas'}
+                    </span>
                   </div>
                   <button
                     type="button"
