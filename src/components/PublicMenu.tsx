@@ -4195,14 +4195,14 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
+                    onPointerDown={(e) => {
+                      e.preventDefault(); // Prevent default touch behavior
                       setReservationPartySize(prev => Math.max(1, prev - 1));
                     }}
                     className={`w-12 h-12 rounded-xl border flex items-center justify-center font-bold transition-all active:scale-95 ${
                       isLight ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200' : 'bg-neutral-900 border-neutral-800 text-white hover:bg-neutral-800'
                     }`}
-                    style={{ touchAction: 'manipulation' }}
+                    style={{ touchAction: 'none' }} // Ensure no browser pan/zoom interferes
                   >
                     -
                   </button>
@@ -4213,14 +4213,14 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   </div>
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
+                    onPointerDown={(e) => {
+                      e.preventDefault(); // Prevent default touch behavior
                       setReservationPartySize(prev => prev + 1);
                     }}
                     className={`w-12 h-12 rounded-xl border flex items-center justify-center font-bold transition-all active:scale-95 ${
                       isLight ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200' : 'bg-neutral-900 border-neutral-800 text-white hover:bg-neutral-800'
                     }`}
-                    style={{ touchAction: 'manipulation' }}
+                    style={{ touchAction: 'none' }} // Ensure no browser pan/zoom interferes
                   >
                     +
                   </button>

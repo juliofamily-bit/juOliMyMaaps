@@ -1188,6 +1188,18 @@ export default function WaiterTab({
             return 'occupied_empty';
         }
         
+        // CORRECCIÓN RESERVAS: Verificar si la mesa tiene una reserva confirmada para hoy
+        const isReservedToday = reservations.some(res => {
+            if (res.status !== 'confirmed') return false;
+            // Verificar si la mesa está asignada a esta reserva
+            const hasTable = res.assigned_tables?.some((t: any) => t.id === resolvedId || t.id === tableId);
+            return hasTable;
+        });
+
+        if (isReservedToday) {
+            return 'reserved';
+        }
+        
         return 'free'; // Disponible / Libre
     };
 
@@ -1884,7 +1896,9 @@ export default function WaiterTab({
                                                             ? 'bg-gradient-to-br from-red-950/90 via-red-900/40 to-slate-950/95 border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.45)] animate-pulse text-white bg-slate-950/60 backdrop-blur-xl'
                                                             : status === 'occupied' || status === 'occupied_empty'
                                                                 ? 'bg-gradient-to-br from-slate-900/90 via-slate-900/60 to-slate-950/95 border-blue-500/30 hover:border-blue-500/60 shadow-[0_4px_20px_rgba(0,0,0,0.3)] text-white bg-slate-950/60 backdrop-blur-xl'
-                                                                : 'bg-slate-950/30 border-white/5 opacity-80 hover:opacity-100 hover:border-white/15 shadow-[0_4px_15px_rgba(0,0,0,0.2)] text-white bg-slate-950/60 backdrop-blur-xl')
+                                                                : status === 'reserved'
+                                                                    ? 'bg-gradient-to-br from-purple-950/40 via-purple-900/20 to-slate-950/95 border-purple-500/50 shadow-[0_4px_20px_rgba(168,85,247,0.2)] text-white bg-slate-950/60 backdrop-blur-xl'
+                                                                    : 'bg-slate-950/30 border-white/5 opacity-80 hover:opacity-100 hover:border-white/15 shadow-[0_4px_15px_rgba(0,0,0,0.2)] text-white bg-slate-950/60 backdrop-blur-xl')
                                             }`}
                                         >
                                             {/* Tag Superior y LED */}
@@ -1905,7 +1919,9 @@ export default function WaiterTab({
                                                         className={`flex items-center gap-1.5 px-2 py-1 rounded-lg shrink-0 transition-colors border ${
                                                             table.is_occupied 
                                                                 ? 'bg-red-500/10 border-red-500/20 hover:bg-red-500/20' 
-                                                                : isLight ? 'bg-slate-50 border-slate-200 hover:bg-slate-100' : 'bg-slate-900/80 border-slate-800 hover:bg-slate-800'
+                                                                : status === 'reserved'
+                                                                    ? 'bg-purple-500/10 border-purple-500/30 hover:bg-purple-500/20'
+                                                                    : isLight ? 'bg-slate-50 border-slate-200 hover:bg-slate-100' : 'bg-slate-900/80 border-slate-800 hover:bg-slate-800'
                                                         }`}
                                                     >
                                                         {table.is_occupied ? (
@@ -1915,6 +1931,11 @@ export default function WaiterTab({
                                                                     <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)]"></span>
                                                                 </span>
                                                                 <span className="text-[7px] font-black uppercase text-red-500 tracking-wider">Ocupada</span>
+                                                            </>
+                                                        ) : status === 'reserved' ? (
+                                                            <>
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_5px_rgba(168,85,247,0.8)]" />
+                                                                <span className="text-[7px] font-black uppercase text-purple-400 tracking-wider">Reservada</span>
                                                             </>
                                                         ) : (
                                                             <>
