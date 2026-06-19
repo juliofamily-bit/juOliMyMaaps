@@ -640,6 +640,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
     const [prodPrice, setProdPrice] = useState('');
     const [prodImage, setProdImage] = useState(PRESET_IMAGES[0].url);
     const [prodIngredients, setProdIngredients] = useState<ProductIngredient[]>([]);
+    const [prodCustomQuestion, setProdCustomQuestion] = useState('');
+    const [prodIsQuestionRequired, setProdIsQuestionRequired] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Stock Form State
@@ -2185,7 +2187,9 @@ const AdminTab: React.FC<AdminTabProps> = ({
             price: parseFloat(prodPrice),
             category_id: activeCategoryId,
             description: prodDesc.trim(),
-            image_url: prodImage
+            image_url: prodImage,
+            custom_question: prodCustomQuestion.trim(),
+            is_question_required: prodIsQuestionRequired
         };
 
         let prodId = editingProductId;
@@ -2227,6 +2231,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
         }
 
         setProdName(''); setProdDesc(''); setProdPrice(''); setProdImage(PRESET_IMAGES[0].url); setProdIngredients([]);
+        setProdCustomQuestion(''); setProdIsQuestionRequired(false);
         setEditingProductId(null);
         setIsProductModalOpen(false);
         refetchData?.();
@@ -2240,6 +2245,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
         setProdDesc(prod.description || '');
         setProdPrice(prod.price.toString());
         setProdImage(prod.image_url || PRESET_IMAGES[0].url);
+        setProdCustomQuestion(prod.custom_question || '');
+        setProdIsQuestionRequired(prod.is_question_required || false);
         
         const existingIngs = productIngredients.filter(pi => pi.product_id === prod.id);
         setProdIngredients(existingIngs);
@@ -5590,7 +5597,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                     ) : (
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                             {tablesList.map(table => {
-                                const tableQrUrl = `${window.location.origin}/${tenant.slug}/menu?table=${table.id}`;
+                                const tableQrUrl = `${window.location.origin}/${tenant.slug}/menu?table=${table.id}&scan=true`;
                                 const qrImgApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(tableQrUrl)}`;
                                 return (
                                     <div key={table.id} className="glass p-5 rounded-[2rem] border border-white/5 flex flex-col justify-between gap-4 relative overflow-hidden group bg-slate-900/20">
@@ -5636,7 +5643,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
                     {/* Modal Premium para mostrar y descargar el QR */}
                     {selectedTableForQr && (() => {
-                        const tableQrUrl = `${window.location.origin}/${tenant.slug}/menu?table=${selectedTableForQr.id}`;
+                        const tableQrUrl = `${window.location.origin}/${tenant.slug}/menu?table=${selectedTableForQr.id}&scan=true`;
                         const qrImgApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(tableQrUrl)}`;
                         return (
                             <div className="fixed inset-0 z-[150] flex items-center justify-center px-4 bg-black/85 backdrop-blur-md animate-in fade-in">
@@ -7160,6 +7167,20 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Descripción (Opcional)</label>
                                     <textarea value={prodDesc} onChange={e => setProdDesc(e.target.value)} rows={2} className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-medium text-[11px] outline-none custom-scrollbar resize-none" placeholder="Ej: Hamburguesa con doble medallón, queso cheddar, bacon y salsa secreta."></textarea>
                                 </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2 text-blue-400">Pregunta Personalizada al Cliente (Opcional)</label>
+                                    <textarea value={prodCustomQuestion} onChange={e => setProdCustomQuestion(e.target.value)} rows={2} className="w-full bg-slate-900 border border-blue-500/30 rounded-2xl p-4 text-white font-medium text-[11px] outline-none custom-scrollbar resize-none focus:border-blue-500 transition-colors" placeholder="Ej: ¿Qué tipo de cerveza querés en el combo? ¿Cómo prefieres tu hamburguesa? ¿Con qué aderezo?"></textarea>
+                                </div>
+                                {prodCustomQuestion.trim().length > 0 && (
+                                    <label className="flex items-center gap-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl cursor-pointer hover:bg-blue-500/20 transition-colors">
+                                        <div className="relative flex items-center">
+                                            <input type="checkbox" checked={prodIsQuestionRequired} onChange={e => setProdIsQuestionRequired(e.target.checked)} className="sr-only" />
+                                            <div className={`w-8 h-4 rounded-full transition-colors ${prodIsQuestionRequired ? 'bg-blue-500' : 'bg-slate-700'}`}></div>
+                                            <div className={`absolute w-3 h-3 bg-white rounded-full top-0.5 transition-transform ${prodIsQuestionRequired ? 'translate-x-4.5' : 'translate-x-0.5'}`}></div>
+                                        </div>
+                                        <span className="text-[10px] font-bold text-white uppercase">¿Es Obligatorio Responder?</span>
+                                    </label>
+                                )}
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Precio Venta (ARS $)</label>
                                     <input type="number" value={prodPrice} onChange={e => setProdPrice(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-bold outline-none" placeholder="0" />

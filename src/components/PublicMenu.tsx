@@ -350,6 +350,9 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
   
+  const [questionModalProduct, setQuestionModalProduct] = useState<Product | null>(null);
+  const [questionModalAnswer, setQuestionModalAnswer] = useState('');
+  
   // Checkout states
   const [customerInfo, setCustomerInfo] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -511,6 +514,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   const [tableName, setTableName] = useState<string | null>(null);
   const [isCallingWaiter, setIsCallingWaiter] = useState(false);
   const [waiterCallCooldown, setWaiterCallCooldown] = useState(0);
+  const [isSessionExpired, setIsSessionExpired] = useState(false);
 
   // Estados y referencias para el botón flotante arrastrable (Premium Glassmorphic)
   const [dragPosition, setDragPosition] = useState({ x: 24, y: 120 });
@@ -564,6 +568,8 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
 
   useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const tableId = params.get('table');
@@ -597,6 +603,43 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         if (match) {
           setTableName(match.name);
         }
+
+        // --- Lógica de Sesión de Mesa con QR (90 min) ---
+        const isScan = params.get('scan') === 'true';
+        const sessionKey = `table_session_${tenant.id}`;
+        
+        if (isScan) {
+          localStorage.setItem(sessionKey, Date.now().toString());
+          params.delete('scan');
+          const queryString = params.toString();
+          const newUrl = `${window.location.pathname}${queryString ? '?' + queryString : ''}`;
+          window.history.replaceState({}, document.title, newUrl);
+          setIsSessionExpired(false);
+        } else {
+          const sessionStart = localStorage.getItem(sessionKey);
+          if (sessionStart) {
+            const elapsedTime = Date.now() - parseInt(sessionStart, 10);
+            const SESSION_TIMEOUT_MS = 2 * 60 * 1000; // 2 min para pruebas
+            if (elapsedTime > SESSION_TIMEOUT_MS) {
+              setIsSessionExpired(true);
+            }
+          } else {
+            // Link copiado sin ser escaneado recientemente
+            setIsSessionExpired(true);
+          }
+        }
+
+        // Check en tiempo real cada 10 segundos para pruebas rápidas
+        intervalId = setInterval(() => {
+          const sessionStart = localStorage.getItem(sessionKey);
+          if (sessionStart) {
+            const elapsedTime = Date.now() - parseInt(sessionStart, 10);
+            const SESSION_TIMEOUT_MS = 2 * 60 * 1000;
+            if (elapsedTime > SESSION_TIMEOUT_MS) {
+              setIsSessionExpired(true);
+            }
+          }
+        }, 10000);
       }
 
       // -----------------------------------------------------
@@ -665,6 +708,10 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         }
       }
     }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [tenant]);
 
   useEffect(() => {
@@ -1298,7 +1345,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     return Math.max(0, maxPossible);
   };
 
-  const addToCart = (product: Product) => {
+  const performAddToCart = (product: Product, answerNote?: string) => {
     const availableNow = getAvailableStockForProduct(product.id);
     
     if (availableNow <= 0) {
@@ -1314,13 +1361,23 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     const productWithPrice = { ...product, price: finalPrice };
 
     setCart((prev) => {
-      const existing = prev.find(item => item.id === product.id);
-      if (existing) {
-        return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+      const existingIndex = prev.findIndex(item => item.id === product.id && item.notes === answerNote);
+      if (existingIndex >= 0) {
+        return prev.map((item, index) => index === existingIndex ? { ...item, quantity: item.quantity + 1 } : item);
       }
-      return [...prev, { ...productWithPrice, cartItemId: crypto.randomUUID(), quantity: 1 }];
+      return [...prev, { ...productWithPrice, cartItemId: crypto.randomUUID(), quantity: 1, notes: answerNote }];
     });
   };
+
+  const addToCart = (product: Product) => {
+    if (product.custom_question) {
+      setQuestionModalProduct(product);
+      setQuestionModalAnswer('');
+      return;
+    }
+    performAddToCart(product);
+  };
+
 
   const updateQuantity = (cartItemId: string, delta: number) => {
     setCart((prev) => {
@@ -1693,6 +1750,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       const giftNoteBase = giftMode.isActive ? `🎁 REGALO PARA: ${giftMode.toTable}${hintText} | DE: ${giftMode.isAnonymous ? 'Alguien Misterioso' : giftMode.fromTable}` : '';
       
       cart.forEach(item => {
+        const finalNotes = [giftNoteBase, item.notes].filter(Boolean).join(' | ');
         const product = products.find(p => p.id === item.id);
         const category = categories.find(c => c.id === product?.category_id);
         const catDepts = category?.target_departments || ['kitchen'];
@@ -1710,7 +1768,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             status: 'pending',
             tenant_id: tenant.id,
             target_departments: catDepts,
-            notes: giftNoteBase // No necesita desglosarse en notas
+            notes: finalNotes
           });
           return;
         }
@@ -1729,7 +1787,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             status: 'pending',
             tenant_id: tenant.id,
             target_departments: ['kitchen'],
-            notes: giftNoteBase
+            notes: finalNotes
           });
           return;
         }
@@ -1758,7 +1816,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             status: 'pending',
             tenant_id: tenant.id,
             target_departments: deptsFound.length === 1 ? [deptsFound[0]] : ['kitchen'],
-            notes: giftNoteBase
+            notes: finalNotes
           });
         } else {
           // Multi-departamento REAL: DIVIDIR (Ej: Hamburguesa + Gaseosa)
@@ -1772,7 +1830,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               status: 'pending',
               tenant_id: tenant.id,
               target_departments: [d],
-              notes: giftNoteBase ? `${giftNoteBase} - ${splitNote}` : splitNote // Nombre específico del componente (ej: Hamburguesa o Coca-Cola)
+              notes: finalNotes ? `${finalNotes} - ${splitNote}` : splitNote
             });
           });
         }
@@ -2103,6 +2161,48 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     return (
       <div className="min-h-screen bg-black flex justify-center items-center">
         <Loader2 className="w-10 h-10 text-white animate-spin" style={{ color: primaryColor }} />
+      </div>
+    );
+  }
+
+  if (isSessionExpired) {
+    return (
+      <div className={`min-h-screen flex flex-col justify-center items-center p-6 text-center transition-colors duration-500 ${isLight ? 'bg-slate-50 text-slate-900' : 'bg-neutral-950 text-white'}`}>
+        <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
+          <Clock className="w-10 h-10 text-red-500" />
+        </div>
+        <h2 className="text-3xl font-bold mb-4 tracking-tight">Sesión Expirada</h2>
+        <div className={`p-6 rounded-2xl mb-8 max-w-md border shadow-lg ${isLight ? 'bg-white border-slate-200' : 'bg-neutral-900 border-neutral-800'}`}>
+          <p className={`text-base mb-5 ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
+            Por seguridad, el acceso directo a la mesa tiene un límite de 2 minutos (para pruebas).
+          </p>
+          <div className={`p-4 rounded-xl flex items-start gap-3 text-left ${isLight ? 'bg-orange-50 border border-orange-100 text-orange-800' : 'bg-orange-500/10 border border-orange-500/20 text-orange-200'}`}>
+            <Utensils className="w-6 h-6 flex-shrink-0 mt-0.5 text-orange-500" />
+            <div>
+              <p className="font-semibold mb-1">¿Aún estás en el local?</p>
+              <p className="text-sm opacity-90 leading-relaxed">Por favor, vuelve a escanear el código QR que se encuentra en tu mesa para continuar pidiendo.</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="w-full max-w-md">
+          <a 
+            href={`/${tenant.slug}/menu`}
+            className={`w-full flex flex-col items-center justify-center gap-2 px-6 py-5 rounded-2xl border-2 transition-all group ${
+              isLight 
+                ? 'border-slate-300 hover:border-slate-400 hover:shadow-md bg-white text-slate-800' 
+                : 'border-neutral-800 hover:border-neutral-700 hover:bg-neutral-800 bg-neutral-900 text-white'
+            }`}
+          >
+            <div className="flex items-center gap-2 font-bold text-lg">
+              <Home className="w-6 h-6 transition-transform group-hover:scale-110" style={{ color: primaryColor }} />
+              Menú de Envíos a Domicilio
+            </div>
+            <span className={`text-sm text-center font-medium px-4 ${isLight ? 'text-slate-500' : 'text-neutral-400'}`}>
+              Si estás en tu casa y quieres pedir Delivery o Retirar por el local, haz clic aquí.
+            </span>
+          </a>
+        </div>
       </div>
     );
   }
@@ -3039,6 +3139,65 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         </div>
       )}
 
+      {/* MODAL DE PREGUNTA PERSONALIZADA */}
+      {questionModalProduct && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setQuestionModalProduct(null)} />
+          <div className={`relative w-full max-w-sm rounded-3xl p-6 shadow-2xl ${isLight ? 'bg-white text-slate-900' : 'bg-neutral-900 border border-neutral-800 text-white'}`}>
+            <h3 className="text-xl font-black mb-2 text-center">
+              Personalizá tu pedido
+            </h3>
+            <p className="text-center text-sm mb-6 opacity-80">
+              {questionModalProduct.name}
+            </p>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold mb-2">
+                  {questionModalProduct.custom_question}
+                  {questionModalProduct.is_question_required && <span className="text-red-500 ml-1">*</span>}
+                </label>
+                <textarea
+                  value={questionModalAnswer}
+                  onChange={(e) => setQuestionModalAnswer(e.target.value)}
+                  placeholder="Escribí tu respuesta acá..."
+                  className={`w-full rounded-2xl p-4 min-h-[100px] outline-none transition-all ${
+                    isLight 
+                      ? 'bg-slate-50 border-2 border-slate-200 focus:border-slate-800 focus:bg-white' 
+                      : 'bg-black/50 border-2 border-neutral-800 focus:border-neutral-600 focus:bg-neutral-800'
+                  }`}
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setQuestionModalProduct(null)}
+                  className={`flex-1 py-3.5 rounded-2xl font-bold transition-all ${
+                    isLight ? 'bg-slate-100 text-slate-600 hover:bg-slate-200' : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+                  }`}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    if (questionModalProduct.is_question_required && !questionModalAnswer.trim()) {
+                      alert("Por favor, respondé la pregunta para continuar.");
+                      return;
+                    }
+                    performAddToCart(questionModalProduct, questionModalAnswer.trim());
+                    setQuestionModalProduct(null);
+                    setQuestionModalAnswer('');
+                  }}
+                  className="flex-1 py-3.5 bg-green-500 hover:bg-green-400 text-white rounded-2xl font-black shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all"
+                >
+                  Confirmar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL DEL CARRITO */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
@@ -3090,6 +3249,11 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     <div className="flex-1 min-w-0">
                       <h4 className={`font-medium text-sm truncate transition-colors duration-500 ${isLight ? 'text-slate-900' : 'text-white'}`}>{item.name}</h4>
                       <p className={`font-medium text-sm mt-0.5 transition-colors duration-500 ${isLight ? 'text-slate-500' : 'text-neutral-400'}`}>${item.price.toLocaleString()}</p>
+                      {item.notes && (
+                        <p className={`text-xs mt-1 italic truncate ${isLight ? 'text-slate-400' : 'text-neutral-500'}`}>
+                          💬 {item.notes}
+                        </p>
+                      )}
                     </div>
                     
                     {/* Controles de Cantidad y Eliminar */}

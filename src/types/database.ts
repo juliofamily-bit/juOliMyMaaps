@@ -35,6 +35,8 @@ export interface Product {
     is_active?: boolean;
     is_delivery_app_enabled?: boolean;
     external_product_id?: string;
+    custom_question?: string | null;
+    is_question_required?: boolean;
 }
 
 export interface ProductIngredient {

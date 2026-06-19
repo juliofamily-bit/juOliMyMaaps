@@ -87,7 +87,7 @@ export default function TenantApp({ params }: TenantPageProps) {
       const params = new URLSearchParams(window.location.search);
       const tableId = params.get('table');
       if (tableId) {
-        window.location.href = `/${tenant_slug}/menu?table=${tableId}`;
+        window.location.href = `/${tenant_slug}/menu${window.location.search}`;
         return;
       }
 
