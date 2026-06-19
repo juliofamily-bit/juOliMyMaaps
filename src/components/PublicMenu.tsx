@@ -619,7 +619,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
           const sessionStart = localStorage.getItem(sessionKey);
           if (sessionStart) {
             const elapsedTime = Date.now() - parseInt(sessionStart, 10);
-            const SESSION_TIMEOUT_MS = 90 * 60 * 1000; // 2 min
+            const SESSION_TIMEOUT_MS = 90 * 60 * 1000; // 90 minutos
             if (elapsedTime > SESSION_TIMEOUT_MS) {
               setIsSessionExpired(true);
             }
