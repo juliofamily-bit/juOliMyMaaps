@@ -604,7 +604,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
           setTableName(match.name);
         }
 
-        // --- Lógica de Sesión de Mesa con QR (90 min) ---
+        // --- Lógica de Sesión de Mesa con QR (2 min) ---
         const isScan = params.get('scan') === 'true';
         const sessionKey = `table_session_${tenant.id}`;
         
@@ -619,7 +619,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
           const sessionStart = localStorage.getItem(sessionKey);
           if (sessionStart) {
             const elapsedTime = Date.now() - parseInt(sessionStart, 10);
-            const SESSION_TIMEOUT_MS = 2 * 60 * 1000; // 2 min para pruebas
+            const SESSION_TIMEOUT_MS = 90 * 60 * 1000; // 2 min
             if (elapsedTime > SESSION_TIMEOUT_MS) {
               setIsSessionExpired(true);
             }
@@ -629,17 +629,17 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
           }
         }
 
-        // Check en tiempo real cada 10 segundos para pruebas rápidas
+        // Check en tiempo real cada minuto
         intervalId = setInterval(() => {
           const sessionStart = localStorage.getItem(sessionKey);
           if (sessionStart) {
             const elapsedTime = Date.now() - parseInt(sessionStart, 10);
-            const SESSION_TIMEOUT_MS = 2 * 60 * 1000;
+            const SESSION_TIMEOUT_MS = 2 * 60 * 1000; // 2 min
             if (elapsedTime > SESSION_TIMEOUT_MS) {
               setIsSessionExpired(true);
             }
           }
-        }, 10000);
+        }, 60000);
       }
 
       // -----------------------------------------------------
@@ -2174,7 +2174,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         <h2 className="text-3xl font-bold mb-4 tracking-tight">Sesión Expirada</h2>
         <div className={`p-6 rounded-2xl mb-8 max-w-md border shadow-lg ${isLight ? 'bg-white border-slate-200' : 'bg-neutral-900 border-neutral-800'}`}>
           <p className={`text-base mb-5 ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
-            Por seguridad, el acceso directo a la mesa tiene un límite de 2 minutos (para pruebas).
+            Por seguridad, el acceso directo a la mesa tiene un límite de 2 minutos.
           </p>
           <div className={`p-4 rounded-xl flex items-start gap-3 text-left ${isLight ? 'bg-orange-50 border border-orange-100 text-orange-800' : 'bg-orange-500/10 border border-orange-500/20 text-orange-200'}`}>
             <Utensils className="w-6 h-6 flex-shrink-0 mt-0.5 text-orange-500" />
