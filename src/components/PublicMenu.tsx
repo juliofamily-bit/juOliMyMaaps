@@ -303,10 +303,12 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     
     // Filtrar turnos llenos (donde reservas >= cantidad de mesas)
     const totalTables = Array.isArray(tenant?.tables) ? tenant.tables.length : 0;
+    const occupiedTables = (isToday && Array.isArray(tenant?.tables)) ? tenant.tables.filter((t: any) => t.is_occupied).length : 0;
+    const availableTablesCount = Math.max(0, totalTables - occupiedTables);
     
     const capacityFilteredSlots = uniqueSlots.filter(time => {
         const booked = bookedTimesCount[time] || 0;
-        return booked < totalTables;
+        return booked < availableTablesCount;
     });
 
     return capacityFilteredSlots.sort((a, b) => {
@@ -615,11 +617,20 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
           const newUrl = `${window.location.pathname}${queryString ? '?' + queryString : ''}`;
           window.history.replaceState({}, document.title, newUrl);
           setIsSessionExpired(false);
+          
+          // Marcar la mesa como ocupada globalmente
+          if (tenant?.id && tableId) {
+            fetch('/api/tables/occupy', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tenantId: tenant.id, tableId: tableId })
+            }).catch(e => console.error("Error setting table occupancy:", e));
+          }
         } else {
           const sessionStart = localStorage.getItem(sessionKey);
           if (sessionStart) {
             const elapsedTime = Date.now() - parseInt(sessionStart, 10);
-            const SESSION_TIMEOUT_MS = 90 * 60 * 1000; // 90 minutos
+            const SESSION_TIMEOUT_MS = 90 * 60 * 1000; // 90 minutos (1 hora y media)
             if (elapsedTime > SESSION_TIMEOUT_MS) {
               setIsSessionExpired(true);
             }
@@ -634,7 +645,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
           const sessionStart = localStorage.getItem(sessionKey);
           if (sessionStart) {
             const elapsedTime = Date.now() - parseInt(sessionStart, 10);
-            const SESSION_TIMEOUT_MS = 2 * 60 * 1000; // 2 min
+            const SESSION_TIMEOUT_MS = 90 * 60 * 1000; // 90 min
             if (elapsedTime > SESSION_TIMEOUT_MS) {
               setIsSessionExpired(true);
             }
@@ -2174,7 +2185,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         <h2 className="text-3xl font-bold mb-4 tracking-tight">Sesión Expirada</h2>
         <div className={`p-6 rounded-2xl mb-8 max-w-md border shadow-lg ${isLight ? 'bg-white border-slate-200' : 'bg-neutral-900 border-neutral-800'}`}>
           <p className={`text-base mb-5 ${isLight ? 'text-slate-600' : 'text-slate-300'}`}>
-            Por seguridad, el acceso directo a la mesa tiene un límite de 2 minutos.
+            Por seguridad, el acceso directo a la mesa tiene un límite de 90 minutos (1 hora y media).
           </p>
           <div className={`p-4 rounded-xl flex items-start gap-3 text-left ${isLight ? 'bg-orange-50 border border-orange-100 text-orange-800' : 'bg-orange-500/10 border border-orange-500/20 text-orange-200'}`}>
             <Utensils className="w-6 h-6 flex-shrink-0 mt-0.5 text-orange-500" />
