@@ -17,6 +17,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
         }
 
+        // Se usa Service Role porque esta API es llamada por clientes no autenticados al escanear QR
         const supabase = createClient(supabaseUrl, supabaseKey);
 
         // 1. Obtener el tenant actual para acceder a su arreglo de mesas

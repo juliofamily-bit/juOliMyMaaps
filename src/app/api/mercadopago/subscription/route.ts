@@ -98,8 +98,9 @@ export async function POST(req: Request) {
       backUrl = `${origin}/${tenant.slug}/admin?tab=subscription`;
     }
 
+    const reasonText = `Suscripción MyM - ${plan.name}`;
     const mpBody = {
-      reason: `Suscripción Mmm TodoLoQueQuiero Comer - ${plan.name}`,
+      reason: reasonText.length > 40 ? reasonText.substring(0, 40) : reasonText,
       external_reference: tenantId,
       payer_email: payerEmail,
       back_url: backUrl,

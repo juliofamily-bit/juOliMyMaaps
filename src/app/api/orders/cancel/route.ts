@@ -1,17 +1,20 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Usar el Service Role Key para ignorar el Row Level Security y forzar la cancelación/borrado
+// Usar el cliente autenticado para respetar Row Level Security (RLS)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''; 
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''; 
 
 export async function POST(request: Request) {
   try {
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("Faltan las credenciales de entorno del Service Role.");
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
     const { orderId } = await request.json();
 
     if (!orderId) {

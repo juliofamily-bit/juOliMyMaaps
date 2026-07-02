@@ -51,9 +51,14 @@ export default function AdminDeliverySettlement({ tenant }: { tenant: any }) {
     setPaying(true);
     try {
       // Usar la API
+      const { data: { session } } = await supabase.auth.getSession();
+      
       const res = await fetch('/api/delivery/pay', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token || ''}`
+        },
         body: JSON.stringify({
           tenantId: tenant.id,
           employeeName // Pasamos el nombre del repartidor

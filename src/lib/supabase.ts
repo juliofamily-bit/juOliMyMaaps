@@ -9,11 +9,7 @@ let activeTenantId: string | null = null;
 function getClient(): SupabaseClient {
   const key = activeTenantId || 'default';
   if (!clientsCache[key]) {
-    clientsCache[key] = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: activeTenantId ? { 'x-tenant-id': activeTenantId } : {}
-      }
-    });
+    clientsCache[key] = createClient(supabaseUrl, supabaseAnonKey);
   }
   return clientsCache[key];
 }

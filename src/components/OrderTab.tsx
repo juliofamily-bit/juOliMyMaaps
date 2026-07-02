@@ -1367,7 +1367,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                     )}
 
                     {!selectedCategoryId ? (
-                        <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4 animate-in fade-in slide-in-from-bottom-4">
                             {categories.length === 0 && (
                                 <div className="col-span-2 py-10 text-center text-slate-600">
                                     <AlertCircle className="mx-auto mb-2 opacity-20" size={40} />
@@ -1390,7 +1390,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                             ))}
                         </div>
                     ) : (
-                        <div className="space-y-4 animate-in slide-in-from-right-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-in slide-in-from-right-4">
                             {(() => {
                                 const selectedCategory = categories.find(c => c.id === selectedCategoryId);
                                 const isOfferCategory = selectedCategory 

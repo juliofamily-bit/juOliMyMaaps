@@ -9,14 +9,14 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@afipsdk/afip.js": "^0.7.11",
+    "@afipsdk/afip.js": "^1.2.3",
     "@serwist/next": "^9.5.11",
     "@supabase/supabase-js": "^2.108.2",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
     "lucide-react": "^0.563.0",
     "mercadopago": "^3.0.0",
-    "next": "16.1.6",
+    "next": "^16.2.10",
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",

@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
       cert: `afip_cert_${tenantId}.crt`,
       key: `afip_key_${tenantId}.key`,
       production: !isSandbox
-    });
+    } as any);
 
     // 5. Determinar el Tipo de Comprobante (por defecto 11 = Factura C para monotributistas, o 6 = Factura B para Consumidor Final)
     // 11 = Factura C (Común para Monotributistas)

@@ -626,18 +626,30 @@ export default function TenantApp({ params }: TenantPageProps) {
           return;
         }
 
-        // 1. Verificar credenciales con PIN
-        const { data, error: rpcError } = await supabase.rpc('check_employee_credential', {
-          p_tenant_id: tenant.id,
-          p_employee_id: selectedEmployeeId,
-          p_pin: password
+        // 1. Verificar credenciales con PIN a través de la API segura y obtener sesión JWT
+        const loginRes = await fetch('/api/auth/pin-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId: tenant.id,
+            employeeId: selectedEmployeeId,
+            pin: password
+          })
         });
 
-        if (rpcError || !data?.success) {
-          setError(data?.error || 'PIN incorrecto');
+        const loginData = await loginRes.json();
+
+        if (!loginRes.ok || !loginData.success) {
+          setError(loginData.error || 'PIN incorrecto');
           setPassword('');
           return;
         }
+
+        // Establecer la sesión JWT criptográfica de Supabase Auth en el cliente
+        await supabase.auth.setSession(loginData.session);
+        
+        // Reasignamos el objeto data para mantener la compatibilidad con el código inferior
+        const data = { success: true, ...loginData.employee };
 
         // 2. Obtener o generar huella del dispositivo
         let fingerprint = localStorage.getItem(`device_fingerprint_${tenant.id}`);
