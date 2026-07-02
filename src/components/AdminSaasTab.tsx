@@ -10,6 +10,8 @@ export const AdminSaasTab = ({ tenantId }: { tenantId: string }) => {
     const [isRedeeming, setIsRedeeming] = useState(false);
     const [subscribingPlanId, setSubscribingPlanId] = useState<string | null>(null);
 
+    const [tenantEmail, setTenantEmail] = useState('');
+
     const fetchSub = async () => {
         const { data, error } = await supabase
             .from('saas_subscriptions')
@@ -17,6 +19,15 @@ export const AdminSaasTab = ({ tenantId }: { tenantId: string }) => {
             .eq('tenant_id', tenantId)
             .maybeSingle();
         if (data) setSub(data);
+    };
+
+    const fetchTenantEmail = async () => {
+        const { data, error } = await supabase
+            .from('tenants')
+            .select('email')
+            .eq('id', tenantId)
+            .single();
+        if (data?.email) setTenantEmail(data.email);
     };
 
     const fetchPlans = async () => {
@@ -38,7 +49,7 @@ export const AdminSaasTab = ({ tenantId }: { tenantId: string }) => {
         } catch (e) {
             console.error('Error al verificar downgrade:', e);
         }
-        await Promise.all([fetchSub(), fetchPlans()]);
+        await Promise.all([fetchSub(), fetchPlans(), fetchTenantEmail()]);
         setLoading(false);
     };
 
@@ -152,9 +163,16 @@ export const AdminSaasTab = ({ tenantId }: { tenantId: string }) => {
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-            <h2 className="text-2xl font-black text-white flex items-center gap-2">
-                Mi Suscripción <ShieldAlert className="text-orange-500" />
-            </h2>
+            <div className="space-y-1">
+                <h2 className="text-2xl font-black text-white flex items-center gap-2">
+                    Mi Suscripción <ShieldAlert className="text-orange-500" />
+                </h2>
+                {tenantEmail && (
+                    <p className="text-xs text-slate-400">
+                        Local registrado con el correo: <span className="text-orange-400 font-bold">{tenantEmail}</span>
+                    </p>
+                )}
+            </div>
 
             {/* Alerta de Promoción Vencida / Downgrade Automático */}
             {sub?.show_downgrade_alert && (

@@ -188,7 +188,12 @@ export default function FranchisePage() {
           email: newBranchAdminEmail,
           admin_password: newBranchAdminPassword,
           franchise_id: franchise.id,
-          theme_colors: franchise.id ? { primary: '#3b82f6', secondary: '#1e293b', mode: 'dark' } : {}
+          theme_colors: franchise.id ? { primary: '#3b82f6', secondary: '#1e293b', mode: 'dark' } : {},
+          staff_password: '',
+          kitchen_password: '',
+          bartender_password: '',
+          waiter_password: '',
+          delivery_password: ''
         }])
         .select();
 

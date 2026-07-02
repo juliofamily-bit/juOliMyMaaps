@@ -96,11 +96,11 @@ export async function POST(req: Request) {
     let backUrl = '';
     if (host.includes('localhost') || host.includes('127.0.0.1')) {
       // Fallback a producción en pruebas locales para pasar la validación estricta de Mercado Pago
-      backUrl = `https://mymfullcontrol.com.ar/${tenant.slug}/admin?tab=subscription`;
+      backUrl = `https://mymfullcontrol.com.ar/${tenant.slug}?tab=subscription`;
     } else {
       const protocol = 'https';
       const origin = `${protocol}://${host}`;
-      backUrl = `${origin}/${tenant.slug}/admin?tab=subscription`;
+      backUrl = `${origin}/${tenant.slug}?tab=subscription`;
     }
 
     const reasonText = `Suscripción MyM - ${plan.name}`;

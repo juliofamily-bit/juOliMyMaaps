@@ -182,6 +182,11 @@ export default function WelcomePage() {
           theme_colors: { primary: primaryColor, secondary: secondaryColor, mode: themeMode },
           enabled_roles: ['admin', ...enabledRoles],
           admin_password: adminPassword,
+          staff_password: '',
+          kitchen_password: '',
+          bartender_password: '',
+          waiter_password: '',
+          delivery_password: '',
           terms_accepted: true,
           terms_accepted_at: new Date().toISOString()
         }])
