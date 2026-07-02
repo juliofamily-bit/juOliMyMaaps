@@ -2797,17 +2797,24 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         )}
 
         {renderReviewsSection()}
-        {/* Powered by Mmm TodoLoQueQuiero Comer - Footer del Menú */}
-        <div className="pt-10 pb-24 flex flex-col items-center justify-center gap-2 select-none pointer-events-none">
-          <div className="flex items-center gap-2 opacity-60 hover:opacity-100 transition-opacity duration-300">
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Powered by</span>
-            <div className="flex items-center gap-1.5">
-              <img src="/logo.png" alt="Mmm TodoLoQueQuiero Comer Logo" className="w-5 h-5 object-cover rounded-full drop-shadow-md" />
-              <span className="text-xs font-black text-white tracking-wider uppercase">
-                My<span className="text-orange-500">Mozo</span>
-              </span>
-            </div>
-          </div>
+        {/* Powered by Mmm TodoLoQueQuiero - Footer del Menú */}
+        <div className="pt-10 pb-24 flex flex-col items-center justify-center gap-3">
+          <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">Powered by</span>
+          <a 
+            href="https://www.mmmtodoloquequiero.com.ar" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 hover:scale-105 active:scale-95 transition-all duration-300 group"
+          >
+            <img 
+              src="/logo_mym_saas.jpg" 
+              alt="MmM TodoLoQueQuiero" 
+              className="w-8 h-8 object-contain rounded-lg border border-white/10 shadow-md group-hover:border-orange-500/50 transition-colors bg-black" 
+            />
+            <span className="text-xs font-black text-white tracking-widest uppercase group-hover:text-orange-400 transition-colors">
+              TodoLoQueQuiero
+            </span>
+          </a>
         </div>
       </main>
       </>
@@ -3043,8 +3050,28 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             )}
             
             {/* RESEÑAS EN LANDING */}
-            <div className="mt-8 pb-12">
+            <div className="mt-8 pb-8">
               {renderReviewsSection()}
+            </div>
+
+            {/* Footer Corporativo */}
+            <div className="pb-16 flex flex-col items-center justify-center gap-3">
+              <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">Powered by</span>
+              <a 
+                href="https://www.mmmtodoloquequiero.com.ar" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 hover:scale-105 active:scale-95 transition-all duration-300 group"
+              >
+                <img 
+                  src="/logo_mym_saas.jpg" 
+                  alt="MmM TodoLoQueQuiero" 
+                  className="w-8 h-8 object-contain rounded-lg border border-white/10 shadow-md group-hover:border-orange-500/50 transition-colors bg-black" 
+                />
+                <span className="text-xs font-black text-white tracking-widest uppercase group-hover:text-orange-400 transition-colors">
+                  TodoLoQueQuiero
+                </span>
+              </a>
             </div>
           </div>
         </main>

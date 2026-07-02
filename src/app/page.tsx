@@ -282,9 +282,7 @@ export default function WelcomePage() {
             </Link>
           </div>
 
-          <p className="text-[8px] font-black uppercase text-slate-600 tracking-widest">
-            © 2026 mmmTodoLoQueQuiero Inc. Todos los derechos reservados
-          </p>
+          {/* Eliminado copyright local para pasarlo a footer global */}
         </div>
       )}
 
@@ -805,6 +803,28 @@ export default function WelcomePage() {
           </div>
         </div>
       )}
+
+      {/* Footer Global Corporativo */}
+      <div className="mt-8 pb-4 z-10 flex flex-col items-center space-y-3 animate-in fade-in duration-700">
+        <a 
+          href="https://www.mmmtodoloquequiero.com.ar" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="hover:scale-105 active:scale-95 transition-all duration-300 flex flex-col items-center gap-1.5 group"
+        >
+          <img 
+            src="/logo_mym_saas.jpg" 
+            alt="MmM Todo Lo Que Quiero" 
+            className="w-14 h-14 object-contain rounded-2xl border border-white/10 shadow-lg shadow-black/40 group-hover:border-orange-500/50 transition-colors bg-black" 
+          />
+          <span className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] group-hover:text-orange-500 transition-colors">
+            Conoce nuestras Apps
+          </span>
+        </a>
+        <p className="text-[8px] font-black uppercase text-slate-650 tracking-widest">
+          © 2026 mmmTodoLoQueQuiero Inc. Todos los derechos reservados
+        </p>
+      </div>
     </div>
   );
 }
