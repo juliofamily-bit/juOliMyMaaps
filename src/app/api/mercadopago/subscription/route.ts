@@ -33,7 +33,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Local no encontrado' }, { status: 404 });
     }
 
-    const payerEmail = tenant.email || 'test_user_vendedor@testuser.com'; // Fallback a email de prueba si no posee uno
+    let payerEmail = tenant.email || 'test_user_buyer@testuser.com';
+    if (mpAccessToken.startsWith('TEST-')) {
+      // En Sandbox, forzamos un correo de comprador de prueba ficticio para evitar cruce
+      // con la cuenta de vendedor de las API keys.
+      payerEmail = 'test_user_28374928@testuser.com';
+    }
 
     // 2. Obtener información del plan elegido
     const { data: plan, error: planError } = await supabase
