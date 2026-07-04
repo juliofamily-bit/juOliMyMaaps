@@ -107,7 +107,6 @@ export async function POST(req: Request) {
     const mpBody = {
       reason: reasonText.length > 40 ? reasonText.substring(0, 40) : reasonText,
       external_reference: tenantId,
-      payer_email: payerEmail,
       back_url: backUrl,
       auto_recurring: {
         frequency: 1,
