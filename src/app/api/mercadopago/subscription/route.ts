@@ -11,10 +11,10 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { tenantId, planId } = body;
+    const { tenantId, planId, mpEmail } = body;
 
-    if (!tenantId || !planId) {
-      return NextResponse.json({ error: 'Faltan parámetros obligatorios (tenantId, planId)' }, { status: 400 });
+    if (!tenantId || !planId || !mpEmail) {
+      return NextResponse.json({ error: 'Faltan parámetros obligatorios (tenantId, planId, mpEmail)' }, { status: 400 });
     }
 
     const mpAccessToken = process.env.MP_SAAS_ACCESS_TOKEN;
@@ -107,7 +107,7 @@ export async function POST(req: Request) {
     const mpBody = {
       reason: reasonText.length > 40 ? reasonText.substring(0, 40) : reasonText,
       external_reference: tenantId,
-      payer_email: `sub-${Date.now()}@mymfullcontrol.com.ar`,
+      payer_email: mpEmail,
       back_url: backUrl,
       auto_recurring: {
         frequency: 1,

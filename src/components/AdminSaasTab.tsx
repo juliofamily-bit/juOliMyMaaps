@@ -90,6 +90,13 @@ export const AdminSaasTab = ({ tenantId }: { tenantId: string }) => {
     };
 
     const handleSubscribe = async (planId: string) => {
+        const mpEmail = window.prompt("IMPORTANTE: Mercado Pago exige saber con qué cuenta vas a pagar.\n\nPor favor, ingresa el CORREO EXACTO de tu cuenta de Mercado Pago:");
+        
+        if (!mpEmail || mpEmail.trim() === '') {
+            alert('Debes ingresar tu correo de Mercado Pago para continuar.');
+            return;
+        }
+
         setSubscribingPlanId(planId);
         try {
             const res = await fetch('/api/mercadopago/subscription', {
@@ -99,7 +106,8 @@ export const AdminSaasTab = ({ tenantId }: { tenantId: string }) => {
                 },
                 body: JSON.stringify({
                     tenantId,
-                    planId
+                    planId,
+                    mpEmail: mpEmail.trim()
                 })
             });
 
