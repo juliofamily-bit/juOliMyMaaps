@@ -649,6 +649,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
     const [stkPrice, setStkPrice] = useState('');
     const [stkLevel, setStkLevel] = useState('');
     const [stkUnit, setStkUnit] = useState('uds');
+    const [stkIsFractionable, setStkIsFractionable] = useState(false);
     const [stkMinAlert, setStkMinAlert] = useState('10');
     const [stkTargetDepartments, setStkTargetDepartments] = useState<string[]>(['kitchen']);
     const [stkExpirationDate, setStkExpirationDate] = useState('');
@@ -2303,6 +2304,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
             unit: stkUnit,
             min_stock_alert: parseFloat(stkMinAlert),
             target_departments: stkTargetDepartments,
+            is_fractionable: stkIsFractionable,
             tenant_id: tenant?.id
         };
 
@@ -2330,8 +2332,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
             try {
                 const totalCost = newUnitPrice * diff;
                 const description = isNew
-                    ? `Ingreso inicial de Insumo: ${stkName} (x${diff.toFixed(1)} ${stkUnit})`
-                    : `Compra de Insumo: ${stkName} (x${diff.toFixed(1)} ${stkUnit})`;
+                    ? `Ingreso inicial de Insumo: ${stkName} (x${diff.toFixed(3)} ${stkUnit})`
+                    : `Compra de Insumo: ${stkName} (x${diff.toFixed(3)} ${stkUnit})`;
 
                 const { error: expenseError } = await supabase.from('expenses').insert([{
                     description: description,
@@ -2371,7 +2373,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
         if (diff < 0) {
             try {
                 const totalCost = newUnitPrice * Math.abs(diff);
-                const description = `Merma: ${stkName} - ${wasteReason} (x${Math.abs(diff).toFixed(1)} ${stkUnit})`;
+                const description = `Merma: ${stkName} - ${wasteReason} (x${Math.abs(diff).toFixed(3)} ${stkUnit})`;
 
                 const { error: expenseError } = await supabase.from('expenses').insert([{
                     description: description,
@@ -2392,6 +2394,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
         setIsStockModalOpen(false);
         setStkName(''); setStkPrice(''); setStkLevel(''); setStkUnit('uds'); setStkMinAlert('10'); setStkTargetDepartments(['kitchen']);
+        setStkIsFractionable(false);
         setStkExpirationDate('');
         setEditingStockId(null);
         notifyChanges();
@@ -2440,6 +2443,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
         setStkQtyToAdd(''); // Limpiar campo agregar
         setStockUpdateMode('add'); // Iniciar por defecto en modo "Agregar"
         setStkUnit(item.unit);
+        setStkIsFractionable(item.is_fractionable || false);
         setStkMinAlert(item.min_stock_alert.toString());
         setStkTargetDepartments(item.target_departments || ['kitchen']);
         setWasteReason('Vencido');
@@ -2479,7 +2483,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
             // 2. Registrar el gasto por desperdicio/merma
             const totalCost = qty * selectedWasteIngredient.unit_price;
-            const description = `Merma: ${selectedWasteIngredient.name} - ${wasteReason} (x${qty.toFixed(1)} ${selectedWasteIngredient.unit})`;
+            const description = `Merma: ${selectedWasteIngredient.name} - ${wasteReason} (x${qty.toFixed(3)} ${selectedWasteIngredient.unit})`;
             
             const { error: expenseError } = await supabase.from('expenses').insert([{
                 description: description,
@@ -2756,7 +2760,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                         <div className="flex items-center gap-3">
                                             <div className="text-right flex flex-col items-end">
                                                 <p className={`font-black text-base ${item.stock_level <= item.min_stock_alert ? 'text-red-500' : 'text-green-500'}`}>
-                                                    {item.stock_level.toFixed(1)} <span className="text-[10px] text-slate-500">{item.unit}</span>
+                                                    {item.stock_level.toFixed(3)} <span className="text-[10px] text-slate-500">{item.unit}</span>
                                                 </p>
                                                 <button
                                                     onClick={(e) => {
@@ -2812,7 +2816,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                                 }`} />
                                                                 <div>
                                                                     <p className="text-[10px] font-black text-slate-200">
-                                                                        {batch.quantity.toFixed(1)} {item.unit}
+                                                                        {batch.quantity.toFixed(3)} {item.unit}
                                                                     </p>
                                                                     <p className="text-[8px] text-slate-500 font-bold">
                                                                         Vence: {formattedDate} ({isExpired ? 'Vencido' : `vence en ${diffDays}d`})
@@ -2823,7 +2827,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                                 onClick={async (e) => {
                                                                     e.stopPropagation();
                                                                     const confirmDelete = window.confirm(
-                                                                        `⚠️ ¿Deseas eliminar este lote de ${batch.quantity.toFixed(1)} ${item.unit} de "${item.name}" con fecha de vencimiento ${formattedDate}?`
+                                                                        `⚠️ ¿Deseas eliminar este lote de ${batch.quantity.toFixed(3)} ${item.unit} de "${item.name}" con fecha de vencimiento ${formattedDate}?`
                                                                     );
                                                                     if (confirmDelete) {
                                                                         const { error } = await supabase.from('ingredient_batches').delete().eq('id', batch.id);
@@ -3562,7 +3566,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                             <div key={iid} className="space-y-1">
                                                                 <div className="flex justify-between items-center text-xs">
                                                                     <span className="font-bold text-slate-300">{ing?.name || 'Insumo'}</span>
-                                                                    <span className="font-black text-cyan-500">{qty.toFixed(1)} {ing?.unit}</span>
+                                                                    <span className="font-black text-cyan-500">{qty.toFixed(3)} {ing?.unit}</span>
                                                                 </div>
                                                                 <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
                                                                     <div className="h-full bg-cyan-500 rounded-full transition-all duration-500" style={{ width: `${(qty / maxQty) * 100}%` }}></div>
@@ -4202,7 +4206,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             </button>
                             {expandedConfigSection === 'personal' && (
                                 <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 animate-in slide-in-from-top-2">
-                                    <AdminEmployeeTab tenant={tenant} />
+                                    <AdminEmployeeTab tenant={tenant} subscription={subscription} />
                                     
                                     <div className="pt-6 mt-6 border-t border-white/10 space-y-4">
                                         <h4 className="font-black text-white text-[12px] uppercase flex items-center gap-2">
@@ -6628,28 +6632,32 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                     >
                                         🍳 Cocina
                                     </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setCatTargetDepartments(['bartender'])}
-                                        className={`flex-1 py-3 px-4 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
-                                            catTargetDepartments.length === 1 && catTargetDepartments.includes('bartender')
-                                                ? 'bg-slate-900 border-orange-500/30 text-white shadow-lg'
-                                                : 'bg-slate-950/20 border-slate-900 text-slate-500 hover:text-slate-400'
-                                        }`}
-                                    >
-                                        🍹 Barra
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setCatTargetDepartments(['kitchen', 'bartender'])}
-                                        className={`flex-1 py-3 px-4 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
-                                            catTargetDepartments.length === 2
-                                                ? 'bg-orange-500/10 border-orange-500 text-orange-500 shadow-lg shadow-orange-500/5'
-                                                : 'bg-slate-950/20 border-slate-900 text-slate-600 hover:text-slate-500'
-                                        }`}
-                                    >
-                                        📦 Combo
-                                    </button>
+                                    {(!subscription || !['Plan Básico', 'Plan Intermedio'].includes(subscription?.saas_plans?.name)) && (
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={() => setCatTargetDepartments(['bartender'])}
+                                                className={`flex-1 py-3 px-4 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                                                    catTargetDepartments.length === 1 && catTargetDepartments.includes('bartender')
+                                                        ? 'bg-slate-900 border-orange-500/30 text-white shadow-lg'
+                                                        : 'bg-slate-950/20 border-slate-900 text-slate-500 hover:text-slate-400'
+                                                }`}
+                                            >
+                                                🍹 Barra
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setCatTargetDepartments(['kitchen', 'bartender'])}
+                                                className={`flex-1 py-3 px-4 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                                                    catTargetDepartments.length === 2
+                                                        ? 'bg-orange-500/10 border-orange-500 text-orange-500 shadow-lg shadow-orange-500/5'
+                                                        : 'bg-slate-950/20 border-slate-900 text-slate-600 hover:text-slate-500'
+                                                }`}
+                                            >
+                                                📦 Combo
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                             <div className="space-y-2">
@@ -6906,26 +6914,26 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                 onClick={() => setStockUpdateMode('add')}
                                                 className={`flex-1 py-2 text-[9px] font-black uppercase rounded-lg transition-all ${stockUpdateMode === 'add' ? 'bg-orange-500 text-white shadow' : 'text-slate-500'}`}
                                             >
-                                                ➕ Agregar Stock
+                                                ➕ Agregar
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => setStockUpdateMode('set')}
                                                 className={`flex-1 py-2 text-[9px] font-black uppercase rounded-lg transition-all ${stockUpdateMode === 'set' ? 'bg-slate-900 border border-white/5 text-white' : 'text-slate-500'}`}
                                             >
-                                                ⚙️ Ajustar Total
+                                                ⚙️ Ajustar
                                             </button>
                                         </div>
                                         {/* Input dinámico según modo */}
                                         {stockUpdateMode === 'add' ? (
                                             <div className="space-y-1">
-                                                <label className="text-[10px] font-black uppercase text-slate-500 ml-1">Cantidad a Agregar</label>
-                                                <input type="number" value={stkQtyToAdd} onChange={e => setStkQtyToAdd(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-white font-bold outline-none" placeholder="Ej: +40" />
+                                                <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Agregar (+)</label>
+                                                <input type="number" step={stkIsFractionable ? "any" : "1"} value={stkQtyToAdd} onChange={e => setStkQtyToAdd(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-white font-bold outline-none" placeholder="Ej: +40" />
                                             </div>
                                         ) : (
                                             <div className="space-y-1">
-                                                <label className="text-[10px] font-black uppercase text-slate-500 ml-1">Nuevo Stock Total</label>
-                                                <input type="number" value={stkLevel} onChange={e => setStkLevel(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-white font-bold outline-none" placeholder="Ej: 60" />
+                                                <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Nuevo Total Fijo</label>
+                                                <input type="number" step={stkIsFractionable ? "any" : "1"} value={stkLevel} onChange={e => setStkLevel(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-white font-bold outline-none" placeholder="Ej: 60" />
                                             </div>
                                         )}
                                     </div>
@@ -6933,7 +6941,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                     /* Si es nuevo insumo, mostrar el input de Stock Inicial clásico */
                                     <div className="space-y-1">
                                         <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Stock Inicial</label>
-                                        <input type="number" value={stkLevel} onChange={e => setStkLevel(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-bold outline-none" placeholder="0" />
+                                        <input type="number" step={stkIsFractionable ? "any" : "1"} value={stkLevel} onChange={e => setStkLevel(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-bold outline-none" placeholder="0" />
                                     </div>
                                 )}
                             </div>
@@ -6944,7 +6952,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Alerta en (nivel)</label>
-                                    <input type="number" value={stkMinAlert} onChange={e => setStkMinAlert(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-bold outline-none" placeholder="10" />
+                                    <input type="number" step={stkIsFractionable ? "any" : "1"} value={stkMinAlert} onChange={e => setStkMinAlert(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-bold outline-none" placeholder="10" />
                                 </div>
                             </div>
 
@@ -7011,7 +7019,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                         Stock Reducido: Registrar Merma
                                     </p>
                                     <p className="text-[8.5px] text-slate-400 font-bold leading-normal">
-                                        Estás reduciendo el stock de {(ingredients.find(i => i.id === editingStockId)?.stock_level || 0).toFixed(1)} a {parseFloat(stkLevel || '0').toFixed(1)} {stkUnit}. Esta diferencia se registrará automáticamente como un gasto por merma en el balance.
+                                        Estás reduciendo el stock de {(ingredients.find(i => i.id === editingStockId)?.stock_level || 0).toFixed(3)} a {parseFloat(stkLevel || '0').toFixed(3)} {stkUnit}. Esta diferencia se registrará automáticamente como un gasto por merma en el balance.
                                     </p>
                                     <div className="space-y-1">
                                         <label className="text-[9px] font-black uppercase text-slate-500 ml-1">Motivo del Descarte</label>
@@ -7053,7 +7061,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest block leading-none">Insumo Seleccionado</span>
                                 <span className="text-sm font-black text-white">{selectedWasteIngredient.name}</span>
                                 <div className="flex justify-between items-center text-[10px] text-slate-400 mt-1">
-                                    <span>Stock Actual: {selectedWasteIngredient.stock_level.toFixed(1)} {selectedWasteIngredient.unit}</span>
+                                    <span>Stock Actual: {selectedWasteIngredient.stock_level.toFixed(3)} {selectedWasteIngredient.unit}</span>
                                     <span>Costo Unitario: {formatARS(selectedWasteIngredient.unit_price)}</span>
                                 </div>
                             </div>
@@ -7236,7 +7244,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                     </div>
                                                     {selected && (
                                                         <div className="flex items-center gap-2">
-                                                            <input type="number" value={selected.quantity_used} onChange={(e) => updateIngredientQty(inv.id, parseFloat(e.target.value) || 0)} className="w-12 bg-slate-800 border border-slate-700 rounded-lg p-1 text-[10px] text-center text-white" />
+                                                            <input type="number" step={inv.is_fractionable ? "any" : "1"} value={selected.quantity_used} onChange={(e) => updateIngredientQty(inv.id, parseFloat(e.target.value) || 0)} className="w-12 bg-slate-800 border border-slate-700 rounded-lg p-1 text-[10px] text-center text-white" />
                                                             <span className="text-[9px] text-slate-500 uppercase">{inv.unit}</span>
                                                         </div>
                                                     )}

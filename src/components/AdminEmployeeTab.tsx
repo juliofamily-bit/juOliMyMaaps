@@ -5,6 +5,7 @@ import { Shield, Plus, Trash2, Smartphone, Eye, EyeOff, Loader2, RefreshCw, XCir
 
 interface AdminEmployeeTabProps {
     tenant: any;
+    subscription?: any;
 }
 
 const ROLES: { id: UserRole, label: string }[] = [
@@ -17,7 +18,7 @@ const ROLES: { id: UserRole, label: string }[] = [
     { id: 'animador', label: 'Animador / DJ' },
 ];
 
-export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant }) => {
+export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant, subscription }) => {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [activeDevices, setActiveDevices] = useState<ActiveDevice[]>([]);
     const [loading, setLoading] = useState(true);
@@ -62,9 +63,19 @@ export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant }) =>
             
             if (empRes.data) setEmployees(empRes.data);
             if (devRes.data) setActiveDevices(devRes.data);
+            
+            // Determinar límite según el plan (si existe subscription prop, usarlo; sino del fetch)
+            let currentPlanName = subscription?.saas_plans?.name || 'Plan Pro';
             if (subRes.data && subRes.data.saas_plans) {
-                setPlanMaxDevices((subRes.data.saas_plans as any).max_devices || 9999);
+                currentPlanName = (subRes.data.saas_plans as any).name || currentPlanName;
             }
+            
+            let calcMax = 9999;
+            if (currentPlanName === 'Plan Básico') calcMax = 4;
+            else if (currentPlanName === 'Plan Intermedio') calcMax = 6;
+            else if (currentPlanName === 'Plan Avanzado') calcMax = 12;
+            
+            setPlanMaxDevices(calcMax);
         } catch (err) {
             console.error('Error fetching employees data:', err);
         } finally {
@@ -277,7 +288,18 @@ export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant }) =>
                         onChange={e => setEmpRole(e.target.value as UserRole)}
                         className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-blue-500"
                     >
-                        {ROLES.filter(r => r.id !== 'admin').map(r => (
+                        {ROLES.filter(r => {
+                            if (r.id === 'admin') return false;
+                            
+                            const planName = subscription?.saas_plans?.name || 'Plan Pro';
+                            if (planName === 'Plan Básico') {
+                                return ['staff', 'kitchen', 'delivery'].includes(r.id);
+                            }
+                            if (planName === 'Plan Intermedio') {
+                                return r.id !== 'bartender';
+                            }
+                            return true;
+                        }).map(r => (
                             <option key={r.id} value={r.id}>{r.label}</option>
                         ))}
                     </select>

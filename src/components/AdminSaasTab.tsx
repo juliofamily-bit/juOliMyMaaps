@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { ShieldAlert, CreditCard, Gift, Clock, AlertTriangle, CheckCircle, Loader2, Sparkles } from 'lucide-react';
+import { ShieldAlert, CreditCard, Gift, Clock, AlertTriangle, CheckCircle, Loader2, Sparkles, Info } from 'lucide-react';
 
 export const AdminSaasTab = ({ tenantId }: { tenantId: string }) => {
     const [sub, setSub] = useState<any>(null);
@@ -340,12 +340,31 @@ export const AdminSaasTab = ({ tenantId }: { tenantId: string }) => {
                                     </div>
 
                                     <ul className="space-y-2 border-t border-white/5 pt-4">
-                                        {featuresList.map((feat: string, idx: number) => (
-                                            <li key={idx} className="flex items-center gap-2 text-xs text-slate-300 font-medium">
-                                                <CheckCircle className="text-emerald-500 shrink-0" size={14} />
-                                                <span>{feat}</span>
-                                            </li>
-                                        ))}
+                                        {featuresList.map((feat: any, idx: number) => {
+                                            const isObj = typeof feat === 'object' && feat !== null;
+                                            const name = isObj ? feat.name : feat;
+                                            const desc = isObj ? feat.desc : null;
+                                            const isExclusive = isObj ? feat.isExclusive : false;
+
+                                            return (
+                                                <li key={idx} className={`flex items-start gap-2 text-xs font-medium ${isExclusive ? 'text-amber-400' : 'text-slate-300'}`}>
+                                                    <CheckCircle className={`${isExclusive ? 'text-amber-400' : 'text-emerald-500'} shrink-0 mt-0.5`} size={14} />
+                                                    <div className="flex-1 relative group cursor-help">
+                                                        <span className="flex items-center gap-1 border-b border-transparent hover:border-white/20 transition-colors">
+                                                            {name}
+                                                            {isExclusive && <span className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 text-[9px] font-black uppercase tracking-wider ml-1">(Exclusivo)</span>}
+                                                            {desc && <Info size={12} className="text-slate-500 ml-0.5 inline-block" />}
+                                                        </span>
+                                                        {desc && (
+                                                            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-slate-800 text-slate-200 text-[10px] leading-relaxed rounded-lg shadow-xl border border-white/10 z-10">
+                                                                {desc}
+                                                                <div className="absolute top-full left-4 -mt-[1px] border-4 border-transparent border-t-slate-800 border-t-white/10"></div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </li>
+                                            );
+                                        })}
                                     </ul>
                                 </div>
 

@@ -22,6 +22,7 @@ export interface Ingredient {
     min_stock_alert: number;
     unit_price: number;
     target_departments?: string[];
+    is_fractionable?: boolean;
 }
 
 export interface Product {
