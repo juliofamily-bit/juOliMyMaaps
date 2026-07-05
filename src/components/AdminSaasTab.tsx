@@ -400,9 +400,19 @@ export const AdminSaasTab = ({ tenantId }: { tenantId: string }) => {
                 </div>
 
                 <div className="mt-8 p-4 border border-white/5 bg-slate-900/50 rounded-xl text-center">
-                    <p className="text-[10px] text-slate-400 leading-relaxed">
-                        <strong>¿Cómo cancelar mi plan?</strong> Si deseás dar de baja el cobro automático de tu suscripción, podés hacerlo en cualquier momento haciendo clic en el botón <span className="text-red-400 font-bold">"Cancelar Suscripción"</span> que aparece arriba en la sección "Estado Actual" cuando tenés un plan activo, o desde tu panel de Mercado Pago. Al cancelar, seguirás teniendo acceso a tus funciones Pro hasta que finalice tu período de facturación actual. Luego, tu cuenta pasará al plan Básico.
+                    <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
+                        <strong>¿Cómo cancelar mi plan?</strong> Si deseás dar de baja el cobro automático de tu suscripción, podés hacerlo en cualquier momento haciendo clic en el botón a continuación. Al cancelar, seguirás teniendo acceso a tus funciones Pro hasta que finalice tu período de facturación actual. Luego, tu cuenta pasará al plan Básico.
                     </p>
+                    {sub?.status === 'active' ? (
+                        <button 
+                            onClick={handleCancelSubscription}
+                            className="bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500 hover:text-white px-6 py-2 rounded-xl text-xs font-bold transition-all uppercase tracking-widest inline-flex items-center gap-2"
+                        >
+                            Cancelar Suscripción
+                        </button>
+                    ) : (
+                        <p className="text-xs text-slate-500 font-bold">No tienes ninguna suscripción de pago activa para cancelar.</p>
+                    )}
                 </div>
             </div>
         </div>
