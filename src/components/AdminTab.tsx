@@ -2653,6 +2653,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             );
                         }
                         
+                        return null;
+                    })()}
                 </div>
             )}
 
