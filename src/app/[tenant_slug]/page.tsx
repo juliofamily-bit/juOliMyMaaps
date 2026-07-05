@@ -153,12 +153,27 @@ export default function TenantApp({ params }: TenantPageProps) {
         // Usar supabase (con cabecera de tenant) en lugar de supabaseAnon para pasar la política RLS
         const { data: subData } = await supabase
           .from('saas_subscriptions')
-          .select('status, plan_id, saas_plans:saas_plans!saas_subscriptions_plan_id_fkey(*)')
+          .select('status, plan_id, trial_started_at, promo_pro_ends_at, saas_plans:saas_plans!saas_subscriptions_plan_id_fkey(*)')
           .eq('tenant_id', data.id)
           .maybeSingle();
 
         let activeFeatures: string[] = [];
-        if (subData && (subData.status === 'active' || subData.status === 'trial')) {
+        
+        // Determinar si está en Trial Activo (14 días desde el primer pedido)
+        const isTrialActive = subData?.trial_started_at && new Date(subData.trial_started_at).getTime() + (14 * 24 * 60 * 60 * 1000) > Date.now();
+        
+        // Determinar si está en Promo Pro (30 días)
+        const isPromoActive = subData?.promo_pro_ends_at && new Date(subData.promo_pro_ends_at).getTime() > Date.now();
+
+        if (isPromoActive || isTrialActive) {
+          // Inyectamos las funciones PRO si está en alguna de las dos ventanas promocionales
+          const { data: proPlan } = await supabaseAnon
+            .from('saas_plans')
+            .select('features')
+            .eq('name', 'Pro Ilimitado')
+            .maybeSingle();
+          activeFeatures = proPlan?.features || [];
+        } else if (subData && (subData.status === 'active' || subData.status === 'trial')) {
           activeFeatures = (subData.saas_plans as any)?.features || [];
         } else {
           // Si no tiene suscripción o está vencida, por defecto tiene los permisos básicos

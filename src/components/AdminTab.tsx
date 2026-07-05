@@ -228,12 +228,27 @@ const AdminTab: React.FC<AdminTabProps> = ({
         if (tenant?.id) {
             supabase
                 .from('saas_subscriptions')
-                .select('status, current_period_end, trial_started_at, saas_plans(name)')
+                .select('status, current_period_end, trial_started_at, promo_pro_ends_at, saas_plans(name)')
                 .eq('tenant_id', tenant.id)
                 .maybeSingle()
                 .then(({ data }) => setSubscription(data));
         }
     }, [tenant?.id]);
+
+    useEffect(() => {
+        if (subscription) {
+            const now = Date.now();
+            const trialStartedAt = subscription.trial_started_at ? new Date(subscription.trial_started_at).getTime() : null;
+            const trialEndsAt = trialStartedAt ? trialStartedAt + (14 * 24 * 60 * 60 * 1000) : null;
+            const promoEndsAt = subscription.promo_pro_ends_at ? new Date(subscription.promo_pro_ends_at).getTime() : null;
+            const isTrialExpired = trialEndsAt && trialEndsAt < now && !promoEndsAt && subscription.status !== 'active';
+            
+            if (isTrialExpired && view !== 'config') {
+                setView('config');
+                setExpandedConfigSection('subscription');
+            }
+        }
+    }, [subscription, view]);
 
     const isViewLocked = (v: string): boolean => {
         if (!planFeatures || planFeatures.length === 0) return false;
@@ -2539,41 +2554,105 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
                                 return (
         <div className="space-y-6 pb-4 max-w-5xl mx-auto px-2">
-            {/* SaaS Trial Banner */}
+            {/* SaaS Funnel Banners */}
             {subscription && (
                 <div className="animate-in fade-in slide-in-from-top-2">
-                    {subscription.status === 'pending_trial' && (
-                        <div className="bg-slate-800/80 border border-slate-700/50 p-4 rounded-2xl flex items-center justify-between text-slate-300">
-                            <div className="flex items-center gap-3">
-                                <span className="text-2xl">⏳</span>
-                                <div>
-                                    <h4 className="font-bold text-sm text-white">Todavía no iniciaste tu prueba</h4>
-                                    <p className="text-xs">Tus 14 días gratuitos de <strong className="text-purple-400">Pro Ilimitado</strong> comenzarán cuando registres tu primera venta.</p>
+                    {(() => {
+                        const now = Date.now();
+                        const trialStartedAt = subscription.trial_started_at ? new Date(subscription.trial_started_at).getTime() : null;
+                        const trialEndsAt = trialStartedAt ? trialStartedAt + (14 * 24 * 60 * 60 * 1000) : null;
+                        const promoEndsAt = subscription.promo_pro_ends_at ? new Date(subscription.promo_pro_ends_at).getTime() : null;
+                        
+                        const isTrialPending = !trialStartedAt;
+                        const isTrialActive = trialEndsAt && trialEndsAt > now && !promoEndsAt; // Solo mostramos trial si no hay promo
+                        const isPromoActive = promoEndsAt && promoEndsAt > now;
+                        
+                        if (isTrialPending) {
+                            return (
+                                <div className="bg-slate-800/80 border border-slate-700/50 p-4 rounded-2xl flex items-center justify-between text-slate-300">
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-2xl">⏳</span>
+                                        <div>
+                                            <h4 className="font-bold text-sm text-white">Todavía no iniciaste tu prueba</h4>
+                                            <p className="text-xs">Tus 14 días gratuitos de <strong className="text-purple-400">Pro Ilimitado</strong> comenzarán automáticamente cuando registres tu primera venta real.</p>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
-                    )}
-                    {subscription.status === 'trial' && subscription.current_period_end && (
-                        <div className="bg-gradient-to-r from-orange-500/20 to-purple-600/20 border border-orange-500/30 p-4 rounded-2xl flex items-center justify-between text-white shadow-lg">
-                            <div className="flex items-center gap-3">
-                                <span className="text-2xl animate-pulse">🔥</span>
-                                <div>
-                                    <h4 className="font-black text-sm uppercase text-orange-400">Período de Prueba Activo</h4>
-                                    <p className="text-xs">
-                                        Te quedan <strong className="text-xl">
-                                            {Math.max(0, Math.ceil((new Date(subscription.current_period_end).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))}
-                                        </strong> días gratis del plan <strong className="text-purple-400">{subscription.saas_plans?.name || 'Pro Ilimitado'}</strong>.
-                                    </p>
+                            );
+                        }
+                        
+                        if (isTrialActive) {
+                            const daysLeft = Math.max(0, Math.ceil((trialEndsAt - now) / (1000 * 60 * 60 * 24)));
+                            return (
+                                <div className="bg-gradient-to-r from-orange-500/20 to-purple-600/20 border border-orange-500/30 p-4 rounded-2xl flex items-center justify-between text-white shadow-lg">
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-2xl animate-pulse">🔥</span>
+                                        <div>
+                                            <h4 className="font-black text-sm uppercase text-orange-400">Prueba Gratis Activa</h4>
+                                            <p className="text-xs">
+                                                Día {14 - daysLeft + 1} de 14. Te quedan <strong className="text-xl">{daysLeft}</strong> días gratis de funciones <strong className="text-purple-400">Pro</strong>.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => { setView('config'); setExpandedConfigSection('subscription'); }}
+                                        className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-xs font-bold uppercase transition-all whitespace-nowrap"
+                                    >
+                                        Mejorar Plan
+                                    </button>
                                 </div>
-                            </div>
-                            <button 
-                                onClick={() => { setView('config'); setExpandedConfigSection('subscription'); }}
-                                className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-xs font-bold uppercase transition-all whitespace-nowrap"
-                            >
-                                Ver Planes
-                            </button>
-                        </div>
-                    )}
+                            );
+                        }
+
+                        if (isPromoActive) {
+                            const daysLeft = Math.max(0, Math.ceil((promoEndsAt - now) / (1000 * 60 * 60 * 24)));
+                            return (
+                                <div className="bg-gradient-to-r from-emerald-500/20 to-teal-600/20 border border-emerald-500/30 p-4 rounded-2xl flex items-center justify-between text-white shadow-lg">
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-2xl animate-bounce">🎁</span>
+                                        <div>
+                                            <h4 className="font-black text-sm uppercase text-emerald-400">Promo 30 Días Pro Activa</h4>
+                                            <p className="text-xs">
+                                                Te quedan <strong className="text-xl">{daysLeft}</strong> días de funciones <strong className="text-emerald-400">Pro Ilimitadas</strong> por el precio del Plan Básico.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => { setView('config'); setExpandedConfigSection('subscription'); }}
+                                        className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-xs font-bold uppercase transition-all whitespace-nowrap"
+                                    >
+                                        Ver Planes
+                                    </button>
+                                </div>
+                            );
+                        }
+
+                        const isTrialExpired = trialEndsAt && trialEndsAt < now && !promoEndsAt && subscription.status !== 'active';
+                        if (isTrialExpired) {
+                            return (
+                                <div className="bg-red-500/20 border border-red-500 p-6 rounded-2xl flex flex-col sm:flex-row items-center justify-between text-white shadow-[0_0_30px_rgba(239,68,68,0.3)]">
+                                    <div className="flex items-center gap-4 mb-4 sm:mb-0">
+                                        <div className="bg-red-500 p-3 rounded-full">
+                                            <Lock className="w-8 h-8 text-white" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-black text-lg uppercase text-red-400">Período de Prueba Finalizado</h4>
+                                            <p className="text-sm">
+                                                Tu prueba gratuita ha expirado. Ingresa tu método de pago ahora para desbloquear tus herramientas.
+                                                <br/>🎁 <strong className="text-emerald-400">Promo Especial:</strong> Obtén 30 días de <strong className="text-purple-400">Pro Ilimitado</strong> al precio del Básico.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => { setView('config'); setExpandedConfigSection('subscription'); }}
+                                        className="bg-red-500 hover:bg-red-600 px-6 py-3 rounded-xl text-sm font-black uppercase transition-all whitespace-nowrap animate-pulse shadow-lg"
+                                    >
+                                        Suscribirme Ahora
+                                    </button>
+                                </div>
+                            );
+                        }
+                        
                 </div>
             )}
 
