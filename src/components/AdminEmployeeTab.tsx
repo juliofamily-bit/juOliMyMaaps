@@ -81,28 +81,35 @@ export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant, subs
             
             setPlanMaxDevices(calcMax);
 
-            // Auto-crear roles por defecto si no hay ninguno
-            if (employeesList.length === 0 && tenant.id) {
-                const defaultEmployees = ROLES.map(r => ({
-                    tenant_id: tenant.id,
-                    name: r.label,
-                    role: r.id,
-                    pin_code: Math.floor(1000 + Math.random() * 9000).toString()
-                }));
-                
-                const { data: newEmps, error: insertError } = await supabase.from('employees').insert(defaultEmployees).select();
-                
-                if (!insertError && newEmps) {
-                    employeesList = newEmps.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            // Auto-crear roles por defecto si faltan algunos
+            const hasAutoPopulated = localStorage.getItem(`autopopulated_roles_${tenant.id}`);
+            if (tenant.id && !hasAutoPopulated) {
+                const existingRoles = employeesList.map(e => e.role);
+                const missingRoles = ROLES.filter(r => !existingRoles.includes(r.id));
+
+                if (missingRoles.length > 0) {
+                    const defaultEmployees = missingRoles.map(r => ({
+                        tenant_id: tenant.id,
+                        name: r.label,
+                        role: r.id,
+                        pin_code: Math.floor(1000 + Math.random() * 9000).toString()
+                    }));
                     
-                    // Asegurarnos que el límite permitido al menos cubra los por defecto
-                    if (currentMaxDevices < defaultEmployees.length) {
-                        const targetLimit = Math.min(defaultEmployees.length, calcMax);
-                        await supabase.from('tenants').update({ max_devices: targetLimit }).eq('id', tenant.id);
-                        setCurrentMaxDevices(targetLimit);
-                        setDesiredMaxDevices(targetLimit);
+                    const { data: newEmps, error: insertError } = await supabase.from('employees').insert(defaultEmployees).select();
+                    
+                    if (!insertError && newEmps) {
+                        employeesList = [...employeesList, ...newEmps].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                        
+                        // Asegurarnos que el límite permitido al menos cubra los por defecto
+                        if (currentMaxDevices < employeesList.length) {
+                            const targetLimit = Math.min(employeesList.length, calcMax);
+                            await supabase.from('tenants').update({ max_devices: targetLimit }).eq('id', tenant.id);
+                            setCurrentMaxDevices(targetLimit);
+                            setDesiredMaxDevices(targetLimit);
+                        }
                     }
                 }
+                localStorage.setItem(`autopopulated_roles_${tenant.id}`, 'true');
             }
 
             setEmployees(employeesList);
