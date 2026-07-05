@@ -326,6 +326,20 @@ export default function TenantApp({ params }: TenantPageProps) {
           });
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'employees',
+          filter: `tenant_id=eq.${tenant.id}`
+        },
+        async () => {
+          console.log('[REALTIME EMPLOYEES] Actualizando lista de empleados...');
+          const { data } = await supabaseAnon.from('employees').select('id, name, role').eq('tenant_id', tenant.id);
+          if (data) setEmployees(data);
+        }
+      )
       .subscribe();
 
     return () => {
