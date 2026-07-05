@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Employee, ActiveDevice, UserRole } from '@/types/database';
-import { Shield, Plus, Trash2, Smartphone, Eye, EyeOff, Loader2, RefreshCw, XCircle, AlertTriangle, Save, Settings2 } from 'lucide-react';
+import { Shield, Plus, Trash2, Smartphone, Eye, EyeOff, Loader2, RefreshCw, XCircle, AlertTriangle, Save, Settings2, Users, Info } from 'lucide-react';
 
 interface AdminEmployeeTabProps {
     tenant: any;
@@ -32,6 +32,7 @@ export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant, subs
     
     // Estados para configuración de límites
     const [planMaxDevices, setPlanMaxDevices] = useState<number>(9999);
+    const [currentMaxDevices, setCurrentMaxDevices] = useState<number>(maxDevices);
     const [desiredMaxDevices, setDesiredMaxDevices] = useState<number>(maxDevices);
     const [isUpdatingLimit, setIsUpdatingLimit] = useState(false);
 
@@ -39,13 +40,16 @@ export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant, subs
         if (tenant?.id) {
             fetchData();
             
-            // Suscribirse a cambios en active_devices para el tiempo real
-            const channel = supabase.channel('devices_changes')
+            // Subscripción a cambios
+            const channel = supabase.channel('employees_changes')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'employees', filter: `tenant_id=eq.${tenant.id}` }, () => {
+                    fetchData();
+                })
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'active_devices', filter: `tenant_id=eq.${tenant.id}` }, () => {
                     fetchData();
                 })
                 .subscribe();
-
+                
             return () => {
                 supabase.removeChannel(channel);
             }
@@ -88,7 +92,7 @@ export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant, subs
         
         if (desiredMaxDevices > planMaxDevices) {
             alert(`No puedes establecer un límite mayor al permitido por tu plan actual (${planMaxDevices === 9999 ? 'Ilimitado' : planMaxDevices}). Si necesitas más espacio, debes cambiar de plan.`);
-            setDesiredMaxDevices(maxDevices); // restaurar al valor real
+            setDesiredMaxDevices(currentMaxDevices); // restaurar al valor real
             return;
         }
 
@@ -114,7 +118,7 @@ export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant, subs
             if (upError) throw upError;
             
             alert("Límite actualizado exitosamente.");
-            // Actualización local momentánea para UX fluida
+            setCurrentMaxDevices(desiredMaxDevices);
             tenant.max_devices = desiredMaxDevices;
             fetchData();
         } catch(err) {
@@ -129,13 +133,19 @@ export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant, subs
         e.preventDefault();
         if (!empName || !empPin) return;
         
-        if (employees.length >= maxDevices) {
-            if (maxDevices < planMaxDevices) {
-                alert(`Has alcanzado el límite de personal configurado (${maxDevices}). Aumenta el "Límite Permitido" arriba para poder registrar más personal.`);
+        let targetMaxDevices = currentMaxDevices;
+        if (employees.length >= currentMaxDevices) {
+            if (currentMaxDevices < planMaxDevices) {
+                // Auto-increment limit instead of blocking
+                targetMaxDevices = employees.length + 1;
+                await supabase.from('tenants').update({ max_devices: targetMaxDevices }).eq('id', tenant.id);
+                setCurrentMaxDevices(targetMaxDevices);
+                setDesiredMaxDevices(targetMaxDevices);
+                tenant.max_devices = targetMaxDevices;
             } else {
                 alert(`Has alcanzado el límite máximo de tu plan (${planMaxDevices} empleados/dispositivos). Elimina alguno para añadir otro, o mejora tu suscripción.`);
+                return;
             }
-            return;
         }
 
         try {
@@ -200,33 +210,30 @@ export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant, subs
                     </div>
                     <div>
                         <h2 className="text-2xl font-black italic text-white leading-none">Personal y Seguridad</h2>
-                        <p className="text-[10px] uppercase font-bold tracking-widest text-blue-400 mt-1">Control de Accesos (Límite activo: {maxDevices} / Plan: {planMaxDevices === 9999 ? 'Ilimitado' : planMaxDevices})</p>
+                        <p className="text-[10px] uppercase font-bold tracking-widest text-blue-400 mt-1">Control de Accesos (Límite activo: {currentMaxDevices} / Plan: {planMaxDevices === 9999 ? 'Ilimitado' : planMaxDevices})</p>
                     </div>
                 </div>
                 <div className="mt-4 flex flex-col md:flex-row gap-4 items-start md:items-center">
-                    <div className="flex gap-2">
-                        <div className="px-4 py-2 bg-slate-900 rounded-xl text-xs font-bold text-slate-300">
-                            Cuentas: <span className={employees.length >= maxDevices ? 'text-red-400' : 'text-green-400'}>{employees.length} / {maxDevices}</span>
-                        </div>
-                        <div className="px-4 py-2 bg-slate-900 rounded-xl text-xs font-bold text-slate-300">
-                            Dispositivos Activos: <span className="text-blue-400">{activeDevices.length}</span>
-                        </div>
+                    <div className="flex-1">
+                        <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
+                            Aquí puedes crear perfiles para que tu personal pueda acceder al sistema mediante un código PIN único. Además, puedes configurar qué dispositivos (computadoras/tablets/celulares) tienen permiso para abrir estos perfiles y desde dónde.
+                        </p>
                     </div>
-                    
-                    {/* Controlador manual de límite */}
-                    <form onSubmit={handleUpdateMaxDevices} className="flex items-center gap-2 bg-slate-900/50 p-1.5 rounded-xl border border-slate-800 ml-auto">
-                        <span className="text-[10px] font-bold uppercase text-slate-400 pl-2">Límite Permitido:</span>
-                        <input 
-                            type="number" 
-                            min={1}
-                            max={planMaxDevices}
-                            value={desiredMaxDevices} 
-                            onChange={(e) => setDesiredMaxDevices(parseInt(e.target.value) || 1)}
-                            className="w-16 bg-slate-800 text-white text-xs font-bold px-2 py-1.5 rounded-lg border border-slate-700 outline-none focus:border-blue-500 text-center"
-                        />
+                    <form onSubmit={handleUpdateMaxDevices} className="flex items-end gap-2 bg-slate-900 p-2 rounded-xl border border-white/5">
+                        <div className="flex flex-col gap-1 w-32">
+                            <label className="text-[9px] uppercase font-bold text-slate-500 tracking-widest pl-1">Límite Permitido</label>
+                            <input 
+                                type="number"
+                                min="1"
+                                max={planMaxDevices === 9999 ? 999 : planMaxDevices}
+                                value={desiredMaxDevices}
+                                onChange={e => setDesiredMaxDevices(parseInt(e.target.value) || 1)}
+                                className="bg-slate-800 border border-slate-700 p-1.5 rounded-lg text-white text-xs outline-none text-center"
+                            />
+                        </div>
                         <button 
                             type="submit" 
-                            disabled={isUpdatingLimit || desiredMaxDevices === maxDevices}
+                            disabled={isUpdatingLimit || desiredMaxDevices === currentMaxDevices}
                             className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white p-1.5 rounded-lg transition-colors flex items-center justify-center"
                             title="Guardar Límite"
                         >
@@ -236,27 +243,36 @@ export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant, subs
                 </div>
             </div>
 
-            {/* Crear Empleado */}
-            <div className="glass p-6 rounded-3xl border border-white/5">
-                <h3 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-4 flex items-center gap-2">
-                    <Plus size={16} /> Alta de Personal
-                </h3>
-
-                {employees.length >= maxDevices && (
-                    maxDevices < planMaxDevices ? (
-                        <div className="mb-6 bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-                            <AlertTriangle className="text-blue-400 shrink-0 mt-0.5" size={20} />
-                            <div>
-                                <h4 className="text-blue-400 font-black text-xs uppercase tracking-widest">Límite Permitido Alcanzado</h4>
-                                <p className="text-blue-300/80 text-[10px] mt-1 leading-relaxed pr-4">
-                                    Actualmente tienes {employees.length} cuentas registradas, alcanzando tu límite permitido actual de {maxDevices}. 
-                                    Como tu plan actual te permite tener hasta {planMaxDevices === 9999 ? 'ilimitadas' : planMaxDevices} cuentas, si deseas agregar más personal sólo debes modificar e incrementar el campo **"Límite Permitido"** arriba en el panel de control y guardar los cambios.
-                                </p>
+            {/* Listado de Empleados Actuales */}
+            <div className="mb-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-black uppercase tracking-widest text-slate-300 flex items-center gap-2">
+                        <Users size={16} className="text-blue-400" />
+                        Cuentas Registradas ({employees.length} / {currentMaxDevices})
+                    </h3>
+                </div>
+                
+                {employees.length >= currentMaxDevices && (
+                    currentMaxDevices < planMaxDevices ? (
+                        <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4 sm:p-6 mb-6">
+                            <div className="flex items-start gap-4">
+                                <div className="bg-blue-500/20 p-2 rounded-xl text-blue-400">
+                                    <Info size={20} />
+                                </div>
+                                <div>
+                                    <h4 className="text-blue-400 font-black text-xs uppercase tracking-widest">Límite Permitido Alcanzado</h4>
+                                    <p className="text-blue-300/80 text-[10px] mt-1 leading-relaxed pr-4">
+                                        Actualmente tienes {employees.length} cuentas registradas, alcanzando tu límite permitido actual de {currentMaxDevices}. 
+                                        Como tu plan actual te permite tener hasta {planMaxDevices === 9999 ? 'ilimitadas' : planMaxDevices} cuentas, si deseas agregar más personal sólo debes crear una nueva cuenta y el límite se aumentará automáticamente.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     ) : (
-                        <div className="mb-6 bg-orange-500/10 border border-orange-500/30 rounded-2xl p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-                            <AlertTriangle className="text-orange-500 shrink-0 mt-0.5" size={20} />
+                        <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl p-4 flex items-start gap-3">
+                            <div className="bg-orange-500/20 p-2 rounded-xl text-orange-500 shrink-0">
+                                <Info size={20} />
+                            </div>
                             <div>
                                 <h4 className="text-orange-500 font-black text-xs uppercase tracking-widest">Límite de Plan Alcanzado</h4>
                                 <p className="text-orange-400/80 text-[10px] mt-1 leading-relaxed pr-4">
@@ -274,7 +290,7 @@ export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant, subs
                     )
                 )}
 
-                <form onSubmit={handleCreateEmployee} className={`grid grid-cols-1 md:grid-cols-4 gap-4 transition-opacity duration-300 ${employees.length >= maxDevices ? 'opacity-40 pointer-events-none grayscale' : ''}`}>
+                <form onSubmit={handleCreateEmployee} className={`grid grid-cols-1 md:grid-cols-4 gap-4 transition-opacity duration-300 ${employees.length >= currentMaxDevices && currentMaxDevices >= planMaxDevices ? 'opacity-40 pointer-events-none grayscale' : ''}`}>
                     <input 
                         type="text" 
                         placeholder="Nombre (Ej: Pepita)" 

@@ -7037,6 +7037,16 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 </div>
                             </div>
 
+                            <label className="flex items-center gap-3 cursor-pointer p-4 bg-slate-900/50 rounded-2xl border border-white/5" onClick={() => setStkIsFractionable(!stkIsFractionable)}>
+                                <div className={`w-5 h-5 rounded flex items-center justify-center border transition-all ${stkIsFractionable ? 'bg-orange-500 border-orange-500' : 'bg-slate-950 border-slate-800'}`}>
+                                    {stkIsFractionable && <Check size={12} className="text-white" />}
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-xs font-bold text-white">Stock Fraccionable (Decimales)</span>
+                                    <span className="text-[10px] text-slate-500">Permite registrar salidas parciales (Ej: 0.150 Kg, 2.5 Litros) en recetas.</span>
+                                </div>
+                            </label>
+
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Destino de Preparación</label>
                                 <div className="flex gap-2">

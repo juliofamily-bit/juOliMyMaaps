@@ -164,9 +164,12 @@ export default function TenantApp({ params }: TenantPageProps) {
         
         // Determinar si está en Promo Pro (30 días)
         const isPromoActive = subData?.promo_pro_ends_at && new Date(subData.promo_pro_ends_at).getTime() > Date.now();
+        
+        // Determinar si es un trial sin iniciar (antes del primer pedido)
+        const isPendingTrial = subData?.status === 'pending_trial';
 
-        if (isPromoActive || isTrialActive) {
-          // Inyectamos las funciones PRO si está en alguna de las dos ventanas promocionales
+        if (isPromoActive || isTrialActive || isPendingTrial) {
+          // Inyectamos las funciones PRO si está en alguna de las ventanas promocionales o a punto de empezar su prueba
           const { data: proPlan } = await supabaseAnon
             .from('saas_plans')
             .select('features')
