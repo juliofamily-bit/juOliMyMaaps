@@ -65,10 +65,10 @@ export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant, subs
                 supabase.from('saas_subscriptions').select('plan_id, status, saas_plans:saas_plans!saas_subscriptions_plan_id_fkey(max_devices)').eq('tenant_id', tenant.id).eq('status', 'active').maybeSingle()
             ]);
             
-            if (empRes.data) setEmployees(empRes.data);
+            let employeesList = empRes.data || [];
             if (devRes.data) setActiveDevices(devRes.data);
             
-            // Determinar límite según el plan (si existe subscription prop, usarlo; sino del fetch)
+            // Determinar límite según el plan
             let currentPlanName = subscription?.saas_plans?.name || 'Plan Pro';
             if (subRes.data && subRes.data.saas_plans) {
                 currentPlanName = (subRes.data.saas_plans as any).name || currentPlanName;
@@ -80,6 +80,32 @@ export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant, subs
             else if (currentPlanName === 'Plan Avanzado') calcMax = 12;
             
             setPlanMaxDevices(calcMax);
+
+            // Auto-crear roles por defecto si no hay ninguno
+            if (employeesList.length === 0 && tenant.id) {
+                const defaultEmployees = ROLES.map(r => ({
+                    tenant_id: tenant.id,
+                    name: r.label,
+                    role: r.id,
+                    pin_code: Math.floor(1000 + Math.random() * 9000).toString()
+                }));
+                
+                const { data: newEmps, error: insertError } = await supabase.from('employees').insert(defaultEmployees).select();
+                
+                if (!insertError && newEmps) {
+                    employeesList = newEmps.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                    
+                    // Asegurarnos que el límite permitido al menos cubra los por defecto
+                    if (currentMaxDevices < defaultEmployees.length) {
+                        const targetLimit = Math.min(defaultEmployees.length, calcMax);
+                        await supabase.from('tenants').update({ max_devices: targetLimit }).eq('id', tenant.id);
+                        setCurrentMaxDevices(targetLimit);
+                        setDesiredMaxDevices(targetLimit);
+                    }
+                }
+            }
+
+            setEmployees(employeesList);
         } catch (err) {
             console.error('Error fetching employees data:', err);
         } finally {

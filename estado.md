@@ -12,6 +12,7 @@ Para reducir la fricción de entrada de nuevos restaurantes y maximizar la conve
   1. Se corrigió un error crítico donde cuentas nuevas (en estado `pending_trial` antes de su primer pedido) perdían acceso a roles "Pro" como Cocina y Delivery, debido a que el sistema los degradaba al plan básico por defecto. Ahora tienen 100% de acceso desde el minuto 0.
   2. Se resolvió un error de sintaxis en el componente de Límite de Empleados (`AdminEmployeeTab.tsx`) que congelaba el panel de administración (Caja). Esto causaba que, aunque el Menú Público aceptara pedidos, el dueño no pudiera verlos llegar a pendientes ni a cocina porque su panel estaba colapsado.
   3. Se mejoró la UX de creación de perfiles: ahora, si tu plan lo permite, crear un nuevo empleado cuando estás al límite auto-incrementa tu configuración de "Límite Permitido" sin bloquearte con alertas manuales, alineándose con la filosofía de cero fricción de Hormozi.
+  4. Autocreación de Cuentas: Para eliminar el paso manual, cuando un local es nuevo y no tiene personal registrado, el sistema automáticamente le crea 7 cuentas por defecto (una para cada rol: Administrador, Caja, Cocina, Repartidor, etc.) con pines aleatorios, ahorrando tiempo de configuración.
 
 ## Impacto Arquitectónico
 - **Frontend:** 
