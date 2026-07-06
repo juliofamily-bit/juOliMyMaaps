@@ -226,12 +226,12 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
     useEffect(() => {
         if (tenant?.id) {
-            supabase
-                .from('saas_subscriptions')
-                .select('status, current_period_end, trial_started_at, promo_pro_ends_at, saas_plans(name)')
-                .eq('tenant_id', tenant.id)
-                .maybeSingle()
-                .then(({ data }) => setSubscription(data));
+            fetch(`/api/get-tenant-plan?tenant_id=${tenant.id}`)
+                .then(res => res.json())
+                .then(json => {
+                    if (json.data) setSubscription(json.data);
+                })
+                .catch(err => console.error('Error fetching subscription in AdminTab:', err));
         }
     }, [tenant?.id]);
 
@@ -918,6 +918,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
     const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
     const [bulkPercent, setBulkPercent] = useState('');
+    const [bulkAmountType, setBulkAmountType] = useState<'percent' | 'fixed'>('percent');
     const [isBulkUpdating, setIsBulkUpdating] = useState(false);
 
     // Reservas y Códigos de Descuento
@@ -1302,14 +1303,14 @@ const AdminTab: React.FC<AdminTabProps> = ({
     };
 
     const handleBulkPriceUpdate = async () => {
-        const percentVal = parseFloat(bulkPercent);
-        if (isNaN(percentVal) || percentVal === 0) {
-            alert("⚠️ Por favor ingresa un porcentaje de aumento válido.");
+        const val = parseFloat(bulkPercent);
+        if (isNaN(val) || val === 0) {
+            alert("⚠️ Por favor ingresa un monto válido.");
             return;
         }
 
         const count = selectedProductIds.length;
-        const confirmMsg = `¿Estás seguro de que deseas aplicar un aumento del ${percentVal}% en lote a los ${count} productos seleccionados?\n\nLos precios serán redondeados al entero más cercano.`;
+        const confirmMsg = `¿Estás seguro de que deseas aplicar un aumento de ${bulkAmountType === 'percent' ? val + '%' : '$' + val} en lote a los ${count} productos seleccionados?\n\nLos precios serán redondeados.`;
         
         if (!window.confirm(confirmMsg)) {
             return;
@@ -1317,7 +1318,6 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
         setIsBulkUpdating(true);
         try {
-            // Actualizar individualmente cada producto seleccionado en Supabase
             let successCount = 0;
             let errorOccurred = false;
 
@@ -1325,7 +1325,9 @@ const AdminTab: React.FC<AdminTabProps> = ({
                 const prod = products.find(p => p.id === productId);
                 if (!prod) continue;
 
-                const newPrice = Math.round(prod.price * (1 + (percentVal / 100)));
+                const newPrice = bulkAmountType === 'percent' 
+                    ? Math.round(prod.price * (1 + (val / 100)))
+                    : Math.round(prod.price + val);
                 
                 const { error } = await supabase
                     .from('products')
@@ -1344,7 +1346,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
             if (errorOccurred) {
                 alert(`⚠️ Se completó con algunos errores. Se actualizaron ${successCount} de ${count} productos.`);
             } else {
-                alert(`🎉 ¡Actualización en lote completada con éxito! Se aplicó un aumento del ${percentVal}% a los ${successCount} productos.`);
+                alert(`🎉 ¡Actualización en lote completada con éxito! Se aplicó un aumento de ${bulkAmountType === 'percent' ? val + '%' : '$' + val} a los ${successCount} productos.`);
             }
 
             // Limpiar estados y refrescar datos
@@ -2564,9 +2566,9 @@ const AdminTab: React.FC<AdminTabProps> = ({
                         const trialEndsAt = trialStartedAt ? trialStartedAt + (14 * 24 * 60 * 60 * 1000) : null;
                         const promoEndsAt = subscription.promo_pro_ends_at ? new Date(subscription.promo_pro_ends_at).getTime() : null;
                         
-                        const isTrialPending = !trialStartedAt;
-                        const isTrialActive = trialEndsAt && trialEndsAt > now; // Priorizamos mostrar el Trial
-                        const isPromoActive = promoEndsAt && promoEndsAt > now && !isTrialActive;
+                        const isPromoActive = promoEndsAt && promoEndsAt > now;
+                        const isTrialActive = trialEndsAt && trialEndsAt > now && !isPromoActive;
+                        const isTrialPending = !trialStartedAt && !isPromoActive;
                         
                         if (isTrialPending) {
                             return (
@@ -7561,40 +7563,50 @@ const AdminTab: React.FC<AdminTabProps> = ({
             {/* Barra Flotante de Acciones Masivas */}
             {selectedProductIds.length > 0 && (
                 <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] w-[95%] max-w-xl bg-slate-900/95 border border-orange-500/30 backdrop-blur-md p-4 rounded-3xl shadow-[0_10px_30px_rgba(249,115,22,0.15)] animate-in fade-in slide-in-from-top-6 duration-200">
-                    <div className="flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
-                        <div className="flex flex-col text-left">
+                    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 w-full">
+                        <div className="flex flex-col text-left shrink-0">
                             <span className="text-[10px] font-black uppercase tracking-wider text-orange-500">Acciones Masivas</span>
                             <span className="text-[11px] font-bold text-white leading-tight">
                                 {selectedProductIds.length} {selectedProductIds.length === 1 ? 'producto seleccionado' : 'productos seleccionados'}
                             </span>
                         </div>
-                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                            <div className="relative flex items-center">
-                                <input
-                                    type="number"
-                                    placeholder="0"
-                                    value={bulkPercent}
-                                    onChange={(e) => setBulkPercent(e.target.value)}
-                                    className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white font-bold outline-none focus:border-orange-500/50 w-20 text-center pr-5"
-                                />
-                                <span className="absolute right-2 text-[10px] font-black text-slate-500">%</span>
+                        
+                        <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto justify-end mt-2 lg:mt-0">
+                            
+                            <div className="flex bg-slate-900 border border-slate-800 rounded-xl overflow-hidden w-full sm:w-auto shrink-0">
+                                <button
+                                    onClick={() => setBulkAmountType('percent')}
+                                    className={`flex-1 sm:flex-none px-4 py-2.5 sm:px-3 sm:py-1.5 text-[11px] sm:text-[10px] font-black transition-all ${bulkAmountType === 'percent' ? 'bg-orange-500 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    Aumento en %
+                                </button>
+                                <button
+                                    onClick={() => setBulkAmountType('fixed')}
+                                    className={`flex-1 sm:flex-none px-4 py-2.5 sm:px-3 sm:py-1.5 text-[11px] sm:text-[10px] font-black transition-all ${bulkAmountType === 'fixed' ? 'bg-orange-500 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    Aumento en $
+                                </button>
                             </div>
-                            <button
-                                onClick={handleBulkPriceUpdate}
-                                disabled={isBulkUpdating || !bulkPercent}
-                                className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider text-white shadow-lg active:scale-95 transition-all flex items-center gap-1"
-                            >
-                                {isBulkUpdating ? 'Aplicando...' : 'Aplicar Aumento'}
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setSelectedProductIds([]);
-                                    setBulkPercent('');
-                                }}
-                                className="bg-white/5 border border-white/10 hover:bg-white/10 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider text-slate-400 hover:text-white transition-all active:scale-95"
-                            >
-                                Cancelar
-                            </button>
+
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                                <div className="relative flex items-center shrink-0">
+                                    <input
+                                        type="number"
+                                        placeholder="0"
+                                        value={bulkPercent}
+                                        onChange={(e) => setBulkPercent(e.target.value)}
+                                        className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 sm:py-1.5 text-xs text-white font-bold outline-none focus:border-orange-500/50 w-24 sm:w-20 text-center pr-6 sm:pr-5"
+                                    />
+                                    <span className="absolute right-2.5 sm:right-2 text-[11px] sm:text-[10px] font-black text-slate-500">{bulkAmountType === 'percent' ? '%' : '$'}</span>
+                                </div>
+                                <button
+                                    onClick={handleBulkPriceUpdate}
+                                    disabled={isBulkUpdating || !bulkPercent}
+                                    className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 px-4 py-2.5 sm:py-2 rounded-xl text-[11px] sm:text-[10px] font-black uppercase tracking-wider text-white shadow-lg active:scale-95 transition-all flex items-center justify-center gap-1 shrink-0 w-full sm:w-auto"
+                                >
+                                    {isBulkUpdating ? '...' : 'Aplicar'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

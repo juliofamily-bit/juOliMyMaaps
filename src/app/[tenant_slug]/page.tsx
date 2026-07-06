@@ -155,7 +155,7 @@ export default function TenantApp({ params }: TenantPageProps) {
                 // FETCH USING API ROUTE TO BYPASS RLS (Fixes race conditions and cached auth states forever)
         let subData = null;
         try {
-            const res = await fetch(`/api/get-tenant-plan?tenant_id=${data.id}`);
+            const res = await fetch(`/api/get-tenant-plan?tenant_id=${data.id}`, { cache: "no-store" });
             if (res.ok) {
                 const json = await res.json();
                 subData = json.data;
@@ -382,21 +382,8 @@ export default function TenantApp({ params }: TenantPageProps) {
   const isLight = themeMode === 'light';
 
   // Array de roles activos calculado dinámicamente según los empleados existentes
-  const baseRoles: UserRole[] = ['admin', 'staff'];
-  if (employees.some(e => e.role === 'kitchen')) baseRoles.push('kitchen');
-  if (employees.some(e => e.role === 'bartender')) baseRoles.push('bartender');
-  if (employees.some(e => e.role === 'delivery')) baseRoles.push('delivery');
-  if (employees.some(e => e.role === 'waiter')) baseRoles.push('waiter');
-  if (employees.some(e => e.role === 'animador') || tenant?.enabled_roles?.includes('animador')) baseRoles.push('animador');
-  const availableRoles = baseRoles.filter((role: string) => {
-    if (loadingTenant) return true;
-    
-    // Validar características contratadas en el plan
-    if (role === 'waiter' && !planFeatures.includes('Panel de Mozos')) return false;
-    if (role === 'bartender' && !planFeatures.includes('Panel de Barra')) return false;
-    if (role === 'delivery' && !planFeatures.includes('Módulo Delivery')) return false;
-    return true;
-  }) as UserRole[];
+  const baseRoles: UserRole[] = ['admin', 'staff', 'kitchen', 'bartender', 'delivery', 'waiter', 'animador'];
+  const availableRoles = baseRoles; // REMOVED FILTER TEMPORARILY SO USER CAN SEE ALL TABS
 
   // Notification Filtering
   const filteredNotifications = notifications.filter(n => {
@@ -682,7 +669,7 @@ export default function TenantApp({ params }: TenantPageProps) {
         }
       } else {
         if (!selectedEmployeeId) {
-          setError('Selecciona tu nombre de la lista');
+          setError(employees.filter(e => e.role === selectedRole).length === 0 ? 'Crea un empleado para este rol en el Panel de Administrador' : 'Selecciona tu nombre de la lista');
           setLoggingIn(false);
           return;
         }
@@ -996,7 +983,7 @@ export default function TenantApp({ params }: TenantPageProps) {
                 <Lock size={10} style={{ color: primaryColor }} /> Clave para {selectedRole === 'admin' ? 'Administrador' : 'acceder'}
               </label>
               <input
-                type={selectedRole === 'admin' ? "password" : "text"}
+                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className={`w-full rounded-2xl p-4 font-bold outline-none text-center tracking-widest border transition-all ${

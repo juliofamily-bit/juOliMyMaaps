@@ -706,6 +706,9 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             .eq('id', orderIdRef)
             .then(({ error }) => {
               if (!error) {
+                // Liberar los items a cocina
+                supabase.from('order_items').update({ status: 'pending' }).eq('order_id', orderIdRef).then();
+                
                 setOrderSuccess(true);
                 setSuccessOrderNumber(0); // 0 indica pedido online
                 
@@ -1636,6 +1639,8 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       let createdOrder: any = null;
       let orderError: any = null;
 
+      const initialOrderStatus = (method === 'mercadopago' || method === 'credito') && !isApproved ? 'pending_payment' : 'pending';
+
       // Primer intento: incluir todas las columnas premium (Envíos, Mercado Pago y Descuento de Señas)
       const firstAttempt = await supabase
         .from('orders')
@@ -1646,7 +1651,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
           total_price: finalTotal,
           discount_amount: appliedDiscount,
           coupon_code: couponCode ? couponCode.trim().toUpperCase() : '',
-          status: 'pending',
+          status: initialOrderStatus,
           phone_number: deliveryType === 'delivery' ? finalPhoneNumber : (finalPhoneNumber || ''),
           tenant_id: tenant.id,
           waiter_name: deliveryType === 'local' ? assignedWaiterName : null,
@@ -1691,7 +1696,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             client_name: finalCustomerInfo,
             table_number: deliveryType === 'local' ? finalTableNumber : null,
             total_price: finalTotal,
-            status: 'pending',
+            status: initialOrderStatus,
             phone_number: finalPhoneNumber || '',
             tenant_id: tenant.id,
             waiter_name: deliveryType === 'local' ? assignedWaiterName : null,
@@ -1785,7 +1790,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             product_id: item.id,
             quantity: item.quantity,
             unit_price: item.price,
-            status: 'pending',
+            status: initialOrderStatus,
             tenant_id: tenant.id,
             target_departments: catDepts,
             notes: finalNotes
@@ -1814,7 +1819,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             product_id: item.id,
             quantity: item.quantity,
             unit_price: deptsFound.length === 1 ? item.price : 0, 
-            status: 'pending',
+            status: initialOrderStatus,
             tenant_id: tenant.id,
             target_departments: deptsFound.length === 1 ? [deptsFound[0]] : catDepts,
             notes: finalNotes
@@ -1828,7 +1833,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               product_id: item.id,
               quantity: item.quantity,
               unit_price: idx === 0 ? item.price : 0, // Solo el primero lleva el precio
-              status: 'pending',
+              status: initialOrderStatus,
               tenant_id: tenant.id,
               target_departments: [d],
               notes: finalNotes ? `${finalNotes} - ${splitNote}` : splitNote
@@ -1872,7 +1877,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         ? `🔔 Pedido para ${destName} (De: ${finalCustomerInfo}) #${createdOrder.order_number}`
         : `⚠️ Pedido PENDIENTE para ${destName} (De: ${finalCustomerInfo}) #${createdOrder.order_number}`;
 
-      const isOnlinePending = (method === 'mercadopago' || method === 'credito') && !isApproved;
+      const isOnlinePending = initialOrderStatus === 'pending_payment';
 
       if (!isOnlinePending) {
         const notifsToInsert = [{

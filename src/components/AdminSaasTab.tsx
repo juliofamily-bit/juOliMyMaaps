@@ -13,12 +13,15 @@ export const AdminSaasTab = ({ tenantId }: { tenantId: string }) => {
     const [tenantEmail, setTenantEmail] = useState('');
 
     const fetchSub = async () => {
-        const { data, error } = await supabase
-            .from('saas_subscriptions')
-            .select(`*, saas_plans:saas_plans!saas_subscriptions_plan_id_fkey(*)`)
-            .eq('tenant_id', tenantId)
-            .maybeSingle();
-        if (data) setSub(data);
+        try {
+            const res = await fetch(`/api/get-tenant-plan?tenant_id=${tenantId}`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.data) setSub(json.data);
+            }
+        } catch (err) {
+            console.error('Error fetching sub in AdminSaasTab:', err);
+        }
     };
 
     const fetchTenantEmail = async () => {

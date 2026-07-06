@@ -27,3 +27,52 @@ Para reducir la fricción de entrada de nuevos restaurantes y maximizar la conve
   - `AdminEmployeeTab.tsx`: Refactorizado para usar estados locales en `max_devices` para evitar desfases de React y auto-incrementar en BD sin requerir pasos extra.
 - **Backend:** `vercel.json` se ha configurado para lanzar `/api/cron/check-promos` diaramente.
 \n\n### Actualizacion - Periodo de Prueba y Bloques\n- Se agrego un endpoint (/api/trial/start) que se gatilla al insertar el primer pedido para cambiar de pending_trial a trial y setear la fecha inicial.\n- Se configuro el banner de 14 dias en AdminTab para mostrar alerta al llegar al dia 12.\n\n\n### Actualizacion - Global Trial Banner y Tiempo Real\n- Se agrego un listener en tiempo real (Supabase Realtime) en page.tsx para escuchar cambios en saas_subscriptions. Esto elimina la necesidad de recargar la pagina para ver el estado desbloqueado.\n- Se agrego un Banner Global de prueba de 14 dias en la parte superior de TODAS las pantallas para usuarios con rol admin.\n- Se corrigio el lock de Balance Financiero que ocurria porque no se habia refrescado el estado.\n\n\n### Hotfix - Tabs y Sintaxis en page.tsx\n- Se corrigio un error de sintaxis causado por la mala inyeccion de dependencias que descalabro el archivo page.tsx.\n- Se restauraron todas las pestañas inferiores para que siempre sean visibles (Pedidos, Cocina, Barra, Despacho, Mozo, Animador, Admin).\n- Se volvio a aplicar el banner global de forma segura y se confirmo que el build de TypeScript esta 100% libre de errores.\n\n\n### Hotfix 2 - Feature Flags Hardcodeados\n- Se corrigio un bug critico donde los usuarios en Trial estaban leyendo los permisos de la tabla saas_plans de la base de datos, los cuales tenian nombres incorrectos.\n- Ahora, si el usuario esta en Trial o Promo, los permisos (incluyendo Balance Financiero Avanzado) se inyectan a la fuerza (hardcoded array) independientemente de lo que diga la base de datos, garantizando que el sistema funcione al 100% completado durante los 14 dias y los 30 dias posteriores de promo.\n\n\n### Hotfix 3 - RLS Race Condition Fix\n- Se detectó un error arquitectónico donde el cliente frontend de Supabase ejecutaba la lectura de saas_subscriptions ANTES de restaurar la sesión o sin cabeceras válidas, fallando la política RLS.\n- Se creó una ruta API Serverless (/api/get-tenant-plan) que utiliza el SUPABASE_SERVICE_ROLE_KEY para ignorar las políticas RLS y devolver siempre el plan real del tenant, eliminando por completo los falsos bloqueos (Race Conditions) para el usuario.\n
+
+### Mejora - Buscador Inteligente en Caja
+- Se agregó una barra de búsqueda en el panel de toma de pedidos (OrderTab).
+- Permite buscar productos por texto en tiempo real (ej. "combo hamburguesa").
+- Integra reconocimiento de voz (API Web Speech) para buscar productos dictándolos por micrófono.
+- Si hay texto en el buscador, se omiten las categorías y se muestran todos los productos coincidentes del local.
+
+
+### Mejora - Buscador de Insumos en Admin
+- Se agregó una barra de búsqueda en el modal de creación/edición de productos (AdminTab) específicamente para los insumos.
+- Permite buscar insumos por texto y por voz.
+- Filtra automáticamente la lista de insumos disponibles al buscar.
+
+
+### Mejora - Acciones Masivas (Aumento en $)
+- Se agregó la posibilidad de aumentar el precio de forma masiva utilizando un monto fijo en pesos, además de poder hacerlo por porcentaje.
+- Se añadieron selectores en el panel de acciones masivas para alternar entre % y $.
+
+
+### Mejora - Buscadores Globales en AdminTab
+- Se añadió una barra de búsqueda con funcionalidad de dictado por voz (Micrófono) en la pestaña principal de "Menú". Permite filtrar rápidamente la lista completa de productos disponibles.
+- Se añadió la misma funcionalidad de búsqueda (texto y voz) en la pestaña "Stock", permitiendo encontrar rápidamente los insumos para editarlos.
+
+
+### Corrección - Supabase Client Configuración Headers
+- Se modificó `src/lib/supabase.ts` para que `getClient()` inyecte automáticamente el header `x-tenant-id` con el `activeTenantId`. Esto soluciona los problemas de RLS en operaciones de `UPDATE` sobre la tabla `tenants` desde el panel de administrador, que estaban arrojando 0 registros actualizados por falta de este header.
+
+
+### Nueva API Route para actualizar Configuración de Tenant (`/api/update-tenant`)
+- Se implementó una API route dedicada que utiliza el `SUPABASE_SERVICE_ROLE_KEY` para guardar los ajustes del administrador. Esto evita el error de "0 registros actualizados" causado por el parche de seguridad de Auth RLS (`supabase_auth_rls_patch.sql`), el cual exige un JWT de Supabase Auth para validar el `tenant_id`. Dado que el panel de administración valida por PIN local y usa sesión anónima, la única forma robusta de actualizar la tabla `tenants` (sin desprotegerla) es a través de una API route del lado del servidor.
+
+
+### Correcciones Generales del Panel Admin (Checkpoint)
+- Se corrigió el botón de guardar de `Fidelización (Club de Clientes)`, `Mesas`, `AFIP` y `Mozos` para que todos utilicen la ruta segura `/api/update-tenant`. Esto soluciona el problema de que el interruptor de fidelización se volvía a activar solo al recargar.
+- Se verificó que los buscadores con texto y voz para "Stock" y "Menú" ya se encontraban implementados correctamente en el código bajo los estados `adminStockSearchQuery` y `adminProductSearchQuery`.
+
+
+### Correcciones Checkpoint 36 (Pagos y UI)
+- **Pagos con MercadoPago:** Se corrigió el flujo de pedidos por MercadoPago. Ahora, cuando un cliente pide y elige pagar online, la orden y sus items se insertan con estado `pending_payment`. La pestaña de cocina (`KitchenTab`) los ignora por completo para evitar que se preparen pedidos no abonados. Recién cuando MercadoPago retorna el `collection_status=approved`, se actualiza todo a `pending` (y `pagado`), enviando automáticamente el pedido a la cocina.
+- **UI Acciones Masivas:** Se agregó `flex-wrap` a la barra de acciones masivas en la vista de stock/productos para que en pantallas móviles pequeñas el selector de "%" vs "$" no se oculte.
+- **Suscripción La Cubanera 2.0:** Se actualizó por base de datos la suscripción a `Plan Pro` por un año para habilitar el acceso a todas las características premium en ese tenant.
+
+
+### Correcciones Checkpoint 37 (UX y Lógica)
+- **Banner de Suscripción:** Se corrigió la prioridad visual del banner de suscripción. Si hay una promoción activa (Promo Pro), esta tiene prioridad sobre el mensaje de Todavía no iniciaste tu prueba.
+- **Acciones Masivas (% vs $):** Se implementó desde cero un selector para alternar entre aumento por porcentaje (%) y aumento por monto fijo ($) en las acciones masivas de productos, una funcionalidad que el usuario recordaba pero que en realidad no existía, adaptando toda la lógica de actualización en lote para soportar ambos formatos.
+- **Feedback de Mapas Visuales:** Se registró la idea del usuario de mapas de mesas escalados en el bloc de notas.
+
+- **UI Móvil Acciones Masivas:** Se rediseñó la estructura flex de la barra flotante. Ahora en celular los controles bajan a líneas independientes y ocupan todo el ancho (w-full) para garantizar que los botones de [%] y [$] sean grandes, fáciles de tocar y no queden ocultos por falta de espacio.

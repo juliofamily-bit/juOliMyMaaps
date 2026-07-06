@@ -1,0 +1,5 @@
+const fs = require('fs');
+let content = fs.readFileSync('estado.md', 'utf-8');
+content += '\n\n### Correcciones Checkpoint 36 (Pagos y UI)\n- **Pagos con MercadoPago:** Se corrigió el flujo de pedidos por MercadoPago. Ahora, cuando un cliente pide y elige pagar online, la orden y sus items se insertan con estado `pending_payment`. La pestaña de cocina (`KitchenTab`) los ignora por completo para evitar que se preparen pedidos no abonados. Recién cuando MercadoPago retorna el `collection_status=approved`, se actualiza todo a `pending` (y `pagado`), enviando automáticamente el pedido a la cocina.\n- **UI Acciones Masivas:** Se agregó `flex-wrap` a la barra de acciones masivas en la vista de stock/productos para que en pantallas móviles pequeñas el selector de "%" vs "$" no se oculte.\n- **Suscripción La Cubanera 2.0:** Se actualizó por base de datos la suscripción a `Plan Pro` por un año para habilitar el acceso a todas las características premium en ese tenant.\n';
+fs.writeFileSync('estado.md', content);
+console.log('updated estado');

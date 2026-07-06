@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Category, Product, Ingredient, OrderItem, Order } from '@/types/database';
-import { Minus, Plus, Smartphone, Check, ArrowLeft, ShoppingCart, AlertCircle, X, RefreshCw, ClipboardList, CheckCircle2, Clock, User, Flame, Navigation, AlertTriangle, Printer, Trash2, ShoppingBag, Calendar, Users, Package, Utensils, GlassWater, Coffee, Pizza, Beer, Search, Info, Coins } from 'lucide-react';
+import { Minus, Plus, Smartphone, Check, ArrowLeft, ShoppingCart, AlertCircle, X, RefreshCw, ClipboardList, CheckCircle2, Clock, User, Flame, Navigation, AlertTriangle, Printer, Trash2, ShoppingBag, Calendar, Users, Package, Utensils, GlassWater, Coffee, Pizza, Beer, Search, Info, Coins, Mic } from 'lucide-react';
 import { supabase, broadcastTenantChange } from '@/lib/supabase';
 import { useNotifications } from '@/lib/store';
 import { useOfflineStore } from '@/lib/offlineStore';
@@ -95,14 +95,36 @@ export default function OrderTab({ products, ingredients, categories: initialCat
     const [cart, setCart] = useState<Record<string, number>>({});
     const [showSummary, setShowSummary] = useState(false);
     const [showOfflineQueue, setShowOfflineQueue] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isListening, setIsListening] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const { addNotification } = useNotifications();
+
+    const handleVoiceSearch = () => {
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            alert('Tu navegador no soporta reconocimiento de voz. Usa Chrome o Safari.');
+            return;
+        }
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'es-AR';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => setIsListening(true);
+        recognition.onresult = (event: any) => {
+            const transcript = event.results[0][0].transcript;
+            setSearchQuery(transcript);
+        };
+        recognition.onerror = () => setIsListening(false);
+        recognition.onend = () => setIsListening(false);
+        recognition.start();
+    };
     const { addToQueue, syncQueue, queue } = useOfflineStore();
 
     // NUEVOS ESTADOS DE COBRO CRUZADO, BUSCADOR Y MÉTODOS DE PAGO NATIVOS
     const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'efectivo' | 'debito' | 'credito' | 'rappi' | 'pedidosya'>('efectivo');
-    const [searchQuery, setSearchQuery] = useState('');
     const [crossPaymentOrder, setCrossPaymentOrder] = useState<Order | null>(null);
     const [crossPaymentMethod, setCrossPaymentMethod] = useState<'efectivo' | 'debito' | 'credito'>('efectivo');
     const [additionalTipAmount, setAdditionalTipAmount] = useState<number>(0);
@@ -1335,6 +1357,42 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                         )}
                     </div>
 
+                    <div className="relative mb-4 flex items-center gap-2 animate-in slide-in-from-top-2">
+                        <div className="relative flex-1">
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 opacity-50">
+                                <Search size={16} />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Buscar productos (ej. combo hamburguesa)..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className={`w-full rounded-2xl py-3 pl-10 pr-10 text-xs font-bold outline-none transition-all shadow-sm border ${
+                                    isLight 
+                                        ? 'bg-white border-slate-200 text-slate-900 focus:border-orange-500' 
+                                        : 'bg-slate-900 border-slate-800 text-white focus:border-orange-500'
+                                }`}
+                            />
+                            {searchQuery && (
+                                <button onClick={() => setSearchQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100">
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
+                        <button
+                            onClick={handleVoiceSearch}
+                            className={`h-10 w-10 shrink-0 rounded-2xl flex items-center justify-center transition-all shadow-sm border ${
+                                isListening 
+                                    ? 'bg-red-500 text-white border-red-500 animate-pulse' 
+                                    : isLight 
+                                        ? 'bg-white text-slate-700 border-slate-200 hover:border-orange-500 hover:text-orange-500' 
+                                        : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-orange-500 hover:text-orange-500'
+                            }`}
+                        >
+                            <Mic size={18} className={isListening ? 'animate-bounce' : ''} />
+                        </button>
+                    </div>
+
                     {queue.length > 0 && (
                         <div onClick={() => setShowOfflineQueue(true)} className="bg-orange-500/10 border border-orange-500/30 rounded-2xl p-3 flex justify-between items-center cursor-pointer animate-pulse hover:bg-orange-500/20 transition-all">
                             <span className="text-[10px] font-black uppercase text-orange-500">
@@ -1347,7 +1405,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                         </div>
                     )}
 
-                    {selectedCategoryId && (
+                    {selectedCategoryId && !searchQuery && (
                         <div className="flex items-center gap-3 mb-4 animate-in slide-in-from-left-4">
                             <button
                                 onClick={() => setSelectedCategoryId(null)}
@@ -1363,7 +1421,63 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                         </div>
                     )}
 
-                    {!selectedCategoryId ? (
+                    {searchQuery ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-in fade-in">
+                            {(() => {
+                                const q = searchQuery.toLowerCase().trim();
+                                const displayedProducts = products.filter(p => p.is_active !== false && p.name.toLowerCase().includes(q));
+                                
+                                if (displayedProducts.length === 0) {
+                                    return (
+                                        <div className="col-span-full py-10 text-center text-slate-500">
+                                            No se encontraron productos para "{searchQuery}"
+                                        </div>
+                                    );
+                                }
+                                
+                                return displayedProducts.map(p => {
+                                    const qty = cart[p.id] || 0;
+                                    const isSelected = qty > 0;
+                                    const finalPrice = p.price;
+                                    return (
+                                        <div 
+                                            key={p.id}
+                                            onClick={() => addToCart(p.id)}
+                                            className={`p-4 rounded-2xl flex flex-col justify-between cursor-pointer transition-all active:scale-[0.98] border shadow-sm relative overflow-hidden ${
+                                                isSelected 
+                                                    ? 'border-orange-500 bg-orange-500/10' 
+                                                    : isLight 
+                                                        ? 'bg-white border-slate-200/65 hover:border-orange-500/30' 
+                                                        : 'glass border-white/5 hover:border-orange-500/30'
+                                            }`}
+                                        >
+                                            <div className="flex justify-between items-start mb-2">
+                                                <h4 className={`font-black uppercase tracking-tight text-sm pr-4 leading-tight ${isLight ? 'text-slate-800' : 'text-white'}`}>{p.name}</h4>
+                                                <span className="font-black text-orange-500 whitespace-nowrap bg-orange-500/10 px-2 py-0.5 rounded-lg text-xs">{formatARS(finalPrice)}</span>
+                                            </div>
+                                            {isSelected && (
+                                                <div className="flex items-center justify-between mt-3 bg-slate-900/40 p-1.5 rounded-xl border border-white/10" onClick={(e) => e.stopPropagation()}>
+                                                    <button 
+                                                        onClick={() => removeFromCart(p.id)}
+                                                        className="w-8 h-8 rounded-lg bg-red-500/20 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors"
+                                                    >
+                                                        <Minus size={14} />
+                                                    </button>
+                                                    <span className="font-black text-sm text-white w-8 text-center">{qty}</span>
+                                                    <button 
+                                                        onClick={() => addToCart(p.id)}
+                                                        className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-white flex items-center justify-center transition-colors"
+                                                    >
+                                                        <Plus size={14} />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                });
+                            })()}
+                        </div>
+                    ) : !selectedCategoryId ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4 animate-in fade-in slide-in-from-bottom-4">
                             {categories.length === 0 && (
                                 <div className="col-span-2 py-10 text-center text-slate-600">
