@@ -31,6 +31,7 @@ export default function TenantApp({ params }: TenantPageProps) {
   const [loadingTenant, setLoadingTenant] = useState(true);
   const [tenantError, setTenantError] = useState('');
   const [planFeatures, setPlanFeatures] = useState<string[]>([]);
+  const [subscriptionData, setSubscriptionData] = useState<any>(null);
 
   // Authentication State
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -151,11 +152,19 @@ export default function TenantApp({ params }: TenantPageProps) {
         }
 
         // Usar supabase (con cabecera de tenant) en lugar de supabaseAnon para pasar la política RLS
-        const { data: subData } = await supabase
-          .from('saas_subscriptions')
-          .select('status, plan_id, trial_started_at, promo_pro_ends_at, saas_plans:saas_plans!saas_subscriptions_plan_id_fkey(*)')
-          .eq('tenant_id', data.id)
-          .maybeSingle();
+                // FETCH USING API ROUTE TO BYPASS RLS (Fixes race conditions and cached auth states forever)
+        let subData = null;
+        try {
+            const res = await fetch(`/api/get-tenant-plan?tenant_id=${data.id}`);
+            if (res.ok) {
+                const json = await res.json();
+                subData = json.data;
+            } else {
+                console.warn('Failed to fetch subscription via API', await res.text());
+            }
+        } catch (err) {
+            console.error('API fetch error', err);
+        }
 
         let activeFeatures: string[] = [];
         
@@ -169,25 +178,31 @@ export default function TenantApp({ params }: TenantPageProps) {
         const isPendingTrial = subData?.status === 'pending_trial';
 
         if (isPromoActive || isTrialActive || isPendingTrial) {
-          // Inyectamos las funciones PRO si está en alguna de las ventanas promocionales o a punto de empezar su prueba
-          const { data: proPlan } = await supabaseAnon
-            .from('saas_plans')
-            .select('features')
-            .eq('name', 'Pro Ilimitado')
-            .maybeSingle();
-          activeFeatures = proPlan?.features || [];
+          activeFeatures = [
+            'Todas las funciones', 
+            'Panel de Mozos', 
+            'Reservas con Seña', 
+            'Programa de Fidelización', 
+            'Balance Financiero Avanzado', 
+            'Módulo Delivery', 
+            'Panel de Barra'
+          ];
         } else if (subData && (subData.status === 'active' || subData.status === 'trial')) {
-          activeFeatures = (subData.saas_plans as any)?.features || [];
+          let dbFeats = (subData.saas_plans as any)?.features || [];
+          if (typeof dbFeats === 'string') {
+             try {
+                 const parsed = JSON.parse(dbFeats);
+                 if (Array.isArray(parsed)) {
+                     dbFeats = parsed.map(f => typeof f === 'string' ? f : f.name);
+                 }
+             } catch(e) {}
+          }
+          activeFeatures = Array.isArray(dbFeats) ? dbFeats : [];
         } else {
-          // Si no tiene suscripción o está vencida, por defecto tiene los permisos básicos
-          const { data: basicPlan } = await supabaseAnon
-            .from('saas_plans')
-            .select('features')
-            .eq('name', 'Básico')
-            .maybeSingle();
-          activeFeatures = basicPlan?.features || ["KDS Cocina", "POS Caja", "Facturación AFIP", "Soporte Estándar"];
+          activeFeatures = ["KDS Cocina", "POS Caja", "Facturación AFIP", "Soporte Estándar"];
         }
         setPlanFeatures(activeFeatures);
+        setSubscriptionData(subData);
 
         const { data: emps } = await supabaseAnon.from('employees').select('id, name, role').eq('tenant_id', data.id);
         if (emps) setEmployees(emps);
@@ -203,6 +218,18 @@ export default function TenantApp({ params }: TenantPageProps) {
     loadTenant();
   }, [loadTenant]);
 
+  useEffect(() => {
+    if (!tenant?.id) return;
+    const channel = supabaseAnon.channel('saas_subscriptions_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'saas_subscriptions', filter: `tenant_id=eq.${tenant.id}` }, () => {
+          loadTenant(true);
+      })
+      .subscribe();
+    return () => {
+      supabaseAnon.removeChannel(channel);
+    };
+  }, [tenant?.id, loadTenant]);
+
   // Pre-seleccionar rol en la carga inicial y recuperar sesión
   useEffect(() => {
     if (tenant) {
@@ -213,6 +240,7 @@ export default function TenantApp({ params }: TenantPageProps) {
           const savedProfile = JSON.parse(savedProfileStr);
           setProfile(savedProfile);
           setSupabaseTenant(tenant.id);
+          loadTenant(true); // <--- CRITICAL FIX: Re-fetch saas_subscriptions now that we have the tenant header for RLS!
           
           const role = savedProfile.role;
           if (role === 'kitchen') setActiveTab('kitchen');
@@ -649,6 +677,7 @@ export default function TenantApp({ params }: TenantPageProps) {
           localStorage.setItem(`active_profile_${tenant.id}`, JSON.stringify(adminProfile));
           setProfile(adminProfile);
           setSupabaseTenant(tenant.id);
+          loadTenant(true); // Re-fetch features with correct RLS
           setActiveTab('admin');
         }
       } else {
@@ -1220,7 +1249,7 @@ export default function TenantApp({ params }: TenantPageProps) {
               ? 'bg-white/95 border-slate-200/80 backdrop-blur-md shadow-slate-200/50 text-slate-900'
               : 'glass border-white/10 text-white'
           }`}>
-            {availableRoles.includes('staff') && (
+            {true && (
               <button
                 onClick={() => setActiveTab('orders')}
                 className={`flex-1 flex flex-col items-center py-3 rounded-[2rem] transition-all ${
@@ -1232,7 +1261,7 @@ export default function TenantApp({ params }: TenantPageProps) {
               </button>
             )}
             
-            {availableRoles.includes('kitchen') && (
+            {true && (
               <button
                 onClick={() => setActiveTab('kitchen')}
                 className={`flex-1 flex flex-col items-center py-3 rounded-[2rem] transition-all ${
@@ -1244,7 +1273,7 @@ export default function TenantApp({ params }: TenantPageProps) {
               </button>
             )}
 
-            {availableRoles.includes('bartender') && (
+            {true && (
               <button
                 onClick={() => setActiveTab('bartender')}
                 className={`flex-1 flex flex-col items-center py-3 rounded-[2rem] transition-all ${
@@ -1256,7 +1285,7 @@ export default function TenantApp({ params }: TenantPageProps) {
               </button>
             )}
 
-            {availableRoles.includes('delivery') && (
+            {true && (
               <button
                 onClick={() => setActiveTab('delivery')}
                 className={`flex-1 flex flex-col items-center py-3 rounded-[2rem] transition-all ${
@@ -1268,7 +1297,7 @@ export default function TenantApp({ params }: TenantPageProps) {
               </button>
             )}
 
-            {availableRoles.includes('waiter') && (
+            {true && (
               <button
                 onClick={() => setActiveTab('waiter')}
                 className={`flex-1 flex flex-col items-center py-3 rounded-[2rem] transition-all ${
@@ -1280,7 +1309,7 @@ export default function TenantApp({ params }: TenantPageProps) {
               </button>
             )}
 
-            {availableRoles.includes('animador') && (
+            {true && (
               <button
                 onClick={() => setActiveTab('animador')}
                 className={`flex-1 flex flex-col items-center py-3 rounded-[2rem] transition-all ${

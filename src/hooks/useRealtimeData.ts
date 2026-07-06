@@ -350,11 +350,21 @@ export function useRealtimeData(tenantId: string | null, isPublic: boolean = fal
             }, 120000);
         }
 
+        // 5. Refresco Inmediato al volver a la pestaña (soluciona throttling de navegadores)
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                console.log(`[REALTIME] Pestaña activa, refrescando datos forzadamente...`);
+                fetchData(true);
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
         return () => {
             supabase.removeChannel(broadcastChannel);
             supabase.removeChannel(dbChannel);
             clearInterval(pollInterval);
             if (heartbeatInterval) clearInterval(heartbeatInterval);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, [tenantId, isPublic])
 

@@ -2,13 +2,22 @@
 
 import React, { useState, useRef } from 'react';
 import { Category, Product, Ingredient, OrderItem, Order } from '@/types/database';
-import { Minus, Plus, Smartphone, Check, ArrowLeft, ShoppingCart, AlertCircle, X, RefreshCw, ClipboardList, CheckCircle2, Clock, User, Flame, Navigation, AlertTriangle, Printer, Trash2, ShoppingBag, Calendar, Users } from 'lucide-react';
+import { Minus, Plus, Smartphone, Check, ArrowLeft, ShoppingCart, AlertCircle, X, RefreshCw, ClipboardList, CheckCircle2, Clock, User, Flame, Navigation, AlertTriangle, Printer, Trash2, ShoppingBag, Calendar, Users, Package, Utensils, GlassWater, Coffee, Pizza, Beer, Search, Info, Coins } from 'lucide-react';
 import { supabase, broadcastTenantChange } from '@/lib/supabase';
 import { useNotifications } from '@/lib/store';
 import { useOfflineStore } from '@/lib/offlineStore';
 import { cleanArgPhone } from '@/lib/phoneUtils';
 import { useReactToPrint } from 'react-to-print';
 import { PrintableTicket } from './PrintableTicket';
+
+const triggerTrialStart = (tenantId: string) => {
+    fetch('/api/trial/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenant_id: tenantId })
+    }).catch(() => {});
+};
+
 interface OrderTabProps {
     products: Product[];
     ingredients: Ingredient[];
@@ -656,7 +665,8 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                     payment_status: 'pagado',
                     is_approved_for_production: true,
                     delivery_type: 'local',
-                    loyalty_discount_applied: loyaltyRedemption
+                    loyalty_discount_applied: loyaltyRedemption,
+                    tenant_id: tenant?.id
                 })
                 .select()
                 .single();
@@ -683,7 +693,8 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                         status: 'pending',
                         payment_method: selectedPaymentMethod,
                         payment_status: 'pagado',
-                        loyalty_discount_applied: loyaltyRedemption
+                        loyalty_discount_applied: loyaltyRedemption,
+                        tenant_id: tenant?.id
                     })
                     .select()
                     .single();
@@ -716,23 +727,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
 
                 const prod = products.find(p => p.id === pid);
                 const category = categories.find(c => c.id === prod?.category_id);
-                const catDepts = category?.target_departments || ['kitchen'];
-
-                // Si la categoría tiene un único depto
-                if (catDepts.length === 1) {
-                    orderItemsToInsert.push({
-                        order_id: order.id,
-                        product_id: pid,
-                        quantity: qty,
-                        unit_price: price,
-                        status: 'pending',
-                        tenant_id: tenant?.id,
-                        target_departments: catDepts,
-                        is_served: false,
-                        notes: ''
-                    });
-                    return;
-                }
+                const catDepts = (category?.target_departments && category.target_departments.length > 0) ? category.target_departments : ['kitchen'];
 
                 // Evaluar la receta (Smart Splitter para combos)
                 const recipe = (productIngredients || []).filter(pi => pi.product_id === pid);
@@ -744,7 +739,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                         unit_price: price,
                         status: 'pending',
                         tenant_id: tenant?.id,
-                        target_departments: ['kitchen'],
+                        target_departments: catDepts, // fallback a la categoria
                         is_served: false,
                         notes: ''
                     });
@@ -754,7 +749,8 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                 const deptsMap: Record<string, string[]> = {};
                 recipe.forEach(ri => {
                     const ing = ingredients.find(ingr => ingr.id === ri.ingredient_id);
-                    const depts = (ing?.target_departments && ing.target_departments.length > 0) ? ing.target_departments : ['kitchen'];
+                    // fallback a la categoria en lugar de kitchen
+                    const depts = (ing?.target_departments && ing.target_departments.length > 0) ? ing.target_departments : catDepts;
                     depts.forEach((d: string) => {
                         if (!deptsMap[d]) deptsMap[d] = [];
                         if (ing) deptsMap[d].push(ing.name);
@@ -770,7 +766,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                         unit_price: price,
                         status: 'pending',
                         tenant_id: tenant?.id,
-                        target_departments: deptsFound.length === 1 ? [deptsFound[0]] : ['kitchen'],
+                        target_departments: deptsFound.length === 1 ? [deptsFound[0]] : catDepts, // fallback a la categoria
                         is_served: false,
                         notes: ''
                     });
@@ -893,6 +889,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
         } finally {
             // Reset regardless
             setCart({});
+            if (tenant?.id) triggerTrialStart(tenant.id);
             setClientName('');
             setPhone('');
             setSelectedCategoryId(null);

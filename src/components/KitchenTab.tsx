@@ -56,6 +56,7 @@ export default function KitchenTab({ orders, products, tenant, refetchData }: Ki
 
     const pendingOrders = orders.filter(o => o.status === 'pending');
 
+
     const getTimeAgo = (timestamp: string) => {
         const diff = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000 / 60);
         return diff < 0 ? '0m' : `${diff}m`;

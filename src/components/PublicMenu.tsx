@@ -8,6 +8,14 @@ import { useRealtimeData } from '@/hooks/useRealtimeData';
 import { supabase, broadcastTenantChange } from '@/lib/supabase';
 import { SocialWall } from '@/components/SocialWall';
 
+const triggerTrialStart = (tenantId: string) => {
+  fetch('/api/trial/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tenant_id: tenantId })
+  }).catch(() => {});
+};
+
 const AutoCarousel = ({ children, gapClass = 'gap-4 md:gap-6' }: { children: React.ReactNode, gapClass?: string }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   
@@ -1764,13 +1772,14 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         const finalNotes = [giftNoteBase, item.notes].filter(Boolean).join(' | ');
         const product = products.find(p => p.id === item.id);
         const category = categories.find(c => c.id === product?.category_id);
-        const catDepts = category?.target_departments || ['kitchen'];
+        const catDepts = (category?.target_departments && category.target_departments.length > 0) ? category.target_departments : ['kitchen'];
 
         console.log(`[SPLIT DEBUG] Producto: ${product?.name}`, { catDepts });
 
-        // REGLA 1: Si la categoría pertenece a UN SOLO departamento (Ej: Bebidas -> Barra)
-        // Se envía todo el producto ahí, sin importar los insumos.
-        if (catDepts.length === 1) {
+        const recipe = productIngredients.filter(pi => pi.product_id === item.id);
+        
+        if (recipe.length === 0) {
+          // Si no hay receta, va al departamento asignado a la categoria
           orderItemsToInsert.push({
             order_id: createdOrder.id,
             product_id: item.id,
@@ -1784,31 +1793,12 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
           return;
         }
 
-        // REGLA 2: Si la categoría pertenece a MÚLTIPLES departamentos (Ej: Combos -> Barra + Cocina)
-        // Se usa el Smart Splitter para dividir basado en los ingredientes.
-        const recipe = productIngredients.filter(pi => pi.product_id === item.id);
-        
-        if (recipe.length === 0) {
-          // Si es multi-departamento pero no tiene receta, forzamos cocina por defecto
-          orderItemsToInsert.push({
-            order_id: createdOrder.id,
-            product_id: item.id,
-            quantity: item.quantity,
-            unit_price: item.price,
-            status: 'pending',
-            tenant_id: tenant.id,
-            target_departments: ['kitchen'],
-            notes: finalNotes
-          });
-          return;
-        }
-
         // Agrupar departamentos presentes en la receta
         const deptsMap: Record<string, string[]> = {};
         recipe.forEach(ri => {
           const ing = ingredients.find(i => i.id === ri.ingredient_id);
-          // Si el insumo no tiene depto, asume cocina
-          const depts = (ing?.target_departments && ing.target_departments.length > 0) ? ing.target_departments : ['kitchen'];
+          // Si el insumo no tiene depto, asume el de la categoria
+          const depts = (ing?.target_departments && ing.target_departments.length > 0) ? ing.target_departments : catDepts;
           depts.forEach(d => {
             if (!deptsMap[d]) deptsMap[d] = [];
             if (ing) deptsMap[d].push(ing.name);
@@ -1826,7 +1816,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             unit_price: deptsFound.length === 1 ? item.price : 0, 
             status: 'pending',
             tenant_id: tenant.id,
-            target_departments: deptsFound.length === 1 ? [deptsFound[0]] : ['kitchen'],
+            target_departments: deptsFound.length === 1 ? [deptsFound[0]] : catDepts,
             notes: finalNotes
           });
         } else {
@@ -1949,6 +1939,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         setSuccessOrderNumber(createdOrder.order_number);
         setOrderSuccess(true);
         setCart([]);
+        triggerTrialStart(tenant.id);
         setTimeout(() => {
           setOrderSuccess(false);
           setSuccessOrderNumber(null);

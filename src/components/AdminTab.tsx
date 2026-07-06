@@ -252,6 +252,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
     const isViewLocked = (v: string): boolean => {
         if (!planFeatures || planFeatures.length === 0) return false;
+        if (planFeatures.includes('Todas las funciones')) return false;
         
         switch (v) {
             case 'tables':
@@ -2564,8 +2565,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
                         const promoEndsAt = subscription.promo_pro_ends_at ? new Date(subscription.promo_pro_ends_at).getTime() : null;
                         
                         const isTrialPending = !trialStartedAt;
-                        const isTrialActive = trialEndsAt && trialEndsAt > now && !promoEndsAt; // Solo mostramos trial si no hay promo
-                        const isPromoActive = promoEndsAt && promoEndsAt > now;
+                        const isTrialActive = trialEndsAt && trialEndsAt > now; // Priorizamos mostrar el Trial
+                        const isPromoActive = promoEndsAt && promoEndsAt > now && !isTrialActive;
                         
                         if (isTrialPending) {
                             return (
@@ -2583,22 +2584,26 @@ const AdminTab: React.FC<AdminTabProps> = ({
                         
                         if (isTrialActive) {
                             const daysLeft = Math.max(0, Math.ceil((trialEndsAt - now) / (1000 * 60 * 60 * 24)));
+                            const isWarning = daysLeft <= 2;
                             return (
-                                <div className="bg-gradient-to-r from-orange-500/20 to-purple-600/20 border border-orange-500/30 p-4 rounded-2xl flex items-center justify-between text-white shadow-lg">
+                                <div className={`border p-4 rounded-2xl flex items-center justify-between text-white shadow-lg ${isWarning ? 'bg-gradient-to-r from-red-600/30 to-orange-600/30 border-red-500/50 animate-pulse' : 'bg-gradient-to-r from-orange-500/20 to-purple-600/20 border-orange-500/30'}`}>
                                     <div className="flex items-center gap-3">
-                                        <span className="text-2xl animate-pulse">🔥</span>
+                                        <span className="text-2xl">{isWarning ? '⚠️' : '🔥'}</span>
                                         <div>
-                                            <h4 className="font-black text-sm uppercase text-orange-400">Prueba Gratis Activa</h4>
+                                            <h4 className={`font-black text-sm uppercase ${isWarning ? 'text-red-400' : 'text-orange-400'}`}>
+                                                {isWarning ? '¡Atención! Tu prueba está por finalizar' : 'Prueba Gratis Activa'}
+                                            </h4>
                                             <p className="text-xs">
-                                                Día {14 - daysLeft + 1} de 14. Te quedan <strong className="text-xl">{daysLeft}</strong> días gratis de funciones <strong className="text-purple-400">Pro</strong>.
+                                                Día {14 - daysLeft + 1} de 14. Te quedan <strong className="text-xl">{daysLeft}</strong> días gratis.
+                                                {isWarning && <span className="block mt-1 text-red-300">En breve deberás introducir tu tarjeta para continuar utilizando la plataforma.</span>}
                                             </p>
                                         </div>
                                     </div>
                                     <button 
                                         onClick={() => { setView('config'); setExpandedConfigSection('subscription'); }}
-                                        className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-xs font-bold uppercase transition-all whitespace-nowrap"
+                                        className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl text-xs font-bold uppercase transition-all whitespace-nowrap border border-white/20"
                                     >
-                                        Mejorar Plan
+                                        {isWarning ? 'Ingresar Tarjeta' : 'Mejorar Plan'}
                                     </button>
                                 </div>
                             );
@@ -6976,9 +6981,24 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Nombre del Insumo</label>
                                 <input type="text" value={stkName} onChange={e => setStkName(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-bold outline-none" placeholder="Ej: Pan Focaccia" />
                             </div>
+
+                            <label className="flex items-center gap-3 cursor-pointer p-4 bg-slate-900/50 rounded-2xl border border-white/5" onClick={() => {
+                                const newValue = !stkIsFractionable;
+                                setStkIsFractionable(newValue);
+                                if (newValue) setStkUnit('kg');
+                            }}>
+                                <div className={`w-5 h-5 rounded flex items-center justify-center border transition-all ${stkIsFractionable ? 'bg-orange-500 border-orange-500' : 'bg-slate-950 border-slate-800'}`}>
+                                    {stkIsFractionable && <Check size={12} className="text-white" />}
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-xs font-bold text-white">¿Es fraccionable? (Venta por peso)</span>
+                                    <span className="text-[10px] text-slate-500">Ejemplo: productos como el pan, queso, que se venden por kilogramo y no enteros.</span>
+                                </div>
+                            </label>
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Precio Costo ($)</label>
+                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2">{stkIsFractionable ? 'Precio Costo por Kg ($)' : 'Precio Costo ($)'}</label>
                                     <input type="number" value={stkPrice} onChange={e => setStkPrice(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-bold outline-none" placeholder="0.00" />
                                 </div>
                                 {editingStockId ? (
@@ -7021,7 +7041,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 ) : (
                                     /* Si es nuevo insumo, mostrar el input de Stock Inicial clásico */
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Stock Inicial</label>
+                                        <label className="text-[10px] font-black uppercase text-slate-500 ml-2">{stkIsFractionable ? 'Stock Inicial en Kg' : 'Stock Inicial'}</label>
                                         <input type="number" step={stkIsFractionable ? "any" : "1"} value={stkLevel} onChange={e => setStkLevel(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-bold outline-none" placeholder="0" />
                                     </div>
                                 )}
@@ -7036,16 +7056,6 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                     <input type="number" step={stkIsFractionable ? "any" : "1"} value={stkMinAlert} onChange={e => setStkMinAlert(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-bold outline-none" placeholder="10" />
                                 </div>
                             </div>
-
-                            <label className="flex items-center gap-3 cursor-pointer p-4 bg-slate-900/50 rounded-2xl border border-white/5" onClick={() => setStkIsFractionable(!stkIsFractionable)}>
-                                <div className={`w-5 h-5 rounded flex items-center justify-center border transition-all ${stkIsFractionable ? 'bg-orange-500 border-orange-500' : 'bg-slate-950 border-slate-800'}`}>
-                                    {stkIsFractionable && <Check size={12} className="text-white" />}
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-bold text-white">Stock Fraccionable (Decimales)</span>
-                                    <span className="text-[10px] text-slate-500">Permite registrar salidas parciales (Ej: 0.150 Kg, 2.5 Litros) en recetas.</span>
-                                </div>
-                            </label>
 
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Destino de Preparación</label>
