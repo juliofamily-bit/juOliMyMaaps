@@ -368,6 +368,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [successOrderNumber, setSuccessOrderNumber] = useState<number | null>(null);
+  const [earnedCashback, setEarnedCashback] = useState<number>(0);
   
   // Propinas
   const [tipPercentage, setTipPercentage] = useState<number>(0);
@@ -1624,7 +1625,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       
       // Calcular descuento por fidelidad (Monedero Virtual mmmTodoLoQueQuiero 2026)
       let loyaltyRedemption = 0;
-      if (useLoyaltyDiscount && loyaltyAccount && tenant.loyalty_enabled !== false) {
+      if (useLoyaltyDiscount && loyaltyAccount && tenant.loyalty_enabled === true) {
         const config = tenant.loyalty_config || {};
         const redeemChannel = config.redeem_channel || 'both';
         const isOnlineAllowed = redeemChannel === 'both' || redeemChannel === 'online';
@@ -1937,7 +1938,21 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       }
 
       if (!skipSuccessUI) {
-        // Éxito Normal
+        // Calcular cashback ganado para mostrarlo en el éxito
+        let calculatedEarnedCashback = 0;
+        if (tenant.loyalty_enabled === true && (deliveryPhone || loyaltyAccount)) {
+          const config = tenant.loyalty_config || {};
+          const tiers = config.tiers || [];
+          let currentTier = loyaltyAccount ? loyaltyAccount.tier : 'bronce';
+          let cashbackPct = config.cashback_pct || 5;
+          const foundTier = tiers.find((t: any) => t.name === currentTier);
+          if (foundTier) {
+              cashbackPct = foundTier.cashback_pct || cashbackPct;
+          }
+          calculatedEarnedCashback = Math.round((finalTotal * (cashbackPct / 100)) * 100) / 100;
+        }
+        setEarnedCashback(calculatedEarnedCashback);
+
         if (giftMode.isActive) {
           setGiftMode({ isActive: false, fromTable: '', toTable: '', isAnonymous: false, giftHint: '' });
         }
@@ -1948,6 +1963,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         setTimeout(() => {
           setOrderSuccess(false);
           setSuccessOrderNumber(null);
+          setEarnedCashback(0);
           setIsCartOpen(false);
           setCustomerInfo('');
           setDeliveryAddress('');
@@ -2090,10 +2106,10 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
           <section className="mt-12 pt-8 border-t border-neutral-900/60">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
               <div>
-                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <h2 className={`text-2xl font-bold   flex items-center gap-2 ${isLight ? "text-slate-900" : "text-white"}`}>
                   Opiniones de Clientes ⭐
                 </h2>
-                <p className="text-sm text-neutral-400 mt-1">
+                <p className={`text-sm   mt-1 ${isLight ? "text-slate-600" : "text-neutral-400"}`}>
                   Lo que dicen nuestros comensales sobre nosotros de forma 100% transparente.
                 </p>
               </div>
@@ -2114,11 +2130,11 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
             {isReviewsLoading ? (
               <div className="flex justify-center items-center py-8">
-                <Loader2 className="w-6 h-6 text-neutral-400 animate-spin" />
+                <Loader2 className={`w-6 h-6   animate-spin ${isLight ? "text-slate-600" : "text-neutral-400"}`} />
               </div>
             ) : reviews.length === 0 ? (
-              <div className="text-center py-12 bg-neutral-900/20 border border-neutral-900/50 rounded-3xl p-6">
-                <p className="text-neutral-500 text-sm">Aún no hay opiniones. ¡Sé el primero en compartir tu experiencia!</p>
+              <div className={`text-center py-12 bg-neutral-900/20 border border-neutral-900/50 rounded-3xl p-6   ${isLight ? "text-slate-900" : "text-white"}`}>
+                <p className={`  text-sm ${isLight ? "text-slate-600" : "text-neutral-400"}`}>Aún no hay opiniones. ¡Sé el primero en compartir tu experiencia!</p>
               </div>
             ) : (
               /* Lista / Carrusel de Reseñas */
@@ -2126,13 +2142,13 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                 {reviews.map((rev) => (
                   <div 
                     key={rev.id}
-                    className="snap-start flex-shrink-0 w-80 bg-neutral-900/40 border border-neutral-900/60 backdrop-blur-sm p-5 rounded-3xl space-y-3 relative hover:border-neutral-800 transition-all flex flex-col justify-between"
+                    className={`snap-start flex-shrink-0 w-80 bg-neutral-900/40 border border-neutral-900/60 backdrop-blur-sm p-5 rounded-3xl space-y-3 relative hover:border-neutral-800 transition-all flex flex-col justify-between   ${isLight ? "text-slate-900" : "text-white"}`}
                   >
                     <div className="space-y-3">
                       <div className="flex justify-between items-start">
                         <div>
-                          <h4 className="font-bold text-white text-sm truncate max-w-[180px]">{rev.client_name}</h4>
-                          <p className="text-[10px] text-neutral-500">
+                          <h4 className={`font-bold   text-sm truncate max-w-[180px] ${isLight ? "text-slate-900" : "text-white"}`}>{rev.client_name}</h4>
+                          <p className={`text-[10px]   ${isLight ? "text-slate-600" : "text-neutral-400"}`}>
                             {new Date(rev.created_at).toLocaleDateString('es-ES', {
                               day: 'numeric',
                               month: 'short',
@@ -2167,7 +2183,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex justify-center items-center">
-        <Loader2 className="w-10 h-10 text-white animate-spin" style={{ color: primaryColor }} />
+        <Loader2 className={`w-10 h-10   animate-spin ${isLight ? "text-slate-900" : "text-white"}`} style={{ color: primaryColor }} />
       </div>
     );
   }
@@ -2205,7 +2221,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               <Home className="w-6 h-6 transition-transform group-hover:scale-110" style={{ color: primaryColor }} />
               Menú de Envíos a Domicilio
             </div>
-            <span className={`text-sm text-center font-medium px-4 ${isLight ? 'text-slate-500' : 'text-neutral-400'}`}>
+            <span className={`text-sm text-center font-medium px-4 ${isLight ? 'text-slate-700' : 'text-neutral-400'}`}>
               Si estás en tu casa y quieres pedir Delivery o Retirar por el local, haz clic aquí.
             </span>
           </a>
@@ -2220,7 +2236,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       {/* PANTALLA DE CARGA PREMIUM MERCADO PAGO */}
       {isRedirectingToPayment && (
         <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-black/75 backdrop-blur-md animate-in fade-in duration-350">
-          <div className="relative flex flex-col items-center max-w-sm w-11/12 p-8 text-center bg-neutral-950/90 border border-neutral-800 rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.8)] backdrop-blur-xl">
+          <div className={`relative flex flex-col items-center max-w-sm w-11/12 p-8 text-center bg-neutral-950/90 border border-neutral-800 rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.8)] backdrop-blur-xl   ${isLight ? "text-slate-900" : "text-white"}`}>
             {/* Círculo loader animado */}
             <div className="relative w-24 h-24 mb-6">
               <div className="absolute inset-0 rounded-full border-4 border-neutral-850 animate-pulse"></div>
@@ -2236,15 +2252,15 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               </div>
             </div>
             
-            <h3 className="text-xl font-bold tracking-tight text-white mb-2">
+            <h3 className={`text-xl font-bold tracking-tight   mb-2 ${isLight ? "text-slate-900" : "text-white"}`}>
               Procesando tu pedido...
             </h3>
-            <p className="text-neutral-400 text-sm leading-relaxed mb-6">
+            <p className={`  text-sm leading-relaxed mb-6 ${isLight ? "text-slate-600" : "text-neutral-400"}`}>
               Estamos preparando la pasarela de pago seguro. Serás redirigido a Mercado Pago en unos instantes.
             </p>
             
             {/* Barra de progreso de carga micro-animada */}
-            <div className="w-full h-1.5 bg-neutral-900 rounded-full overflow-hidden mb-4">
+            <div className={`w-full h-1.5 bg-neutral-900 rounded-full overflow-hidden mb-4   ${isLight ? "text-slate-900" : "text-white"}`}>
               <div 
                 className="h-full rounded-full animate-pulse"
                 style={{ 
@@ -2255,7 +2271,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               ></div>
             </div>
             
-            <span className="text-[10px] text-neutral-500 uppercase tracking-widest font-semibold flex items-center gap-1.5">
+            <span className={`text-[10px]   uppercase tracking-widest font-semibold flex items-center gap-1.5 ${isLight ? "text-slate-600" : "text-neutral-400"}`}>
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
@@ -2279,7 +2295,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       </button>
 
       {/* PORTADA ESTILO RED SOCIAL */}
-      <div className="relative w-full h-44 md:h-60 bg-neutral-900 overflow-hidden">
+      <div className={`relative w-full h-44 md:h-60 bg-neutral-900 overflow-hidden   ${isLight ? "text-slate-900" : "text-white"}`}>
         {bannerUrl ? (
           <img 
             src={bannerUrl} 
@@ -2360,7 +2376,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                       <Star className="w-3.5 h-3.5 fill-current mr-1 text-amber-400" />
                       <span>{avgRating}</span>
                     </div>
-                    <span className={`text-xs font-medium transition-colors duration-500 ${isLight ? 'text-slate-500' : 'text-neutral-400'}`}>
+                    <span className={`text-xs font-medium transition-colors duration-500 ${isLight ? 'text-slate-700' : 'text-neutral-400'}`}>
                       ({totalReviews} {totalReviews === 1 ? 'opinión' : 'opiniones'})
                     </span>
                   </div>
@@ -2467,18 +2483,18 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       {/* GIFT MODE BANNER */}
       {giftMode.isActive && (
         <div className="sticky top-0 z-[45] mx-4 md:mx-auto max-w-4xl p-3 bg-gradient-to-r from-orange-500 to-amber-500 rounded-b-2xl shadow-xl animate-in slide-in-from-top flex items-center justify-between border-x border-b border-orange-400/30">
-          <div className="flex items-center gap-3 text-white">
+          <div className={`flex items-center gap-3   ${isLight ? "text-slate-900" : "text-white"}`}>
             <div className="p-2 bg-white/20 rounded-lg">
               <Gift className="w-5 h-5 animate-pulse" />
             </div>
             <div>
-              <p className="font-black uppercase text-xs md:text-sm leading-tight tracking-wider text-white drop-shadow-md">Modo Regalo</p>
+              <p className={`font-black uppercase text-xs md:text-sm leading-tight tracking-wider   drop-shadow-md ${isLight ? "text-slate-900" : "text-white"}`}>Modo Regalo</p>
               <p className="text-[10px] md:text-xs opacity-90 text-orange-50 mt-0.5">Comprando para la <b>{giftMode.toTable}</b></p>
             </div>
           </div>
           <button 
             onClick={() => setGiftMode({ isActive: false, fromTable: '', toTable: '', isAnonymous: false, giftHint: '' })}
-            className="text-[10px] md:text-xs font-bold px-3 py-2 rounded-lg bg-black/20 hover:bg-black/40 text-white transition-colors uppercase tracking-wider"
+            className={`text-[10px] md:text-xs font-bold px-3 py-2 rounded-lg bg-black/20 hover:bg-black/40   transition-colors uppercase tracking-wider ${isLight ? "text-slate-900" : "text-white"}`}
           >
             Cancelar
           </button>
@@ -2511,13 +2527,17 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               </button>
             )}
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+              <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4   ${isLight ? "text-slate-600" : "text-neutral-400"}`} />
               <input 
                 type="text" 
                 placeholder="¿Qué se te antoja?"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-neutral-900/50 border border-neutral-800/80 rounded-2xl pl-10 pr-4 py-2.5 text-sm outline-none transition-all placeholder:text-neutral-500 focus:border-white focus:ring-1 focus:ring-white focus:bg-neutral-900"
+                className={`w-full border rounded-2xl pl-10 pr-4 py-2.5 text-sm outline-none transition-all placeholder:text-neutral-500 focus:ring-1 ${
+                  isLight 
+                    ? 'bg-slate-100 border-slate-200 text-slate-900 focus:border-black focus:ring-black focus:bg-white' 
+                    : 'bg-neutral-900/50 border-neutral-800/80 text-white focus:border-white focus:ring-white focus:bg-neutral-900'
+                }`}
               />
             </div>
           </div>
@@ -2631,7 +2651,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               }`}
             >
               {/* Imagen (placeholder visual estético si no hay image_url) */}
-              <div className="w-1/3 min-h-[120px] bg-neutral-800 relative overflow-hidden">
+              <div className={`w-1/3 min-h-[120px] relative overflow-hidden ${isLight ? "bg-slate-200" : "bg-neutral-800"}`}>
                 {product.image_url ? (
                   <img src={product.image_url} alt={product.name} className="w-full h-full object-cover md:group-hover:scale-105 transition-transform duration-500" />
                 ) : (
@@ -2668,7 +2688,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                       </div>
                     </div>
                   ) : (
-                    <p className={`text-xs mt-1 line-clamp-1 leading-relaxed ${isLight ? 'text-slate-400' : 'text-neutral-500'}`}>
+                    <p className={`text-xs mt-1 line-clamp-1 leading-relaxed ${isLight ? 'text-slate-600' : 'text-neutral-500'}`}>
                       Delicioso y preparado al momento.
                     </p>
                   )}
@@ -2689,7 +2709,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                               {activeOffer.discount_percentage}% OFF
                             </span>
                           </div>
-                          <span className="text-[10px] text-neutral-400 dark:text-neutral-500 line-through font-bold">
+                          <span className={`text-[10px] text-neutral-400 dark:  line-through font-bold ${isLight ? "text-slate-600" : "text-neutral-400"}`}>
                             ${product.price.toLocaleString()}
                           </span>
                         </div>
@@ -2726,7 +2746,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
           })}
 
           {filteredProducts.length === 0 && (
-            <div className="col-span-full py-12 text-center text-neutral-500">
+            <div className={`col-span-full py-12 text-center   ${isLight ? "text-slate-600" : "text-neutral-400"}`}>
               No encontramos productos en esta categoría.
             </div>
           )}
@@ -2736,23 +2756,23 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         {(socialLinks.address || socialLinks.google_maps_url || socialLinks.maps_iframe) && (
           <section className="mt-12 pt-8 border-t border-neutral-900/60 space-y-6">
             <div>
-              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+              <h2 className={`text-2xl font-bold   flex items-center gap-2 ${isLight ? "text-slate-900" : "text-white"}`}>
                 Nuestra Ubicación 📍
               </h2>
-              <p className="text-sm text-neutral-400 mt-1">
+              <p className={`text-sm   mt-1 ${isLight ? "text-slate-600" : "text-neutral-400"}`}>
                 Ven a disfrutar de la mejor experiencia gastronómica en nuestro local.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 bg-neutral-950/40 border border-neutral-900/60 rounded-[2.5rem] p-6 backdrop-blur-md shadow-2xl">
+            <div className={`grid grid-cols-1 md:grid-cols-12 gap-6 rounded-[2.5rem] p-6 backdrop-blur-md shadow-2xl transition-colors ${isLight ? "bg-white border border-slate-200 text-slate-900" : "bg-neutral-950/40 border border-neutral-900/60 text-white"}`}>
               {/* Información y dirección */}
               <div className="md:col-span-5 flex flex-col justify-center space-y-5">
                 {socialLinks.address && (
                   <div className="space-y-2">
-                    <span className="text-[10px] font-black uppercase text-neutral-500 tracking-widest block">Dirección</span>
+                    <span className={`text-[10px] font-black uppercase   tracking-widest block ${isLight ? "text-slate-600" : "text-neutral-400"}`}>Dirección</span>
                     <div className="flex items-start gap-2.5">
                       <MapPin className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
-                      <p className="text-white font-bold text-sm leading-relaxed">{socialLinks.address}</p>
+                      <p className={`font-bold text-sm leading-relaxed ${isLight ? "text-slate-900" : "text-white"}`}>{socialLinks.address}</p>
                     </div>
                   </div>
                 )}
@@ -2795,7 +2815,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         {renderReviewsSection()}
         {/* Powered by Mmm TodoLoQueQuiero - Footer del Menú */}
         <div className="pt-10 pb-24 flex flex-col items-center justify-center gap-3">
-          <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">Powered by</span>
+          <span className={`text-[9px] font-bold   uppercase tracking-widest ${isLight ? "text-slate-600" : "text-neutral-400"}`}>Powered by</span>
           <a 
             href="https://www.mmmtodoloquequiero.com.ar" 
             target="_blank" 
@@ -2807,7 +2827,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               alt="MmM TodoLoQueQuiero" 
               className="w-8 h-8 object-contain rounded-lg border border-white/10 shadow-md group-hover:border-orange-500/50 transition-colors bg-black" 
             />
-            <span className="text-xs font-black text-white tracking-widest uppercase group-hover:text-orange-400 transition-colors">
+            <span className={`text-xs font-black   tracking-widest uppercase group-hover:text-orange-400 transition-colors ${isLight ? "text-slate-900" : "text-white"}`}>
               TodoLoQueQuiero
             </span>
           </a>
@@ -2849,9 +2869,9 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             {/* NUESTRA ESENCIA (ABOUT US) */}
             {tenant?.landing_config?.about_text && (
               <section className="text-center max-w-3xl mx-auto space-y-6 animate-in slide-in-from-bottom-8 duration-700">
-                <div className="p-8 md:p-12 rounded-[3rem] bg-neutral-900/50 border border-white/5 backdrop-blur-md shadow-2xl relative overflow-hidden">
+                <div className={`p-8 md:p-12 rounded-[3rem] border backdrop-blur-md shadow-2xl relative overflow-hidden transition-colors ${isLight ? "bg-white border-slate-200 text-slate-900" : "bg-neutral-900/50 border-white/5 text-white"}`}>
                   <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-                  <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-widest drop-shadow-lg mb-6">Nuestra Esencia</h2>
+                  <h2 className={`text-2xl md:text-3xl font-black   uppercase tracking-widest drop-shadow-lg mb-6 ${isLight ? "text-slate-900" : "text-white"}`}>Nuestra Esencia</h2>
                   <p className="text-slate-300 text-base md:text-lg leading-relaxed font-medium whitespace-pre-wrap">
                     {tenant.landing_config.about_text}
                   </p>
@@ -2866,32 +2886,32 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   <div className="p-2 rounded-xl bg-orange-500/20 text-orange-500 border border-orange-500/30">
                     <Star className="w-6 h-6 fill-current" />
                   </div>
-                  <h2 className="text-2xl md:text-3xl font-black uppercase tracking-widest text-white">
+                  <h2 className={`text-2xl md:text-3xl font-black uppercase tracking-widest   ${isLight ? "text-slate-900" : "text-white"}`}>
                     Novedades
                   </h2>
                 </div>
                 
                 <AutoCarousel gapClass="gap-4 md:gap-6">
                   {tenant.landing_config.custom_carousel.map((slide: any) => (
-                    <div key={slide.id} className="min-w-[300px] md:min-w-[400px] snap-center bg-neutral-900/60 border border-white/5 rounded-[2rem] overflow-hidden shadow-2xl relative group">
-                      <div className="h-64 md:h-72 w-full bg-neutral-800 relative overflow-hidden">
+                    <div key={slide.id} className={`min-w-[300px] md:min-w-[400px] snap-center border rounded-[2rem] overflow-hidden shadow-2xl relative group transition-colors ${isLight ? "bg-slate-50 border-slate-200 text-slate-900" : "bg-neutral-900/60 border-white/5 text-white"}`}>
+                      <div className={`h-64 md:h-72 w-full relative overflow-hidden ${isLight ? "bg-slate-200" : "bg-neutral-800"}`}>
                         {slide.image_url ? (
                           <img src={slide.image_url} alt={slide.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-orange-500/10 to-purple-500/10">
-                            <ImageIcon className="w-12 h-12 text-white/20" />
+                            <ImageIcon className={`w-12 h-12  /20 ${isLight ? "text-slate-900" : "text-white"}`} />
                           </div>
                         )}
                         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-90" />
                         
                         {slide.badge_text && (
-                          <div className="absolute top-4 left-4 px-3 py-1.5 bg-white/10 backdrop-blur-md rounded-xl font-bold text-white text-xs border border-white/20 shadow-lg">
+                          <div className={`absolute top-4 left-4 px-3 py-1.5 bg-white/10 backdrop-blur-md rounded-xl font-bold   text-xs border border-white/20 shadow-lg ${isLight ? "text-slate-900" : "text-white"}`}>
                             ✨ {slide.badge_text}
                           </div>
                         )}
                         
                         <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-col justify-end">
-                          <h3 className="text-xl md:text-2xl font-black text-white leading-tight mb-2 drop-shadow-md">{slide.title}</h3>
+                          <h3 className={`text-xl md:text-2xl font-black   leading-tight mb-2 drop-shadow-md ${isLight ? "text-slate-900" : "text-white"}`}>{slide.title}</h3>
                           <p className="text-sm text-slate-300 line-clamp-3 leading-relaxed drop-shadow-sm">{slide.description}</p>
                         </div>
                       </div>
@@ -2909,11 +2929,11 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     <div className="p-2 rounded-xl bg-green-500/20 text-green-500 border border-green-500/30">
                       <Utensils className="w-6 h-6 fill-current" />
                     </div>
-                    <h2 className="text-2xl md:text-3xl font-black uppercase tracking-widest text-white">
+                    <h2 className={`text-2xl md:text-3xl font-black uppercase tracking-widest   ${isLight ? "text-slate-900" : "text-white"}`}>
                       Lo Más Destacado
                     </h2>
                   </div>
-                  <button onClick={goToMenu} className="text-xs font-bold text-slate-400 hover:text-white transition-colors uppercase tracking-widest flex items-center gap-1">
+                  <button onClick={goToMenu} className={`text-xs font-bold text-slate-400 hover:  transition-colors uppercase tracking-widest flex items-center gap-1 ${isLight ? "text-slate-900" : "text-white"}`}>
                     Ver Menú <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -2921,22 +2941,22 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                 {/* Scroll horizontal de productos */}
                 <AutoCarousel gapClass="gap-4">
                   {products.filter(p => p.is_active !== false).slice(0, 6).map((product) => (
-                    <div key={product.id} className="min-w-[260px] md:min-w-[300px] snap-center bg-neutral-900/60 border border-white/5 rounded-3xl overflow-hidden shadow-xl hover:border-white/20 transition-all duration-300 flex flex-col cursor-pointer" onClick={goToMenu}>
-                      <div className="h-48 w-full bg-neutral-800 relative overflow-hidden">
+                    <div key={product.id} className={`min-w-[260px] md:min-w-[300px] snap-center border rounded-3xl overflow-hidden shadow-xl transition-all duration-300 flex flex-col cursor-pointer ${isLight ? "bg-white border-slate-200 hover:border-slate-400 text-slate-900" : "bg-neutral-900/60 border-white/5 hover:border-white/20 text-white"}`} onClick={goToMenu}>
+                      <div className={`h-48 w-full relative overflow-hidden ${isLight ? "bg-slate-200" : "bg-neutral-800"}`}>
                         {product.image_url ? (
                           <img src={product.image_url} alt={product.name} className="w-full h-full object-cover transition-transform duration-700 hover:scale-110 opacity-90 hover:opacity-100" />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-neutral-800/50">
+                          <div className={`w-full h-full flex items-center justify-center ${isLight ? "bg-slate-200/50" : "bg-neutral-800/50"}`}>
                             <Utensils className="w-10 h-10 text-neutral-600" />
                           </div>
                         )}
                         <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 via-transparent to-transparent" />
-                        <div className="absolute bottom-3 right-3 px-3 py-1.5 bg-black/80 backdrop-blur-md rounded-xl font-bold text-white text-sm shadow-lg border border-white/10">
+                        <div className={`absolute bottom-3 right-3 px-3 py-1.5 bg-black/80 backdrop-blur-md rounded-xl font-bold   text-sm shadow-lg border border-white/10 ${isLight ? "text-slate-900" : "text-white"}`}>
                           ${product.price}
                         </div>
                       </div>
                       <div className="p-5 flex-1 flex flex-col">
-                        <h3 className="text-lg font-black text-white leading-tight mb-2 line-clamp-1">{product.name}</h3>
+                        <h3 className={`text-lg font-black   leading-tight mb-2 line-clamp-1 ${isLight ? "text-slate-900" : "text-white"}`}>{product.name}</h3>
                         <p className="text-sm text-slate-400 line-clamp-2 leading-relaxed flex-1">{product.description}</p>
                       </div>
                     </div>
@@ -2952,25 +2972,25 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   <div className="p-2 rounded-xl bg-orange-500/20 text-orange-500 border border-orange-500/30">
                     <Star className="w-6 h-6 fill-current" />
                   </div>
-                  <h2 className="text-2xl md:text-3xl font-black uppercase tracking-widest text-white">
+                  <h2 className={`text-2xl md:text-3xl font-black uppercase tracking-widest   ${isLight ? "text-slate-900" : "text-white"}`}>
                     Promociones
                   </h2>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {tenant.landing_config.promos.map((promo: any) => (
-                    <div key={promo.id} className="relative rounded-[2rem] overflow-hidden group border border-white/5 shadow-2xl bg-neutral-900/50 hover:border-white/20 transition-all duration-500 hover:-translate-y-2">
+                    <div key={promo.id} className={`relative rounded-[2rem] overflow-hidden group border shadow-2xl transition-all duration-500 hover:-translate-y-2 ${isLight ? "bg-white border-slate-200 hover:border-slate-400 text-slate-900" : "bg-neutral-900/50 border-white/5 hover:border-white/20 text-white"}`}>
                       <div className="aspect-[4/3] w-full bg-black relative overflow-hidden">
                         {promo.image_url ? (
                           <img src={promo.image_url} alt={promo.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100" />
                         ) : (
                           <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-orange-500/10 to-purple-500/10">
-                            <Gift className="w-12 h-12 text-white/20" />
+                            <Gift className={`w-12 h-12  /20 ${isLight ? "text-slate-900" : "text-white"}`} />
                           </div>
                         )}
                         <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-transparent" />
                       </div>
                       <div className="absolute bottom-0 inset-x-0 p-6 space-y-2 translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
-                        <h3 className="text-xl font-black text-white uppercase tracking-wider drop-shadow-md">{promo.title}</h3>
+                        <h3 className={`text-xl font-black   uppercase tracking-wider drop-shadow-md ${isLight ? "text-slate-900" : "text-white"}`}>{promo.title}</h3>
                         <p className="text-sm text-slate-300 font-medium drop-shadow-md line-clamp-2">{promo.subtitle}</p>
                         {promo.cta_text && promo.cta_link && (
                           <div className="pt-3 opacity-0 group-hover:opacity-100 transition-opacity duration-500 delay-100">
@@ -2993,7 +3013,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   <div className="p-2 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30">
                     <BellRing className="w-6 h-6 animate-pulse" />
                   </div>
-                  <h2 className="text-2xl md:text-3xl font-black uppercase tracking-widest text-white">
+                  <h2 className={`text-2xl md:text-3xl font-black uppercase tracking-widest   ${isLight ? "text-slate-900" : "text-white"}`}>
                     Próximos Eventos
                   </h2>
                 </div>
@@ -3011,7 +3031,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                         <div className="inline-block px-3 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-full text-[9px] font-black uppercase tracking-widest mb-3 shadow-[0_0_10px_rgba(168,85,247,0.2)]">
                           📅 {ev.date || 'Próximamente'}
                         </div>
-                        <h3 className="text-lg font-black text-white leading-tight uppercase tracking-wide group-hover:text-purple-300 transition-colors">{ev.title}</h3>
+                        <h3 className={`text-lg font-black   leading-tight uppercase tracking-wide group-hover:text-purple-300 transition-colors ${isLight ? "text-slate-900" : "text-white"}`}>{ev.title}</h3>
                         <p className="text-xs text-slate-400 mt-2 leading-relaxed line-clamp-3">{ev.description}</p>
                       </div>
                     </div>
@@ -3282,9 +3302,9 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     {/* Detalles */}
                     <div className="flex-1 min-w-0">
                       <h4 className={`font-medium text-sm truncate transition-colors duration-500 ${isLight ? 'text-slate-900' : 'text-white'}`}>{item.name}</h4>
-                      <p className={`font-medium text-sm mt-0.5 transition-colors duration-500 ${isLight ? 'text-slate-500' : 'text-neutral-400'}`}>${item.price.toLocaleString()}</p>
+                      <p className={`font-medium text-sm mt-0.5 transition-colors duration-500 ${isLight ? 'text-slate-700' : 'text-neutral-400'}`}>${item.price.toLocaleString()}</p>
                       {item.notes && (
-                        <p className={`text-xs mt-1 italic truncate ${isLight ? 'text-slate-400' : 'text-neutral-500'}`}>
+                        <p className={`text-xs mt-1 italic truncate ${isLight ? 'text-slate-600' : 'text-neutral-500'}`}>
                           💬 {item.notes}
                         </p>
                       )}
@@ -3343,7 +3363,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                       <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400 block">
                         Método de Entrega
                       </label>
-                      <div className="flex p-1 bg-neutral-900 border border-neutral-800 rounded-2xl shadow-inner">
+                      <div className="flex p-1 bg-neutral-900 border border-neutral-800 rounded-2xl shadow-inner text-white">
                         <button
                           type="button"
                           onClick={() => setDeliveryType('llevar')}
@@ -3403,7 +3423,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                           value={tableName || tableParamId || ''}
                           onChange={(e) => setTableName(e.target.value)}
                           placeholder="Ej: 3, Mesa 4, Patio..."
-                          className="w-full bg-neutral-950 border border-purple-500/40 rounded-xl px-4 py-3 text-sm outline-none text-purple-400 font-bold focus:border-purple-400 focus:ring-1 focus:ring-purple-400 transition-all"
+                          className="w-full bg-neutral-950 border border-purple-500/40 rounded-xl px-4 py-3 text-sm outline-none text-purple-400 font-bold focus:border-purple-400 focus:ring-1 focus:ring-purple-400 transition-all text-white"
                         />
                       </div>
                       <div>
@@ -3415,7 +3435,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                           placeholder="Ingresa tu nombre para identificarte..."
                           value={customerInfo}
                           onChange={(e) => setCustomerInfo(e.target.value)}
-                          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-white focus:ring-1 focus:ring-white"
+                          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-white focus:ring-1 focus:ring-white text-white"
                         />
                       </div>
                     </div>
@@ -3432,7 +3452,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                             const val = e.target.value;
                             setSelectedDeliveryZone(val ? JSON.parse(val) : null);
                           }}
-                          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none text-neutral-300 transition-all focus:border-white focus:ring-1 focus:ring-white cursor-pointer"
+                          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none text-neutral-300 transition-all focus:border-white focus:ring-1 focus:ring-white cursor-pointer text-white"
                         >
                           <option value="">-- Selecciona tu Zona de Envío --</option>
                           {Array.isArray(tenant?.delivery_zones) && tenant.delivery_zones.map((zone: any, idx: number) => (
@@ -3452,7 +3472,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                           placeholder="Ingresa tu nombre..."
                           value={customerInfo}
                           onChange={(e) => setCustomerInfo(e.target.value)}
-                          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-white focus:ring-1 focus:ring-white"
+                          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-white focus:ring-1 focus:ring-white text-white"
                         />
                       </div>
                       
@@ -3465,7 +3485,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                           placeholder="Calle, Número, Departamento, Ciudad..."
                           value={deliveryAddress}
                           onChange={(e) => setDeliveryAddress(e.target.value)}
-                          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-white focus:ring-1 focus:ring-white"
+                          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-white focus:ring-1 focus:ring-white text-white"
                         />
                       </div>
                       
@@ -3478,7 +3498,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                           placeholder="https://maps.app.goo.gl/..."
                           value={deliveryMapLink}
                           onChange={(e) => setDeliveryMapLink(e.target.value)}
-                          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-white focus:ring-1 focus:ring-white"
+                          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-white focus:ring-1 focus:ring-white text-white"
                         />
                         <p className="text-[9px] text-neutral-500 mt-1.5 leading-normal">
                           📍 Si sabes cómo obtener el enlace de tu ubicación, por favor colócalo. Esto ayudará a que la entrega sea más eficiente y tu pedido llegue lo antes posible.
@@ -3493,7 +3513,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                           <select
                             value={phonePrefix}
                             onChange={(e) => setPhonePrefix(e.target.value)}
-                            className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-3 text-xs outline-none text-neutral-300 font-bold focus:border-white transition-all cursor-pointer"
+                            className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-3 text-xs outline-none text-neutral-300 font-bold focus:border-white transition-all cursor-pointer text-white"
                           >
                             <option value="+54">🇦🇷 +54 (AR)</option>
                             <option value="+56">🇨🇱 +56 (CL)</option>
@@ -3511,13 +3531,13 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                             placeholder="Celular (ej: 9 11 1234-5678)"
                             value={deliveryPhone}
                             onChange={(e) => setDeliveryPhone(e.target.value)}
-                            className="flex-1 bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-white focus:ring-1 focus:ring-white"
+                            className="flex-1 bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-white focus:ring-1 focus:ring-white text-white"
                           />
                         </div>
                       </div>
 
                       {/* Geolocalizador / Mapa de Simulación Premium */}
-                      <div className="bg-neutral-900 border border-neutral-800 p-4 rounded-2xl space-y-3">
+                      <div className="bg-neutral-900 border border-neutral-800 p-4 rounded-2xl space-y-3 text-white">
                         <div className="flex justify-between items-center">
                           <span className="text-[9px] font-black uppercase text-neutral-400 tracking-wider">Geolocalización GPS</span>
                           {deliveryLat && deliveryLng && (
@@ -3528,7 +3548,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                         </div>
                         
                         {/* Emulador visual del Mapa */}
-                        <div className="h-28 bg-neutral-950 rounded-xl border border-neutral-800 relative overflow-hidden flex items-center justify-center group shadow-inner">
+                        <div className="h-28 bg-neutral-950 rounded-xl border border-neutral-800 relative overflow-hidden flex items-center justify-center group shadow-inner text-white">
                           {/* Cuadrícula simulada estilo radar de mapa */}
                           <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:16px_16px]" />
                           <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent pointer-events-none" />
@@ -3613,7 +3633,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                           placeholder="Ingresa tu nombre..."
                           value={customerInfo}
                           onChange={(e) => setCustomerInfo(e.target.value)}
-                          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-white focus:ring-1 focus:ring-white"
+                          className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-white focus:ring-1 focus:ring-white text-white"
                         />
                       </div>
 
@@ -3625,7 +3645,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                           <select
                             value={phonePrefix}
                             onChange={(e) => setPhonePrefix(e.target.value)}
-                            className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-3 text-xs outline-none text-neutral-300 font-bold focus:border-white transition-all cursor-pointer"
+                            className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-3 text-xs outline-none text-neutral-300 font-bold focus:border-white transition-all cursor-pointer text-white"
                           >
                             <option value="+54">🇦🇷 +54 (AR)</option>
                             <option value="+56">🇨🇱 +56 (CL)</option>
@@ -3643,7 +3663,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                             placeholder="Celular (ej: 9 11 1234-5678)"
                             value={deliveryPhone}
                             onChange={(e) => setDeliveryPhone(e.target.value)}
-                            className="flex-1 bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-white focus:ring-1 focus:ring-white"
+                            className="flex-1 bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-white focus:ring-1 focus:ring-white text-white"
                           />
                         </div>
                       </div>
@@ -3652,7 +3672,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
                   {/* Selector del Método de Pago */}
                   <div className={`space-y-3 pt-3 border-t ${isLight ? 'border-slate-200' : 'border-neutral-800'}`}>
-                    <label className={`text-xs font-semibold uppercase tracking-wider block ${isLight ? 'text-slate-500' : 'text-neutral-400'}`}>
+                    <label className={`text-xs font-semibold uppercase tracking-wider block ${isLight ? 'text-slate-700' : 'text-neutral-400'}`}>
                       Método de Pago
                     </label>
                     <div className="grid grid-cols-3 gap-3">
@@ -3731,7 +3751,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                       </button>
 
                       {afipBillingRequested && (
-                        <div className="mt-4 p-3 bg-neutral-900/50 border border-neutral-800 rounded-xl space-y-4 animate-in slide-in-from-top-2 duration-200">
+                        <div className="mt-4 p-3 bg-neutral-900/50 border border-neutral-800 rounded-xl space-y-4 animate-in slide-in-from-top-2 duration-200 text-white">
                           
                           {/* Explicación de tipo de factura según condición del local */}
                           <div className={`p-2.5 rounded-lg text-[9px] uppercase tracking-wider font-bold border ${isLight ? 'bg-blue-50/50 border-blue-200 text-blue-700' : 'bg-blue-900/20 border-blue-800/50 text-blue-300'}`}>
@@ -3745,7 +3765,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                             <label className="text-[9px] font-bold uppercase tracking-widest text-neutral-500 mb-2 block">
                               Tipo de Receptor AFIP
                             </label>
-                            <div className="flex bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden p-1 gap-1">
+                            <div className="flex bg-neutral-950 border border-neutral-800 rounded-xl overflow-hidden p-1 gap-1 text-white">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -3800,7 +3820,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                               value={afipDocNumber}
                               onChange={(e) => setAfipDocNumber(e.target.value)}
                               placeholder={afipClientType === 'consumidor_final' ? 'Ingresa tu DNI o dejalo vacío' : 'Ingresa tu CUIT sin guiones'}
-                              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs outline-none text-neutral-300 transition-all focus:border-white focus:ring-1 focus:ring-white"
+                              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-xs outline-none text-neutral-300 transition-all focus:border-white focus:ring-1 focus:ring-white text-white"
                             />
                             {afipClientType === 'consumidor_final' && (
                               <p className="text-[8px] text-neutral-500 mt-1 font-medium">Para Consumidor Final, no es obligatorio el DNI para importes menores.</p>
@@ -3821,7 +3841,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                 isLight ? 'border-slate-200 bg-white shadow-[0_-8px_30px_rgba(0,0,0,0.04)]' : 'border-neutral-800 bg-neutral-900/80'
               }`}>
                 
-                {loyaltyAccount && tenant.loyalty_enabled !== false && (() => {
+                {loyaltyAccount && tenant.loyalty_enabled === true && (() => {
                   const config = tenant.loyalty_config || {};
                   const redeemChannel = config.redeem_channel || 'both';
                   const isOnlineAllowed = redeemChannel === 'both' || redeemChannel === 'online';
@@ -3861,7 +3881,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   <div className={`p-4 border rounded-3xl space-y-2.5 transition-colors ${
                     isLight ? 'bg-slate-50 border-slate-200/80' : 'bg-neutral-900/40 border-neutral-800/80'
                   }`}>
-                    <label className={`text-[9px] font-bold uppercase tracking-wider block ml-1 ${isLight ? 'text-slate-500' : 'text-neutral-400'}`}>
+                    <label className={`text-[9px] font-bold uppercase tracking-wider block ml-1 ${isLight ? 'text-slate-700' : 'text-neutral-400'}`}>
                       ¿Tienes un Código de Reserva o Cupón?
                     </label>
                     <div className="flex gap-2">
@@ -3914,7 +3934,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                       <span className={`text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 ${isLight ? 'text-slate-700' : 'text-neutral-300'}`}>
                         <Gift size={12} className="text-orange-500" /> Propina para el equipo
                       </span>
-                      <span className={`text-[9px] font-bold uppercase tracking-widest ${isLight ? 'text-slate-400' : 'text-neutral-500'}`}>
+                      <span className={`text-[9px] font-bold uppercase tracking-widest ${isLight ? 'text-slate-600' : 'text-neutral-500'}`}>
                         ¡Gracias por tu apoyo! (Opcional)
                       </span>
                     </div>
@@ -3949,7 +3969,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     </div>
                     {tipPercentage === -1 && (
                       <div className="relative">
-                        <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold ${isLight ? 'text-slate-400' : 'text-neutral-500'}`}>$</span>
+                        <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold ${isLight ? 'text-slate-600' : 'text-neutral-500'}`}>$</span>
                         <input
                           type="number"
                           value={customTip}
@@ -3968,24 +3988,24 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
                 {/* Desglose Financiero */}
                 <div className={`space-y-1.5 pb-1 border-b ${isLight ? 'border-slate-100' : 'border-neutral-800/50'}`}>
-                  <div className={`flex items-center justify-between text-xs transition-colors duration-500 ${isLight ? 'text-slate-500' : 'text-neutral-400'}`}>
+                  <div className={`flex items-center justify-between text-xs transition-colors duration-500 ${isLight ? 'text-slate-700' : 'text-neutral-400'}`}>
                     <span>Subtotal Productos</span>
                     <span>${cartProductsTotal.toLocaleString('es-AR')}</span>
                   </div>
                   {deliveryType === 'delivery' && (
-                    <div className={`flex items-center justify-between text-xs transition-colors duration-500 ${isLight ? 'text-slate-500' : 'text-neutral-400'}`}>
+                    <div className={`flex items-center justify-between text-xs transition-colors duration-500 ${isLight ? 'text-slate-700' : 'text-neutral-400'}`}>
                       <span>Envío a domicilio</span>
                       <span>${deliveryFee.toLocaleString('es-AR')}</span>
                     </div>
                   )}
                   {tableCharge > 0 && (
-                    <div className={`flex items-center justify-between text-xs transition-colors duration-500 ${isLight ? 'text-slate-500' : 'text-neutral-400'}`}>
+                    <div className={`flex items-center justify-between text-xs transition-colors duration-500 ${isLight ? 'text-slate-700' : 'text-neutral-400'}`}>
                       <span>Servicio de Mesa (Cubierto)</span>
                       <span>${tableCharge.toLocaleString('es-AR')}</span>
                     </div>
                   )}
                   {calculatedTip > 0 && (
-                    <div className={`flex items-center justify-between text-xs transition-colors duration-500 ${isLight ? 'text-slate-500' : 'text-neutral-400'}`}>
+                    <div className={`flex items-center justify-between text-xs transition-colors duration-500 ${isLight ? 'text-slate-700' : 'text-neutral-400'}`}>
                       <span>Propina al equipo</span>
                       <span>${calculatedTip.toLocaleString('es-AR')}</span>
                     </div>
@@ -3997,7 +4017,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     </div>
                   )}
                   {(() => {
-                    const loyaltyRedemption = useLoyaltyDiscount && loyaltyAccount && tenant.loyalty_enabled !== false
+                    const loyaltyRedemption = useLoyaltyDiscount && loyaltyAccount && tenant.loyalty_enabled === true
                       ? Math.min(parseFloat(loyaltyAccount.balance) || 0, cartTotal - appliedDiscount)
                       : 0;
                     if (loyaltyRedemption <= 0) return null;
@@ -4014,7 +4034,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   <span className={`transition-colors duration-500 ${isLight ? 'text-slate-600' : 'text-neutral-400'}`}>Total a pagar</span>
                   <div className="flex flex-col items-end">
                     {(() => {
-                      const loyaltyRedemption = useLoyaltyDiscount && loyaltyAccount && tenant.loyalty_enabled !== false
+                      const loyaltyRedemption = useLoyaltyDiscount && loyaltyAccount && tenant.loyalty_enabled === true
                         ? Math.min(parseFloat(loyaltyAccount.balance) || 0, cartTotal - appliedDiscount)
                         : 0;
                       const hasAnyDiscount = appliedDiscount > 0 || loyaltyRedemption > 0;
@@ -4160,7 +4180,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
             {/* Cabecera / Identidad */}
             <div className="flex flex-col items-center space-y-3 mt-2">
-              <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-orange-500/20 bg-neutral-900 flex items-center justify-center shrink-0">
+              <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-orange-500/20 bg-neutral-900 flex items-center justify-center shrink-0 text-white">
                 {profilePictureUrl ? (
                   <img src={profilePictureUrl} alt={tenant.name} className="w-full h-full object-cover" />
                 ) : (
@@ -4243,7 +4263,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             </button>
 
             <div className="flex flex-col items-center space-y-3 mt-2">
-              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-orange-500/20 bg-neutral-900 flex items-center justify-center shrink-0">
+              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-orange-500/20 bg-neutral-900 flex items-center justify-center shrink-0 text-white">
                 <Clock className="w-8 h-8 text-orange-500" />
               </div>
               <h3 className="text-xl font-black uppercase tracking-tight italic text-orange-500" style={{ color: primaryColor }}>
@@ -4262,7 +4282,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
                 return (
                   <div key={dayIndex} className={`flex justify-between items-center py-2 border-b border-white/5 last:border-0 ${isToday ? 'bg-orange-500/10 rounded-lg px-2 -mx-2 border-b-0' : ''}`}>
-                    <span className={`font-bold text-xs uppercase tracking-widest ${isToday ? 'text-orange-500' : isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                    <span className={`font-bold text-xs uppercase tracking-widest ${isToday ? 'text-orange-500' : isLight ? 'text-slate-700' : 'text-slate-400'}`}>
                       {dayName} {isToday && '(Hoy)'}
                     </span>
                     <div className="flex flex-col items-end gap-1">
@@ -4297,7 +4317,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             <div className="flex justify-between items-center">
               <div>
                 <h3 className={`text-xl font-black ${isLight ? 'text-slate-900' : 'text-white'}`}>📅 Reservar Mesa</h3>
-                <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-500' : 'text-neutral-400'}`}>Completa los detalles de tu visita.</p>
+                <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-700' : 'text-neutral-400'}`}>Completa los detalles de tu visita.</p>
               </div>
               <button 
                 onClick={() => setIsReservationModalOpen(false)}
@@ -4321,7 +4341,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
               {/* Nombre */}
               <div className="space-y-1">
-                <label className={`text-[9px] font-bold uppercase tracking-wider block ml-1 ${isLight ? 'text-slate-500' : 'text-neutral-500'}`}>Tu Nombre</label>
+                <label className={`text-[9px] font-bold uppercase tracking-wider block ml-1 ${isLight ? 'text-slate-700' : 'text-neutral-500'}`}>Tu Nombre</label>
                 <input
                   type="text"
                   placeholder="Ej. Juan Pérez"
@@ -4335,7 +4355,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
               {/* Teléfono */}
               <div className="space-y-1">
-                <label className={`text-[9px] font-bold uppercase tracking-wider block ml-1 ${isLight ? 'text-slate-500' : 'text-neutral-500'}`}>Teléfono de Contacto</label>
+                <label className={`text-[9px] font-bold uppercase tracking-wider block ml-1 ${isLight ? 'text-slate-700' : 'text-neutral-500'}`}>Teléfono de Contacto</label>
                 <div className="flex gap-2">
                   <select
                     value={reservationPhonePrefix}
@@ -4370,7 +4390,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               {/* Fecha y Hora en Fila */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className={`text-[9px] font-bold uppercase tracking-wider block ml-1 ${isLight ? 'text-slate-500' : 'text-neutral-500'}`}>Día</label>
+                  <label className={`text-[9px] font-bold uppercase tracking-wider block ml-1 ${isLight ? 'text-slate-700' : 'text-neutral-500'}`}>Día</label>
                   <input
                     type="date"
                     min={reservationDateLimits.min}
@@ -4404,7 +4424,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className={`text-[9px] font-bold uppercase tracking-wider block ml-1 ${isLight ? 'text-slate-500' : 'text-neutral-500'}`}>Hora</label>
+                  <label className={`text-[9px] font-bold uppercase tracking-wider block ml-1 ${isLight ? 'text-slate-700' : 'text-neutral-500'}`}>Hora</label>
                   {!reservationDate ? (
                     <div className={`w-full border rounded-xl px-4 py-3 text-sm font-bold flex items-center justify-center ${
                       isLight ? 'bg-slate-50 border-slate-200 text-slate-400' : 'bg-neutral-900/50 border-neutral-800 text-neutral-500'
@@ -4439,7 +4459,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
               {/* Cantidad de personas */}
               <div className="space-y-1">
-                <label className={`text-[9px] font-bold uppercase tracking-wider block ml-1 ${isLight ? 'text-slate-500' : 'text-neutral-500'}`}>Cantidad de Personas</label>
+                <label className={`text-[9px] font-bold uppercase tracking-wider block ml-1 ${isLight ? 'text-slate-700' : 'text-neutral-500'}`}>Cantidad de Personas</label>
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
@@ -4516,7 +4536,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             }}
           />
           
-          <div className="relative w-full max-w-sm bg-neutral-950 border border-neutral-900 rounded-[2.5rem] p-6 space-y-6 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="relative w-full max-w-sm bg-neutral-950 border border-neutral-900 rounded-[2.5rem] p-6 space-y-6 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-white">
             {isMpReservationSuccess && (
               <div className="py-8 flex flex-col items-center text-center space-y-4 animate-in zoom-in duration-300">
                 <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-3xl shadow-[0_0_20px_rgba(16,185,129,0.2)]">
@@ -4529,7 +4549,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   </p>
                 </div>
 
-                <div className="w-full p-4 bg-neutral-900/40 border border-neutral-900 rounded-2xl space-y-2 mt-4">
+                <div className="w-full p-4 bg-neutral-900/40 border border-neutral-900 rounded-2xl space-y-2 mt-4 text-white">
                   <span className="text-[8px] font-black uppercase text-slate-500 block">Código Único de Reserva</span>
                   <span className="text-2xl font-black text-orange-500 tracking-wider block">{generatedReservationCode}</span>
                   <span className="text-[7px] text-slate-500 uppercase font-bold block leading-relaxed">Presenta este código al mozo o ingrésalo en el carrito de compras para descontar tu seña.</span>
@@ -4553,7 +4573,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             className="absolute inset-0 bg-black/70 backdrop-blur-md"
             onClick={() => setIsReviewModalOpen(false)}
           />
-          <div className="relative bg-neutral-950 border border-neutral-900 w-full max-w-md rounded-3xl p-6 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+          <div className="relative bg-neutral-950 border border-neutral-900 w-full max-w-md rounded-3xl p-6 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-white">
             {/* Header del Modal */}
             <div className="flex justify-between items-center">
               <div>
@@ -4562,7 +4582,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               </div>
               <button 
                 onClick={() => setIsReviewModalOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800 transition-all"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800 transition-all text-white"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -4571,7 +4591,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             {/* Formulario */}
             <div className="space-y-4">
               {/* Selector de Estrellas */}
-              <div className="space-y-2 text-center py-2 bg-neutral-900/30 rounded-2xl border border-neutral-900">
+              <div className="space-y-2 text-center py-2 bg-neutral-900/30 rounded-2xl border border-neutral-900 text-white">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block">
                   Calificación
                 </label>
@@ -4605,7 +4625,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   placeholder="Ej. Juan Pérez"
                   value={newReviewName}
                   onChange={(e) => setNewReviewName(e.target.value)}
-                  className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-white focus:ring-1 focus:ring-white transition-all placeholder:text-neutral-600"
+                  className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-white focus:ring-1 focus:ring-white transition-all placeholder:text-neutral-600 text-white"
                   required
                 />
               </div>
@@ -4620,7 +4640,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   value={newReviewComment}
                   onChange={(e) => setNewReviewComment(e.target.value)}
                   rows={4}
-                  className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-white focus:ring-1 focus:ring-white transition-all resize-none placeholder:text-neutral-600"
+                  className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-white focus:ring-1 focus:ring-white transition-all resize-none placeholder:text-neutral-600 text-white"
                 />
               </div>
             </div>
@@ -4629,7 +4649,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setIsReviewModalOpen(false)}
-                className="flex-1 py-3 rounded-2xl bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800 transition-all font-bold text-sm"
+                className="flex-1 py-3 rounded-2xl bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800 transition-all font-bold text-sm text-white"
               >
                 Cancelar
               </button>
@@ -4697,6 +4717,20 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     {deliveryType === 'delivery' ? 'Te avisaremos cuando esté en camino con el repartidor.' : 'Te avisaremos cuando esté listo para retirar en mostrador.'}
                   </p>
                 </>
+              )}
+              {earnedCashback > 0 && (
+                <div className="mt-4 p-4 rounded-2xl bg-orange-500/10 border border-orange-500/30 text-left space-y-1.5 animate-in slide-in-from-bottom-2">
+                  <div className="flex items-center gap-2 text-orange-400">
+                    <span className="text-xl">🎁</span>
+                    <h4 className="font-black uppercase tracking-tight text-sm">¡Beneficio Desbloqueado!</h4>
+                  </div>
+                  <p className="font-bold text-orange-300 text-[11px] leading-relaxed">
+                    Con esta compra has ganado <span className="font-black">${earnedCashback.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span> de saldo a favor para tu próxima visita.
+                  </p>
+                  <p className="text-[9px] font-bold text-orange-500/80 uppercase tracking-wide leading-tight mt-1 pt-1.5 border-t border-orange-500/20">
+                    Recuerda que el sistema te identifica por tu número de teléfono. La próxima vez que ingreses con tu número, tendrás este descuento disponible.
+                  </p>
+                </div>
               )}
             </div>
 

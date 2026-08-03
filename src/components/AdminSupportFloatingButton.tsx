@@ -33,7 +33,7 @@ export const AdminSupportFloatingButton = ({ tenantId }: { tenantId: string }) =
             {/* Botón flotante */}
             <button 
                 onClick={() => setIsOpen(true)}
-                className={`fixed bottom-6 right-6 w-14 h-14 bg-orange-500 text-white rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(249,115,22,0.4)] hover:scale-110 transition-all z-50 ${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'}`}
+                className={`fixed bottom-[100px] md:bottom-6 right-6 w-14 h-14 bg-orange-500 text-white rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(249,115,22,0.4)] hover:scale-110 transition-all z-50 ${isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'}`}
                 title="Soporte Técnico"
             >
                 <MessageCircle size={24} />
@@ -41,7 +41,7 @@ export const AdminSupportFloatingButton = ({ tenantId }: { tenantId: string }) =
 
             {/* Panel de Soporte */}
             {isOpen && (
-                <div className="fixed bottom-6 right-6 w-[340px] glass border border-white/10 rounded-3xl shadow-2xl z-50 animate-in slide-in-from-bottom-8 overflow-hidden">
+                <div className="fixed bottom-[100px] md:bottom-6 right-6 w-[340px] glass border border-white/10 rounded-3xl shadow-2xl z-50 animate-in slide-in-from-bottom-8 overflow-hidden">
                     <div className="bg-gradient-to-r from-orange-500 to-orange-600 p-4 flex items-center justify-between">
                         <div className="flex items-center gap-2 text-white">
                             <MessageCircle size={20} />
@@ -87,7 +87,7 @@ export const AdminSupportFloatingButton = ({ tenantId }: { tenantId: string }) =
                         </button>
 
                         <div className="pt-2 border-t border-white/10 text-center">
-                            <a href="https://wa.me/5491112345678" target="_blank" rel="noreferrer" className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold uppercase tracking-widest flex items-center justify-center gap-1">
+                            <a href="https://wa.me/549299530971" target="_blank" rel="noreferrer" className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold uppercase tracking-widest flex items-center justify-center gap-1">
                                 O contáctanos por WhatsApp
                             </a>
                         </div>

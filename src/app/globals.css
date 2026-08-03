@@ -4,21 +4,86 @@
   --radius-xl: 1.5rem;
   --radius-2xl: 2rem;
   --radius-3xl: 2.5rem;
+
+  /* REBRANDING: DEEP BLACK & GOLD (HIGH-TICKET) */
+  /* Redefiniendo las paletas de oscuros (Slate / Neutral / Black) al Deep Black */
+  --color-neutral-950: #050505;
+  --color-slate-950: #050505;
+  --color-black: #050505;
+  
+  --color-neutral-900: #111111;
+  --color-slate-900: #111111;
+
+  --color-neutral-800: #1A1A1A;
+  --color-slate-800: #1A1A1A;
+
+  --color-neutral-700: #2A2A2A;
+  --color-slate-700: #2A2A2A;
+
+  --color-neutral-600: #52525B;
+  --color-slate-600: #52525B;
+
+  --color-neutral-500: #71717A;
+  --color-slate-500: #71717A;
+
+  --color-neutral-400: #A1A1AA;
+  --color-slate-400: #A1A1AA;
+
+  --color-neutral-300: #D4D4D8;
+  --color-slate-300: #D4D4D8;
+
+  --color-neutral-200: #E4E4E7;
+  --color-slate-200: #E4E4E7;
+
+  --color-neutral-100: #F4F4F5;
+  --color-slate-100: #F4F4F5;
+
+  /* Blancos a Blanco Perla */
+  --color-neutral-50: #FDFBF7;
+  --color-slate-50: #FDFBF7;
+  --color-white: #FDFBF7;
+
+  /* Redefiniendo los colores de acento (Orange / Amber / Yellow) al Oro y Bronce */
+  --color-orange-950: #33240A;
+  --color-orange-900: #574017;
+  --color-orange-800: #7A5C28;
+  --color-orange-700: #9C7A3C;
+  --color-orange-600: #C5A059; /* Acento Secundario Bronce */
+  --color-orange-500: #D4AF37; /* Acento Principal Oro Metálico */
+  --color-orange-400: #E6C27A; /* Acento Terciario Oro Claro */
+  --color-orange-300: #F0D59D;
+  --color-orange-200: #F5E5C0;
+  --color-orange-100: #FAF4E4;
+  --color-orange-50: #FDFBF7;
+
+  --color-amber-950: #33240A;
+  --color-amber-900: #574017;
+  --color-amber-800: #7A5C28;
+  --color-amber-700: #9C7A3C;
+  --color-amber-600: #C5A059;
+  --color-amber-500: #D4AF37;
+  --color-amber-400: #E6C27A;
+  --color-amber-300: #F0D59D;
+  --color-amber-200: #F5E5C0;
+  --color-amber-100: #FAF4E4;
+  --color-amber-50: #FDFBF7;
+
+  /* Redefiniendo el rojo de peligro a Rojo Vino Elegante */
+  --color-red-500: #7F1D1D;
+  --color-red-600: #651717;
 }
 
 :root {
-  --background: 240 10% 3.9%;
-  --foreground: 0 0% 98%;
-  --primary: 24.6 95% 53.1%;
-  --border: 240 3.7% 15.9%;
+  --background: 0 0% 2%;
+  --foreground: 40 40% 98%;
+  --primary: 45 65% 53%; /* Oro */
+  --border: 0 0% 10%;
 }
 
 @layer base {
   body {
-    background-color: #020617;
-    /* bg-slate-950 fallback */
-    color: #f8fafc;
-    /* text-slate-50 fallback */
+    background-color: #050505;
+    color: #FDFBF7;
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -40,27 +105,58 @@
     background-repeat: no-repeat;
     background-position: center;
     background-size: min(60%, 500px);
-    opacity: 0.03;
+    opacity: 0.02;
     pointer-events: none;
     z-index: -999;
+  }
+
+  /* Tipografía High-Ticket */
+  h1, h2, h3, h4 {
+    letter-spacing: -0.5px;
+  }
+
+  .uppercase {
+    letter-spacing: 1px;
+  }
+  
+  /* Hover Premium Lift general para botones principales */
+  button.bg-orange-500, button.bg-amber-500 {
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+  
+  button.bg-orange-500:hover:not(:disabled), button.bg-amber-500:hover:not(:disabled) {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 30px rgba(212, 175, 55, 0.12) !important;
   }
 }
 
 @layer components {
+  /* Cristalería / Glassmorphism Premium */
   .glass {
-    background-color: rgba(15, 23, 42, 0.4);
+    background-color: rgba(17, 17, 17, 0.6);
     backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(212, 175, 55, 0.15);
   }
 
+  .hover-premium-lift {
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  .hover-premium-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 30px rgba(212, 175, 55, 0.12);
+  }
+
+  /* Reemplazamos los neones por resplandores dorados elegantes */
   .neon-glow {
-    box-shadow: 0 0 20px -5px rgba(249, 115, 22, 0.5);
+    box-shadow: 0 0 20px -5px rgba(212, 175, 55, 0.3);
   }
 
   .neon-icon {
-    filter: drop-shadow(0 0 8px rgba(249, 115, 22, 0.6));
+    filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.4));
   }
 
+  /* Custom Scrollbar adaptado a Dark Mode Premium */
   .custom-scrollbar::-webkit-scrollbar {
     width: 4px;
   }
@@ -70,7 +166,7 @@
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: #1e293b;
+    background-color: #1A1A1A;
     border-radius: 9999px;
   }
 

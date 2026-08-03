@@ -642,7 +642,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
 
         // Calcular descuento por fidelidad (Monedero Virtual mmmTodoLoQueQuiero 2026)
         let loyaltyRedemption = 0;
-        if (useLoyaltyDiscount && loyaltyAccount && tenant?.loyalty_enabled !== false) {
+        if (useLoyaltyDiscount && loyaltyAccount && tenant?.loyalty_enabled === true) {
             const config = tenant?.loyalty_config || {};
             const redeemChannel = config.redeem_channel || 'both';
             const isSalonAllowed = redeemChannel === 'both' || redeemChannel === 'salon';
@@ -824,7 +824,26 @@ export default function OrderTab({ products, ingredients, categories: initialCat
             });
 
             addNotification(`Nuevo pedido de ${clientName}`, Array.from(targetRoles), 'info', tenant?.id);
-            alert("¡Pedido creado y notificado correctamente!");
+            
+            let successAlertMessage = "¡Pedido creado y notificado correctamente!";
+            
+            if (tenant?.loyalty_enabled === true && loyaltyAccount) {
+                const config = tenant.loyalty_config || {};
+                const tiers = config.tiers || [];
+                let currentTier = loyaltyAccount.tier || 'bronce';
+                let cashbackPct = config.cashback_pct || 5;
+                const foundTier = tiers.find((t: any) => t.name === currentTier);
+                if (foundTier) {
+                    cashbackPct = foundTier.cashback_pct || cashbackPct;
+                }
+                const earnedCashback = Math.round((totalPrice * (cashbackPct / 100)) * 100) / 100;
+                
+                if (earnedCashback > 0) {
+                    successAlertMessage += `\n\n🎁 ¡Beneficio Desbloqueado!\nEl cliente ha ganado $${earnedCashback.toLocaleString('es-AR', { minimumFractionDigits: 2 })} de saldo a favor para su próxima compra.\n\nRecuérdale que el sistema lo identifica por su número de teléfono.`;
+                }
+            }
+
+            alert(successAlertMessage);
 
             if (isAfipBilling && tenant?.afip_enabled) {
                 try {
@@ -1083,7 +1102,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                 <div className="pt-4 border-t border-slate-700 flex justify-between items-end">
                     <span className="text-slate-400 font-bold uppercase text-xs">Total</span>
                     <div className="text-right">
-                        {useLoyaltyDiscount && loyaltyAccount && tenant?.loyalty_enabled !== false && (() => {
+                        {useLoyaltyDiscount && loyaltyAccount && tenant?.loyalty_enabled === true && (() => {
                             const loyaltyRedemption = Math.min(parseFloat(loyaltyAccount.balance) || 0, totalPrice);
                             return (
                                 <>
@@ -1125,7 +1144,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                         />
                     </div>
 
-                    {loyaltyAccount && tenant?.loyalty_enabled !== false && (() => {
+                    {loyaltyAccount && tenant?.loyalty_enabled === true && (() => {
                         const config = tenant?.loyalty_config || {};
                         const redeemChannel = config.redeem_channel || 'both';
                         const isSalonAllowed = redeemChannel === 'both' || redeemChannel === 'salon';

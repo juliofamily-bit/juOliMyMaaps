@@ -58,6 +58,17 @@ Para reducir la fricción de entrada de nuevos restaurantes y maximizar la conve
 ### Nueva API Route para actualizar Configuración de Tenant (`/api/update-tenant`)
 - Se implementó una API route dedicada que utiliza el `SUPABASE_SERVICE_ROLE_KEY` para guardar los ajustes del administrador. Esto evita el error de "0 registros actualizados" causado por el parche de seguridad de Auth RLS (`supabase_auth_rls_patch.sql`), el cual exige un JWT de Supabase Auth para validar el `tenant_id`. Dado que el panel de administración valida por PIN local y usa sesión anónima, la única forma robusta de actualizar la tabla `tenants` (sin desprotegerla) es a través de una API route del lado del servidor.
 
+### Rebranding Global "High-Ticket" (Negro Profundo y Dorado)
+- Se implementó un rediseño de UI en toda la suite utilizando la técnica de secuestro de paletas (`@theme` en `globals.css`) con Tailwind v4.
+- Los tonos base `slate` y `neutral` pasaron a `Deep Black` (#050505, #111111, #1A1A1A).
+- Los colores primarios `orange` y `amber` ahora renderizan Oro Metálico (#D4AF37) y Bronce (#C5A059).
+- Se añadieron micro-animaciones en `globals.css` (Hover lift: `translateY(-4px)` y resplandores dorados `box-shadow`) para todos los elementos interactivos, y tracking tipográfico para lograr una estética "Apple/Luxury Boutique" tanto en Light como en Dark mode.
+
+### Mejora UX: Notificaciones Inmediatas de Fidelización (Club de Clientes)
+- Se desactivó el Club de Clientes (Cashback) por defecto para los nuevos restaurantes creados (ahora la evaluación es estricta: `loyalty_enabled === true`), previniendo que entreguen dinero virtual accidentalmente sin haberlo configurado.
+- Se agregó el cálculo visual en el Frontend (`PublicMenu.tsx` y `OrderTab.tsx`) que detecta y calcula cuánto cashback está ganando el cliente por la orden actual. 
+- En el Menú de Cliente (PublicMenu), al finalizar exitosamente la compra, ahora aparece un cartel interactivo indicando exactamente en pesos ($) el beneficio desbloqueado, indicando al cliente que se lo identificará mediante su número celular en su próxima visita (estrategia UX/Retención solicitada por el usuario).
+- En el panel de Caja/Meseros (OrderTab), el cajero ahora recibe el monto de cashback ganado en el Alert de éxito, para informarle verbalmente al cliente.
 
 ### Correcciones Generales del Panel Admin (Checkpoint)
 - Se corrigió el botón de guardar de `Fidelización (Club de Clientes)`, `Mesas`, `AFIP` y `Mozos` para que todos utilicen la ruta segura `/api/update-tenant`. Esto soluciona el problema de que el interruptor de fidelización se volvía a activar solo al recargar.
@@ -76,3 +87,16 @@ Para reducir la fricción de entrada de nuevos restaurantes y maximizar la conve
 - **Feedback de Mapas Visuales:** Se registró la idea del usuario de mapas de mesas escalados en el bloc de notas.
 
 - **UI Móvil Acciones Masivas:** Se rediseñó la estructura flex de la barra flotante. Ahora en celular los controles bajan a líneas independientes y ocupan todo el ancho (w-full) para garantizar que los botones de [%] y [$] sean grandes, fáciles de tocar y no queden ocultos por falta de espacio.
+
+
+### Correcciones (Bug Guardar Ajustes)
+- **Resolución Error 406:** Se refactorizaron absolutamente todas las funciones del AdminTab.tsx que modificaban el tenant en la base de datos (Guardar Ajustes, Mesas, Fidelización, AFIP, Eliminar Mozo) ya que usaban actualizaciones directas con .single() fallando por restricciones de RLS. Ahora, TODAS pasan unificadamente a través de la API /api/update-tenant que utiliza permisos de super-admin, solucionando de raíz los errores cannot coerce the result to a single JSON object (Error 406) al guardar la configuración, incluyendo el cambio de colores y modo oscuro/claro.
+- **Soporte Técnico (Admin):** Se configuró el número de WhatsApp real del administrador (+54299530971) en el botón flotante de soporte técnico.
+
+
+### Correcciones Checkpoint 42 (Visibilidad de Inputs en Menú Público)
+- **Resolución Textos Invisibles:** Se corrigió un error visual en el Menú de Cliente (PublicMenu.tsx) donde la barra de búsqueda general y los campos de texto en los modales (como pedir datos, nombre, etc.) escribían el texto en color negro sobre fondos oscuros (g-neutral-900/950), haciéndolos ilegibles (texto invisible). Se aplicó lógica adaptativa para la barra de búsqueda respetando el Modo Claro y Oscuro, y se forzó 	ext-white para todos los formularios internos oscuros.
+
+### Correcciones Checkpoint 43 (Fondo Oscuro en Landing Page y Contraste)
+- **Resolución Landing Oscura en Modo Claro:** Se corrigió un error en PublicMenu.tsx donde la parte inferior de la vista pública (muro social, slider de ofertas, opiniones y tarjetas de productos en la landing) tenía fondos negros (g-neutral-900/950) estáticos (hardcodeados). Ahora todos los contenedores principales respetan la variable isLight, cambiando de manera dinámica a blancos y grises claros (g-white / g-slate-50) en Modo Claro, manteniendo la legibilidad sin sacrificar la elegancia de la marca.
+- **Mejora de Contraste en Modo Claro:** Se aumentaron los pesos de color para las descripciones en Modo Claro, pasando de grises pálidos (	ext-slate-500) a grises más oscuros y definidos (	ext-slate-700), tal como solicitó el usuario, aumentando el contraste.
