@@ -3,7 +3,7 @@ import { supabase as rawSupabase, broadcastTenantChange } from '@/lib/supabase';
 import { Product, Ingredient, Order, Expense, OrderStatus, Category, ProductIngredient, IngredientBatch, ProductOffer } from '@/types/database';
 import { PRESET_IMAGES, NEON_ICONS, DEFAULT_CAROUSEL_SLIDES, DEFAULT_LANDING_CONFIG } from '@/lib/constants';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, ReferenceLine } from 'recharts';
-import { CreditCard, BarChart2, QrCode, FileText, Plus, Trash2, Edit, TrendingUp, DollarSign, Package, Layers, History, ChevronRight, X, Save, Check, Upload, Image as ImageIcon, Wallet, Receipt, ArrowUpCircle, ArrowDownCircle, Calendar, FilterX, Star, StarOff, PieChart, Paintbrush, LayoutGrid, Sun, Moon, CheckCircle, AlertCircle, Loader2, Share2, AlertTriangle, CalendarRange, Trophy, Smartphone, Instagram, Facebook, Phone, Printer, Download, Award, Coins, Search, MessageCircle, Gift, RefreshCw, Settings, ChevronUp, ChevronDown, Users, Truck, Map as MapIcon, Utensils, Lock, Mic, MicOff } from 'lucide-react';
+import { CreditCard, BarChart2, QrCode, FileText, Plus, Trash2, Edit, TrendingUp, DollarSign, Package, Layers, History, ChevronRight, X, Save, Check, Upload, Image as ImageIcon, Wallet, Receipt, ArrowUpCircle, ArrowDownCircle, Calendar, FilterX, Star, StarOff, PieChart, Paintbrush, LayoutGrid, Sun, Moon, CheckCircle, AlertCircle, Loader2, Share2, AlertTriangle, CalendarRange, Trophy, Smartphone, Instagram, Facebook, Phone, Printer, Download, Award, Coins, Search, MessageCircle, Gift, RefreshCw, Settings, ChevronUp, ChevronDown, Users, Truck, Map as MapIcon, Utensils, Lock, Mic, MicOff, Video, Film, Link as LinkIcon } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { PrintableQRPoster } from './PrintableQRPoster';
 import { AdminEmployeeTab } from './AdminEmployeeTab';
@@ -81,27 +81,47 @@ const getProductIdsArray = (pIds: any): string[] => {
     return [strVal];
 };
 
+const DEFAULT_SCHEDULE: Record<string, Array<{ open: string; close: string }>> = {
+    "1": [{ open: "00:00", close: "23:59" }],
+    "2": [{ open: "00:00", close: "23:59" }],
+    "3": [{ open: "00:00", close: "23:59" }],
+    "4": [{ open: "00:00", close: "23:59" }],
+    "5": [{ open: "00:00", close: "23:59" }],
+    "6": [{ open: "00:00", close: "23:59" }],
+    "0": [{ open: "00:00", close: "23:59" }]
+};
+
 const ScheduleEditor = ({ cfg, setCfg, primaryColor }: { cfg: any, setCfg: any, primaryColor: string }) => {
     const days = [
         { id: '1', name: 'Lunes' }, { id: '2', name: 'Martes' }, { id: '3', name: 'Miércoles' },
         { id: '4', name: 'Jueves' }, { id: '5', name: 'Viernes' }, { id: '6', name: 'Sábado' }, { id: '0', name: 'Domingo' }
     ];
 
+    const currentSchedule = cfg?.schedule || DEFAULT_SCHEDULE;
+
     const addShift = (dayId: string) => {
-        const newSched = { ...cfg.schedule };
+        const newSched = { ...(cfg?.schedule || DEFAULT_SCHEDULE) };
         newSched[dayId] = [...(newSched[dayId] || []), { open: '00:00', close: '23:59' }];
-        setCfg({ ...cfg, schedule: newSched });
+        setCfg({ ...cfg, enabled: true, schedule: newSched });
     };
 
     const removeShift = (dayId: string, index: number) => {
-        const newSched = { ...cfg.schedule };
-        newSched[dayId].splice(index, 1);
+        const newSched = { ...(cfg?.schedule || DEFAULT_SCHEDULE) };
+        if (newSched[dayId]) {
+            const arr = [...newSched[dayId]];
+            arr.splice(index, 1);
+            newSched[dayId] = arr;
+        }
         setCfg({ ...cfg, schedule: newSched });
     };
 
     const updateShift = (dayId: string, index: number, field: 'open' | 'close', value: string) => {
-        const newSched = { ...cfg.schedule };
-        newSched[dayId][index][field] = value;
+        const newSched = { ...(cfg?.schedule || DEFAULT_SCHEDULE) };
+        if (newSched[dayId] && newSched[dayId][index]) {
+            const arr = [...newSched[dayId]];
+            arr[index] = { ...arr[index], [field]: value };
+            newSched[dayId] = arr;
+        }
         setCfg({ ...cfg, schedule: newSched });
     };
 
@@ -110,23 +130,30 @@ const ScheduleEditor = ({ cfg, setCfg, primaryColor }: { cfg: any, setCfg: any, 
             <label className="flex items-center gap-2 cursor-pointer mb-4 bg-slate-900/60 p-4 rounded-xl border border-white/5 transition-all hover:bg-slate-800/60">
                 <input
                     type="checkbox"
-                    checked={cfg.enabled}
-                    onChange={(e) => setCfg({ ...cfg, enabled: e.target.checked })}
+                    checked={!!cfg?.enabled}
+                    onChange={(e) => setCfg({
+                        ...cfg,
+                        enabled: e.target.checked,
+                        schedule: cfg?.schedule || JSON.parse(JSON.stringify(DEFAULT_SCHEDULE))
+                    })}
                     className="w-5 h-5 rounded border-gray-600 bg-slate-800"
                 />
                 <span className="text-sm font-bold text-white">Activar restricción de horarios</span>
             </label>
 
-            {cfg.enabled && (
+            {cfg?.enabled && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
                     <p className="text-xs text-slate-400 mb-2">
                         Puedes añadir múltiples turnos partidos (ej: de 12:00 a 15:00 y de 20:00 a 23:59). Si no hay turnos, se considera cerrado todo el día. Si cruzas la medianoche (ej: 20:00 a 02:00), el sistema lo calculará correctamente.
                     </p>
-                    {days.map(day => (
+                    {days.map(day => {
+                        const dayShifts = currentSchedule[day.id] || [];
+                        return (
                         <div key={day.id} className="bg-slate-950/40 p-4 rounded-xl border border-white/5">
                             <div className="flex items-center justify-between mb-3">
                                 <span className="font-bold text-white text-sm">{day.name}</span>
                                 <button 
+                                    type="button"
                                     onClick={(e) => { e.preventDefault(); addShift(day.id); }}
                                     className="text-[10px] font-black uppercase text-slate-400 hover:text-white flex items-center gap-1 bg-slate-900 px-2 py-1 rounded-md transition-all hover:scale-105"
                                 >
@@ -134,26 +161,27 @@ const ScheduleEditor = ({ cfg, setCfg, primaryColor }: { cfg: any, setCfg: any, 
                                 </button>
                             </div>
                             
-                            {(cfg.schedule[day.id] || []).length === 0 ? (
+                            {dayShifts.length === 0 ? (
                                 <p className="text-xs text-red-400/80 italic font-bold">Cerrado todo el día</p>
                             ) : (
                                 <div className="space-y-2">
-                                    {(cfg.schedule[day.id] || []).map((shift: any, idx: number) => (
+                                    {dayShifts.map((shift: any, idx: number) => (
                                         <div key={idx} className="flex items-center gap-2">
                                             <input
                                                 type="time"
-                                                value={shift.open}
+                                                value={shift.open || '00:00'}
                                                 onChange={e => updateShift(day.id, idx, 'open', e.target.value)}
                                                 className="bg-slate-900 text-white border border-slate-700 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-white transition-colors"
                                             />
                                             <span className="text-slate-500 text-xs font-black">a</span>
                                             <input
                                                 type="time"
-                                                value={shift.close}
+                                                value={shift.close || '23:59'}
                                                 onChange={e => updateShift(day.id, idx, 'close', e.target.value)}
                                                 className="bg-slate-900 text-white border border-slate-700 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-white transition-colors"
                                             />
                                             <button 
+                                                type="button"
                                                 onClick={(e) => { e.preventDefault(); removeShift(day.id, idx); }}
                                                 className="text-red-400 hover:text-red-300 hover:bg-red-500/10 ml-2 p-1.5 rounded-lg transition-all"
                                                 title="Eliminar turno"
@@ -165,7 +193,8 @@ const ScheduleEditor = ({ cfg, setCfg, primaryColor }: { cfg: any, setCfg: any, 
                                 </div>
                             )}
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
         </div>
@@ -804,26 +833,17 @@ const AdminTab: React.FC<AdminTabProps> = ({
     });
 
     // Business Hours & Delivery Hours State
-    const defaultSchedule = {
-        "1": [{ open: "00:00", close: "23:59" }],
-        "2": [{ open: "00:00", close: "23:59" }],
-        "3": [{ open: "00:00", close: "23:59" }],
-        "4": [{ open: "00:00", close: "23:59" }],
-        "5": [{ open: "00:00", close: "23:59" }],
-        "6": [{ open: "00:00", close: "23:59" }],
-        "0": [{ open: "00:00", close: "23:59" }]
-    };
     const [cfgBusinessHours, setCfgBusinessHours] = useState<any>({
         enabled: false,
-        schedule: JSON.parse(JSON.stringify(defaultSchedule))
+        schedule: JSON.parse(JSON.stringify(DEFAULT_SCHEDULE))
     });
     const [cfgDeliveryHours, setCfgDeliveryHours] = useState<any>({
         enabled: false,
-        schedule: JSON.parse(JSON.stringify(defaultSchedule))
+        schedule: JSON.parse(JSON.stringify(DEFAULT_SCHEDULE))
     });
     const [cfgReservationHours, setCfgReservationHours] = useState<any>({
         enabled: false,
-        schedule: JSON.parse(JSON.stringify(defaultSchedule))
+        schedule: JSON.parse(JSON.stringify(DEFAULT_SCHEDULE))
     });
     const [cfgDeliveryPanic, setCfgDeliveryPanic] = useState(false);
 
@@ -893,9 +913,32 @@ const AdminTab: React.FC<AdminTabProps> = ({
         setCfgLandingConfig({ ...cfgLandingConfig, hero_image_url: data.publicUrl });
     };
 
-    const handleCarouselImageUpload = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleCarouselImageUpload = async (index: number, e: React.ChangeEvent<HTMLInputElement>, isVideo: boolean = false) => {
         const file = e.target.files?.[0];
         if (!file) return;
+
+        // Si es video, verificar duración o tamaño
+        if (isVideo || file.type.startsWith('video/')) {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `carousel_vid_${Date.now()}.${fileExt}`;
+            const filePath = `${fileName}`;
+            const { error: uploadError } = await supabase.storage.from('products').upload(filePath, file);
+            if (uploadError) {
+                console.error('Error uploading carousel video:', uploadError);
+                alert('Error al subir el video del carrusel');
+                return;
+            }
+            const { data } = supabase.storage.from('products').getPublicUrl(filePath);
+            const newCarousel = [...(cfgLandingConfig.custom_carousel || [])];
+            newCarousel[index] = { 
+                ...newCarousel[index], 
+                media_type: 'video', 
+                video_url: data.publicUrl 
+            };
+            setCfgLandingConfig({ ...cfgLandingConfig, custom_carousel: newCarousel });
+            return;
+        }
+
         const fileExt = file.name.split('.').pop();
         const fileName = `carousel_${Date.now()}.${fileExt}`;
         const filePath = `${fileName}`;
@@ -908,7 +951,11 @@ const AdminTab: React.FC<AdminTabProps> = ({
         const { data } = supabase.storage.from('products').getPublicUrl(filePath);
         
         const newCarousel = [...(cfgLandingConfig.custom_carousel || [])];
-        newCarousel[index].image_url = data.publicUrl;
+        newCarousel[index] = {
+            ...newCarousel[index],
+            media_type: 'image',
+            image_url: data.publicUrl
+        };
         setCfgLandingConfig({ ...cfgLandingConfig, custom_carousel: newCarousel });
     };
 
@@ -920,9 +967,12 @@ const AdminTab: React.FC<AdminTabProps> = ({
         }
         const newSlide = {
             id: Date.now().toString(),
+            media_type: 'image',
             image_url: '',
-            title: 'Nuevo Título',
-            description: 'Descripción breve para atraer a tus clientes...',
+            video_url: '',
+            product_id: '',
+            title: 'Nuevo Plato / Novedad',
+            description: 'Descripción breve para tentar a tus clientes...',
             badge_text: ''
         };
         setCfgLandingConfig({ ...cfgLandingConfig, custom_carousel: [...current, newSlide] });
@@ -933,7 +983,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
         setCfgLandingConfig({ ...cfgLandingConfig, custom_carousel: current.filter((s: any) => s.id !== id) });
     };
 
-    const handleUpdateCarouselSlide = (index: number, field: string, value: string) => {
+    const handleUpdateCarouselSlide = (index: number, field: string, value: any) => {
         const current = [...(cfgLandingConfig.custom_carousel || [])];
         current[index] = { ...current[index], [field]: value };
         setCfgLandingConfig({ ...cfgLandingConfig, custom_carousel: current });
@@ -1076,21 +1126,29 @@ const AdminTab: React.FC<AdminTabProps> = ({
             });
 
             // Cargar Business Hours & Delivery Hours
-            if ((tenant as any).business_hours) {
-                setCfgBusinessHours((tenant as any).business_hours);
-            } else {
-                setCfgBusinessHours({ enabled: false, schedule: JSON.parse(JSON.stringify(defaultSchedule)) });
-            }
-            if ((tenant as any).delivery_hours) {
-                setCfgDeliveryHours((tenant as any).delivery_hours);
-            } else {
-                setCfgDeliveryHours({ enabled: false, schedule: JSON.parse(JSON.stringify(defaultSchedule)) });
-            }
-            if ((tenant as any).reservation_hours) {
-                setCfgReservationHours((tenant as any).reservation_hours);
-            } else {
-                setCfgReservationHours({ enabled: false, schedule: JSON.parse(JSON.stringify(defaultSchedule)) });
-            }
+            const loadedBizHours = (tenant as any).business_hours;
+            setCfgBusinessHours({
+                enabled: loadedBizHours?.enabled === true,
+                schedule: (loadedBizHours?.schedule && Object.keys(loadedBizHours.schedule).length > 0)
+                    ? loadedBizHours.schedule
+                    : JSON.parse(JSON.stringify(DEFAULT_SCHEDULE))
+            });
+
+            const loadedDelivHours = (tenant as any).delivery_hours;
+            setCfgDeliveryHours({
+                enabled: loadedDelivHours?.enabled === true,
+                schedule: (loadedDelivHours?.schedule && Object.keys(loadedDelivHours.schedule).length > 0)
+                    ? loadedDelivHours.schedule
+                    : JSON.parse(JSON.stringify(DEFAULT_SCHEDULE))
+            });
+
+            const loadedResHours = (tenant as any).reservation_hours;
+            setCfgReservationHours({
+                enabled: loadedResHours?.enabled === true,
+                schedule: (loadedResHours?.schedule && Object.keys(loadedResHours.schedule).length > 0)
+                    ? loadedResHours.schedule
+                    : JSON.parse(JSON.stringify(DEFAULT_SCHEDULE))
+            });
             setCfgDeliveryPanic((tenant as any).delivery_panic_button || false);
 
             // Cargar configuraciones de Fidelización (Micro-CRM)
@@ -5080,54 +5138,134 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                             </div>
                                             
                                             <div className="space-y-4">
-                                                {(cfgLandingConfig.custom_carousel || []).map((slide: any, idx: number) => (
+                                                {(cfgLandingConfig.custom_carousel || []).map((slide: any, idx: number) => {
+                                                    const isVideo = slide.media_type === 'video' || (slide.video_url && !slide.image_url);
+                                                    const linkedProduct = products.find(p => p.id === slide.product_id);
+
+                                                    return (
                                                     <div key={slide.id} className="bg-slate-900/50 border border-white/5 rounded-2xl p-4 space-y-3 relative">
                                                         <button
                                                             type="button"
                                                             onClick={() => handleRemoveCarouselSlide(slide.id)}
-                                                            className="absolute top-3 right-3 text-red-500 hover:text-red-400 bg-red-500/10 p-1.5 rounded-lg transition-colors"
+                                                            className="absolute top-3 right-3 text-red-500 hover:text-red-400 bg-red-500/10 p-1.5 rounded-lg transition-colors z-10"
                                                             title="Eliminar Slide"
                                                         >
                                                             <Trash2 size={14} />
                                                         </button>
                                                         
                                                         <div className="flex flex-col sm:flex-row gap-4">
-                                                            {/* Columna Izquierda: Imagen */}
-                                                            <div className="w-full sm:w-1/3">
+                                                            {/* Columna Izquierda: Multimedia (Imagen o Video) */}
+                                                            <div className="w-full sm:w-1/3 space-y-2">
+                                                                {/* Selector de Tipo Multimedia */}
+                                                                <div className="flex gap-1 bg-slate-950 p-1 rounded-xl border border-white/5">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleUpdateCarouselSlide(idx, 'media_type', 'image')}
+                                                                        className={`flex-1 py-1 rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-1 transition-all ${!isVideo ? 'bg-orange-500 text-white' : 'text-slate-500 hover:text-white'}`}
+                                                                    >
+                                                                        <ImageIcon size={10} /> Foto
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleUpdateCarouselSlide(idx, 'media_type', 'video')}
+                                                                        className={`flex-1 py-1 rounded-lg text-[9px] font-black uppercase flex items-center justify-center gap-1 transition-all ${isVideo ? 'bg-purple-600 text-white' : 'text-slate-500 hover:text-white'}`}
+                                                                    >
+                                                                        <Video size={10} /> Video (15s)
+                                                                    </button>
+                                                                </div>
+
                                                                 <div className="aspect-video bg-slate-950 rounded-xl border border-white/10 overflow-hidden relative group flex items-center justify-center">
-                                                                    {slide.image_url ? (
-                                                                        <img src={slide.image_url} alt="Slide" className="w-full h-full object-cover" />
+                                                                    {isVideo ? (
+                                                                        slide.video_url ? (
+                                                                            <video 
+                                                                                src={slide.video_url} 
+                                                                                autoPlay loop muted playsInline 
+                                                                                className="w-full h-full object-cover" 
+                                                                            />
+                                                                        ) : (
+                                                                            <div className="text-slate-600 flex flex-col items-center">
+                                                                                <Video size={24} className="text-purple-400/50" />
+                                                                                <span className="text-[9px] mt-1">Sin video</span>
+                                                                            </div>
+                                                                        )
                                                                     ) : (
-                                                                        <div className="text-slate-600 flex flex-col items-center">
-                                                                            <ImageIcon size={24} />
-                                                                            <span className="text-[9px] mt-1">Sin imagen</span>
-                                                                        </div>
+                                                                        slide.image_url ? (
+                                                                            <img src={slide.image_url} alt="Slide" className="w-full h-full object-cover" />
+                                                                        ) : (
+                                                                            <div className="text-slate-600 flex flex-col items-center">
+                                                                                <ImageIcon size={24} />
+                                                                                <span className="text-[9px] mt-1">Sin imagen</span>
+                                                                            </div>
+                                                                        )
                                                                     )}
                                                                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
                                                                         <label className="bg-orange-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg cursor-pointer hover:bg-orange-600 transition-colors flex items-center gap-1">
-                                                                            <Upload size={12} /> Subir
-                                                                            <input type="file" accept="image/*" onChange={(e) => handleCarouselImageUpload(idx, e)} className="hidden" />
+                                                                            <Upload size={12} /> Subir {isVideo ? 'Video' : 'Foto'}
+                                                                            <input 
+                                                                                type="file" 
+                                                                                accept={isVideo ? "video/*" : "image/*"} 
+                                                                                onChange={(e) => handleCarouselImageUpload(idx, e, isVideo)} 
+                                                                                className="hidden" 
+                                                                            />
                                                                         </label>
                                                                     </div>
                                                                 </div>
+
                                                                 <input
                                                                     type="text"
-                                                                    value={slide.image_url}
-                                                                    onChange={(e) => handleUpdateCarouselSlide(idx, 'image_url', e.target.value)}
-                                                                    placeholder="URL de la imagen..."
-                                                                    className="w-full mt-2 bg-slate-950 border border-white/10 rounded-lg px-2 py-1.5 text-white text-[9px] outline-none"
+                                                                    value={isVideo ? (slide.video_url || '') : (slide.image_url || '')}
+                                                                    onChange={(e) => handleUpdateCarouselSlide(idx, isVideo ? 'video_url' : 'image_url', e.target.value)}
+                                                                    placeholder={isVideo ? "URL del video MP4/WebM..." : "URL de la imagen..."}
+                                                                    className="w-full bg-slate-950 border border-white/10 rounded-lg px-2 py-1.5 text-white text-[9px] outline-none"
                                                                 />
                                                             </div>
                                                             
-                                                            {/* Columna Derecha: Textos */}
-                                                            <div className="w-full sm:w-2/3 space-y-2 pt-6 sm:pt-0">
+                                                            {/* Columna Derecha: Textos y Enlace de Producto */}
+                                                            <div className="w-full sm:w-2/3 space-y-2.5 pt-6 sm:pt-0">
+                                                                {/* Enlazar Producto del Menú */}
+                                                                <div className="bg-slate-950/80 p-2.5 rounded-xl border border-orange-500/20 space-y-1">
+                                                                    <label className="text-[9px] font-black text-orange-400 uppercase flex items-center gap-1">
+                                                                        <Utensils size={11} /> Enlazar a un Plato del Menú (Compra Rápida)
+                                                                    </label>
+                                                                    <select
+                                                                        value={slide.product_id || ''}
+                                                                        onChange={(e) => {
+                                                                            const selectedPid = e.target.value;
+                                                                            const linkedProd = products.find(p => p.id === selectedPid);
+                                                                            const current = [...(cfgLandingConfig.custom_carousel || [])];
+                                                                            current[idx] = {
+                                                                                ...current[idx],
+                                                                                product_id: selectedPid,
+                                                                                title: (!current[idx].title || current[idx].title === 'Nuevo Plato / Novedad' || current[idx].title === 'Nuevo Título') && linkedProd ? linkedProd.name : current[idx].title,
+                                                                                description: (!current[idx].description || current[idx].description.includes('para tentar a tus')) && linkedProd ? (linkedProd.description || '') : current[idx].description,
+                                                                                image_url: (!current[idx].image_url && linkedProd?.image_url) ? linkedProd.image_url : current[idx].image_url,
+                                                                                badge_text: !current[idx].badge_text && linkedProd ? `Pedir por ${formatARS(linkedProd.price)}` : current[idx].badge_text
+                                                                            };
+                                                                            setCfgLandingConfig({ ...cfgLandingConfig, custom_carousel: current });
+                                                                        }}
+                                                                        className="w-full bg-slate-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-[10px] font-bold outline-none focus:border-orange-500"
+                                                                    >
+                                                                        <option value="">-- Sin plato enlazado (Solo diapositiva informativa) --</option>
+                                                                        {products.map(p => (
+                                                                            <option key={p.id} value={p.id}>
+                                                                                🍽️ {p.name} ({formatARS(p.price)})
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                    {linkedProduct && (
+                                                                        <p className="text-[8.5px] text-emerald-400 font-bold flex items-center gap-1">
+                                                                            <CheckCircle size={10} /> Enlazado a "{linkedProduct.name}" ({formatARS(linkedProduct.price)}). Al hacer clic en el carrusel, se abrirá para comprar.
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+
                                                                 <div>
                                                                     <label className="text-[8px] font-bold text-slate-500 uppercase ml-1 block mb-0.5">Título del Slide</label>
                                                                     <input
                                                                         type="text"
                                                                         value={slide.title}
                                                                         onChange={(e) => handleUpdateCarouselSlide(idx, 'title', e.target.value)}
-                                                                        className="w-full bg-slate-950 border border-white/10 rounded-lg px-3 py-2 text-white text-[11px] font-bold outline-none focus:border-orange-500"
+                                                                        className="w-full bg-slate-950 border border-white/10 rounded-lg px-3 py-1.5 text-white text-[11px] font-bold outline-none focus:border-orange-500"
                                                                     />
                                                                 </div>
                                                                 <div>
@@ -5135,23 +5273,24 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                                     <textarea
                                                                         value={slide.description}
                                                                         onChange={(e) => handleUpdateCarouselSlide(idx, 'description', e.target.value)}
-                                                                        className="w-full bg-slate-950 border border-white/10 rounded-lg px-3 py-2 text-white text-[10px] outline-none focus:border-orange-500 min-h-[60px]"
+                                                                        className="w-full bg-slate-950 border border-white/10 rounded-lg px-3 py-1.5 text-white text-[10px] outline-none focus:border-orange-500 min-h-[50px]"
                                                                     />
                                                                 </div>
                                                                 <div>
-                                                                    <label className="text-[8px] font-bold text-slate-500 uppercase ml-1 block mb-0.5">Texto Destacado (Opcional, ej: "A 120 personas les gustó")</label>
+                                                                    <label className="text-[8px] font-bold text-slate-500 uppercase ml-1 block mb-0.5">Texto Destacado (Badge, ej: "¡Recomendado del Chef!")</label>
                                                                     <input
                                                                         type="text"
                                                                         value={slide.badge_text}
                                                                         onChange={(e) => handleUpdateCarouselSlide(idx, 'badge_text', e.target.value)}
-                                                                        placeholder='Ej: "A 120 personas les gustó esto"'
-                                                                        className="w-full bg-slate-950 border border-white/10 rounded-lg px-3 py-2 text-white text-[10px] outline-none focus:border-orange-500"
+                                                                        placeholder='Ej: "Top Seleccionado", "¡Este Finde!"'
+                                                                        className="w-full bg-slate-950 border border-white/10 rounded-lg px-3 py-1.5 text-white text-[10px] outline-none focus:border-orange-500"
                                                                     />
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                ))}
+                                                    );
+                                                })}
                                                 {(cfgLandingConfig.custom_carousel || []).length === 0 && (
                                                     <div className="text-center p-6 bg-slate-900/30 rounded-2xl border border-white/5 border-dashed">
                                                         <ImageIcon className="mx-auto text-slate-600 mb-2" size={24} />

@@ -17,6 +17,8 @@ const triggerTrialStart = (tenantId: string) => {
   }).catch(() => {});
 };
 
+const formatPrice = (p: number) => '$' + Number(p || 0).toLocaleString('es-AR');
+
 const AutoCarousel = ({ children, gapClass = 'gap-4 md:gap-6' }: { children: React.ReactNode, gapClass?: string }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   
@@ -2906,31 +2908,84 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   </div>
                   
                   <AutoCarousel gapClass="gap-4 md:gap-6">
-                    {carouselSlides.map((slide: any) => (
-                      <div key={slide.id} className={`min-w-[300px] md:min-w-[400px] snap-center border rounded-[2rem] overflow-hidden shadow-2xl relative group transition-colors ${isLight ? "bg-slate-50 border-slate-200 text-slate-900" : "bg-neutral-900/60 border-white/5 text-white"}`}>
+                    {carouselSlides.map((slide: any) => {
+                      const isVideo = slide.media_type === 'video' || (slide.video_url && !slide.image_url);
+                      const linkedProduct = slide.product_id ? products.find(p => p.id === slide.product_id) : null;
+
+                      return (
+                      <div 
+                        key={slide.id} 
+                        onClick={() => {
+                          if (linkedProduct) {
+                            goToMenu();
+                            addToCart(linkedProduct);
+                          }
+                        }}
+                        className={`min-w-[300px] md:min-w-[400px] snap-center border rounded-[2rem] overflow-hidden shadow-2xl relative group transition-all duration-300 ${linkedProduct ? 'cursor-pointer active:scale-[0.98]' : ''} ${isLight ? "bg-slate-50 border-slate-200 text-slate-900" : "bg-neutral-900/60 border-white/5 text-white"}`}
+                      >
                         <div className={`h-64 md:h-72 w-full relative overflow-hidden ${isLight ? "bg-slate-200" : "bg-neutral-800"}`}>
-                          {slide.image_url ? (
-                            <img src={slide.image_url} alt={slide.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100" />
+                          {isVideo && slide.video_url ? (
+                            <video 
+                              src={slide.video_url} 
+                              autoPlay 
+                              loop 
+                              muted 
+                              playsInline 
+                              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+                            />
+                          ) : slide.image_url ? (
+                            <img 
+                              src={slide.image_url} 
+                              alt={slide.title} 
+                              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100" 
+                            />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-orange-500/10 to-purple-500/10">
-                              <ImageIcon className={`w-12 h-12  /20 ${isLight ? "text-slate-900" : "text-white"}`} />
+                              <ImageIcon className={`w-12 h-12 /20 ${isLight ? "text-slate-900" : "text-white"}`} />
                             </div>
                           )}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-90" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-90 pointer-events-none" />
                           
                           {slide.badge_text && (
-                            <div className={`absolute top-4 left-4 px-3 py-1.5 bg-white/10 backdrop-blur-md rounded-xl font-bold   text-xs border border-white/20 shadow-lg ${isLight ? "text-slate-900" : "text-white"}`}>
+                            <div className={`absolute top-4 left-4 px-3 py-1.5 bg-white/10 backdrop-blur-md rounded-xl font-bold text-xs border border-white/20 shadow-lg z-10 ${isLight ? "text-slate-900" : "text-white"}`}>
                               ✨ {slide.badge_text}
                             </div>
                           )}
+
+                          {isVideo && (
+                            <div className="absolute top-4 right-4 px-2.5 py-1 bg-black/50 backdrop-blur-md rounded-lg text-[9px] font-black uppercase tracking-wider text-purple-300 border border-purple-500/30 flex items-center gap-1 z-10">
+                              🎬 Video
+                            </div>
+                          )}
                           
-                          <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-col justify-end">
-                            <h3 className={`text-xl md:text-2xl font-black   leading-tight mb-2 drop-shadow-md ${isLight ? "text-slate-900" : "text-white"}`}>{slide.title}</h3>
-                            <p className="text-sm text-slate-300 line-clamp-3 leading-relaxed drop-shadow-sm">{slide.description}</p>
+                          <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-col justify-end z-10">
+                            <h3 className={`text-xl md:text-2xl font-black leading-tight mb-1.5 drop-shadow-md ${isLight ? "text-slate-900" : "text-white"}`}>{slide.title}</h3>
+                            <p className="text-sm text-slate-300 line-clamp-2 leading-relaxed drop-shadow-sm">{slide.description}</p>
+                            
+                            {linkedProduct && (
+                              <div className="mt-3 flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    goToMenu();
+                                    addToCart(linkedProduct);
+                                  }}
+                                  className="bg-orange-500 hover:bg-orange-600 text-white font-black text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-lg active:scale-95 transition-all"
+                                >
+                                  <ShoppingBag size={13} />
+                                  Pedir {formatPrice(linkedProduct.price)}
+                                </button>
+                                <span className="text-[10px] text-white/80 font-bold uppercase tracking-wider bg-black/50 px-2.5 py-1.5 rounded-xl border border-white/10 backdrop-blur-sm">
+                                  🔥 Plato del Menú
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </AutoCarousel>
                 </section>
               );

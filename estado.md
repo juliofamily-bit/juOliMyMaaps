@@ -113,3 +113,13 @@ Para reducir la fricci√≥n de entrada de nuevos restaurantes y maximizar la conve
 ### Hotfix 5 - QA Bug de Planes y Caducidad de Trial
 - Se detectÛ y arreglÛ un bug de ruteo en el Modal del candado (AdminTab.tsx) que al hacer click en 'Ver Planes y Precios' asignaba la vista incorrecta y enviaba al usuario a una pantalla vacÌa (negra). Ahora redirige de forma exitosa a la vista de configuraciÛn y expande el acordeÛn de SuscripciÛn.
 - QA (Seguridad de Trial): El usuario estaba siendo bloqueado en Balance Financiero a pesar de nuestro arreglo previo porque, seg˙n la Base de Datos de ProducciÛn/Local (Supabase), su periodo de 14 dÌas habÌa comenzado el 05 de Julio de 2026. Al ser Agosto, sus 14 dÌas expiraron legÌtimamente, por lo que el sistema cortÛ sus permisos autom·ticamente y pasÛ a comportarse como un plan B·sico (ya que los feature flags condicionales de page.tsx eval˙an la fecha exacta mediante Date.now()). Se reseteÛ su trial_started_at a la fecha de HOY mediante script para permitir la continuaciÛn de sus pruebas funcionales.
+
+
+### Actualizaci√≥n - Videos y Enlace de Platos en Carrusel
+- **Soporte para Videos Cortos (15s):** En la configuraci√≥n de Landing Page (Admin), cada slide del carrusel permite alternar entre Foto y Video (hasta 15 seg). Se reproducen autom√°ticamente en bucle y silenciados tanto en el panel como en la vista p√∫blica.
+- **Enlace de Platos con Compra Directa con 1 Clic:** Se agreg√≥ un selector de productos en cada diapositiva del carrusel. Al seleccionar un plato, se autocompleta la informaci√≥n del slide y en la Landing Page p√∫blica aparece un bot√≥n de compra directa ('Pedir [Precio]') que navega al men√∫ y a√±ade el producto al carrito autom√°ticamente con un solo toque.
+
+
+### Correcci√≥n - Error al Activar Restricciones Horarias
+- **Causa del Error:** En el componente ScheduleEditor, cuando un local no ten√≠a la propiedad schedule inicializada en su registro de business_hours / delivery_hours / reservation_hours, el acceso directo a cfg.schedule[day.id] generaba un TypeError en React, provocando la ca√≠da de la p√°gina ("no se pudo cargar la p√°gina").
+- **Soluci√≥n Implementada:** Se defini√≥ DEFAULT_SCHEDULE de forma global y defensiva para todos los d√≠as de la semana. Tanto la carga inicial como la activaci√≥n del toggle y la adici√≥n/eliminaci√≥n de turnos cuentan con salvaguardas contra valores nulos o indefinidos.
