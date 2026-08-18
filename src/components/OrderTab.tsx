@@ -39,6 +39,32 @@ const formatARS = (amount: number) => {
     }).format(amount);
 };
 
+const checkIsCurrentlyOpen = (cfg: any) => {
+    if (!cfg || !cfg.enabled || !cfg.schedule) return true;
+    const now = new Date();
+    let currentDayStr = String(now.getDay());
+    const currentHours = now.getHours().toString().padStart(2, '0');
+    const currentMinutes = now.getMinutes().toString().padStart(2, '0');
+    const currentTimeStr = `${currentHours}:${currentMinutes}`;
+    const todayShifts = cfg.schedule[currentDayStr] || [];
+    if (todayShifts.length === 0) return false;
+    for (const shift of todayShifts) {
+        if (shift.open <= shift.close) {
+            if (currentTimeStr >= shift.open && currentTimeStr <= shift.close) return true;
+        } else {
+            if (currentTimeStr >= shift.open || currentTimeStr <= shift.close) return true;
+        }
+    }
+    let yesterdayDayStr = String((now.getDay() - 1 + 7) % 7);
+    const yesterdayShifts = cfg.schedule[yesterdayDayStr] || [];
+    for (const shift of yesterdayShifts) {
+        if (shift.open > shift.close) {
+            if (currentTimeStr <= shift.close) return true;
+        }
+    }
+    return false;
+};
+
 const getTableDisplayName = (tableNumber: string | null | undefined, tenant: any) => {
     if (!tableNumber) return '';
     const tables = tenant?.tables || [];
@@ -1345,6 +1371,23 @@ export default function OrderTab({ products, ingredients, categories: initialCat
             {subTab === 'new_order' ? (
                 /* Pestaña: REGISTRAR NUEVO PEDIDO (Mantiene la funcionalidad existente al 100%) */
                 <div className="space-y-6">
+                    {/* Aviso de Modo Caja / Fuera de Horario */}
+                    {!checkIsCurrentlyOpen(tenant?.business_hours) && (
+                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3.5 flex items-center gap-3 animate-in fade-in">
+                            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 shrink-0">
+                                <Clock size={16} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-black text-amber-400 uppercase tracking-wide">
+                                    Modo Caja Habilitado (Fuera de Horario)
+                                </p>
+                                <p className="text-[10px] text-slate-400">
+                                    El menú web y de mesas se encuentran bloqueados por horario. Como cajero, tienes acceso exclusivo para registrar pedidos presenciales libremente.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="space-y-3">
                         <input
                             type="text" placeholder="NOMBRE DEL CLIENTE *" value={clientName}

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Category, Product, OrderItem, Ingredient, ProductIngredient, ProductOffer } from '@/types/database';
-import { ShoppingBag, ChevronRight, ChevronLeft, Minus, Plus, X, Search, Utensils, CheckCircle, Loader2, Trash2, ChevronDown, ChevronUp, Star, BellRing, Instagram, Facebook, MessageCircle, MapPin, Map, Sun, Moon, Info, Gift, Home, ArrowLeft, Image as ImageIcon, Clock } from 'lucide-react';
+import { ShoppingBag, ChevronRight, ChevronLeft, Minus, Plus, X, Search, Utensils, CheckCircle, CheckCircle2, Loader2, Trash2, ChevronDown, ChevronUp, Star, BellRing, Instagram, Facebook, MessageCircle, MapPin, Map, Sun, Moon, Info, Gift, Home, ArrowLeft, Image as ImageIcon, Clock, Truck, Phone, ExternalLink } from 'lucide-react';
 import { MaxesLogo } from '@/components/MaxesLogo';
 import { useRealtimeData } from '@/hooks/useRealtimeData';
 import { supabase, broadcastTenantChange } from '@/lib/supabase';
@@ -362,6 +362,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [isHoursModalOpen, setIsHoursModalOpen] = useState(false);
+  const [hoursModalTab, setHoursModalTab] = useState<'business' | 'delivery'>('business');
   
   const [questionModalProduct, setQuestionModalProduct] = useState<Product | null>(null);
   const [questionModalAnswer, setQuestionModalAnswer] = useState('');
@@ -1499,6 +1500,13 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   const submitOrderToSupabase = async (paymentStatus: 'pendiente' | 'pagado', isApproved: boolean, method: string, skipSuccessUI: boolean = false, externalOrderId?: string): Promise<string | undefined> => {
     setIsSubmitting(true);
     try {
+      // Validar horario de atención (solo caja puede tomar pedidos fuera de horario)
+      if (!isBusinessOpen) {
+        alert("⚠️ El local se encuentra actualmente fuera de su horario de atención y no recibe pedidos por la página web ni desde las mesas. Si estás en el local, puedes solicitar tu pedido directamente en Caja.");
+        setIsSubmitting(false);
+        return undefined;
+      }
+
       // 0. Verificar Latido (Heartbeat) para evitar pedidos en el limbo
       if (tenant?.id) {
         const { data: heartbeatData } = await supabase.from('tenants').select('last_online_ping').eq('id', tenant.id).single();
@@ -2392,36 +2400,24 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                 )}
               </div>
 
-              {/* Enlaces Sociales */}
-              <div className="flex items-center justify-center gap-2">
+              {/* Enlaces Sociales e Información de Horarios */}
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
                 {socialLinks.instagram && (
                   <a 
                     href={socialLinks.instagram} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className={`p-2.5 rounded-2xl border transition-all hover:scale-105 active:scale-95 flex items-center justify-center shadow-lg ${
+                    className={`px-3 py-2 rounded-2xl border transition-all hover:scale-105 active:scale-95 flex items-center gap-1.5 shadow-lg text-[11px] font-black uppercase tracking-wider ${
                       isLight 
-                        ? 'bg-white border-slate-200 text-slate-500 hover:text-pink-500 hover:border-pink-500/30' 
-                        : 'bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-pink-500 hover:border-pink-500/30'
+                        ? 'bg-white border-pink-200 text-pink-600 hover:bg-pink-50' 
+                        : 'bg-neutral-900 border-pink-500/30 text-pink-400 hover:bg-pink-500/10 hover:border-pink-500/60'
                     }`}
-                    title="Instagram"
+                    title="Instagram Oficial"
                   >
-                    <Instagram className="w-5 h-5" />
-                  </a>
-                )}
-                {socialLinks.facebook && (
-                  <a 
-                    href={socialLinks.facebook} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className={`p-2.5 rounded-2xl border transition-all hover:scale-105 active:scale-95 flex items-center justify-center shadow-lg ${
-                      isLight 
-                        ? 'bg-white border-slate-200 text-slate-500 hover:text-blue-500 hover:border-blue-500/30' 
-                        : 'bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-blue-500 hover:border-blue-500/30'
-                    }`}
-                    title="Facebook"
-                  >
-                    <Facebook className="w-5 h-5" />
+                    <div className="w-5 h-5 rounded-lg bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                      <Instagram className="w-3.5 h-3.5" />
+                    </div>
+                    <span>Instagram</span>
                   </a>
                 )}
                 {socialLinks.whatsapp && (
@@ -2429,27 +2425,52 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     href={`https://wa.me/${formatWhatsAppNumber(socialLinks.whatsapp)}`} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className={`p-2.5 rounded-2xl border transition-all hover:scale-105 active:scale-95 flex items-center justify-center shadow-lg ${
+                    className={`px-3 py-2 rounded-2xl border transition-all hover:scale-105 active:scale-95 flex items-center gap-1.5 shadow-lg text-[11px] font-black uppercase tracking-wider ${
                       isLight 
-                        ? 'bg-white border-slate-200 text-slate-500 hover:text-green-500 hover:border-green-500/30' 
-                        : 'bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-green-500 hover:border-green-500/30'
+                        ? 'bg-white border-emerald-200 text-emerald-600 hover:bg-emerald-50' 
+                        : 'bg-neutral-900 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/60'
                     }`}
-                    title="WhatsApp"
+                    title="WhatsApp Directo"
                   >
-                    <MessageCircle className="w-5 h-5" />
+                    <div className="w-5 h-5 rounded-lg bg-[#25D366] text-white flex items-center justify-center shrink-0 shadow-sm">
+                      <MessageCircle className="w-3.5 h-3.5" />
+                    </div>
+                    <span>WhatsApp</span>
                   </a>
                 )}
                 {tenant?.business_hours?.enabled && (
                   <button 
-                    onClick={() => setIsHoursModalOpen(true)}
-                    className={`p-2.5 px-4 rounded-2xl border transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2 shadow-lg font-bold text-xs uppercase tracking-widest ${
+                    onClick={() => { setHoursModalTab('business'); setIsHoursModalOpen(true); }}
+                    className={`px-3 py-2 rounded-2xl border transition-all hover:scale-105 active:scale-95 flex items-center gap-1.5 shadow-lg text-[11px] font-black uppercase tracking-wider ${
                       isLight 
-                        ? 'bg-white border-slate-200 text-slate-700 hover:text-orange-500 hover:border-orange-500/30' 
-                        : 'bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-orange-400 hover:border-orange-500/30'
+                        ? 'bg-white border-amber-200 text-amber-700 hover:bg-amber-50' 
+                        : 'bg-neutral-900 border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/60'
                     }`}
+                    title="Horarios de Atención"
                   >
-                    <Clock className="w-4 h-4" />
-                    <span className="hidden sm:inline">Horarios</span>
+                    <div className="w-5 h-5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center shrink-0">
+                      <Clock className="w-3.5 h-3.5" />
+                    </div>
+                    <span>Horarios de Atención</span>
+                    <span className={`text-[8.5px] px-1.5 py-0.2 rounded-full font-black ${isBusinessOpen ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                      {isBusinessOpen ? 'Abierto' : 'Cerrado'}
+                    </span>
+                  </button>
+                )}
+                {tenant?.delivery_hours?.enabled && (
+                  <button 
+                    onClick={() => { setHoursModalTab('delivery'); setIsHoursModalOpen(true); }}
+                    className={`px-3 py-2 rounded-2xl border transition-all hover:scale-105 active:scale-95 flex items-center gap-1.5 shadow-lg text-[11px] font-black uppercase tracking-wider ${
+                      isLight 
+                        ? 'bg-white border-sky-200 text-sky-700 hover:bg-sky-50' 
+                        : 'bg-neutral-900 border-sky-500/30 text-sky-400 hover:bg-sky-500/10 hover:border-sky-500/60'
+                    }`}
+                    title="Horarios de Envío a Domicilio"
+                  >
+                    <div className="w-5 h-5 rounded-lg bg-sky-500/20 text-sky-400 border border-sky-500/40 flex items-center justify-center shrink-0">
+                      <Truck className="w-3.5 h-3.5" />
+                    </div>
+                    <span>Horarios de Envío</span>
                   </button>
                 )}
               </div>
@@ -3135,6 +3156,157 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               </section>
             )}
             
+            {/* SECCIÓN CONTACTO, HORARIOS Y REDES */}
+            <section className="space-y-6 animate-in slide-in-from-bottom-8 duration-700 pt-4">
+              <div className="flex items-center gap-3 px-2">
+                <div className="p-2 rounded-xl bg-orange-500/20 text-orange-500 border border-orange-500/30">
+                  <Phone className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className={`text-2xl md:text-3xl font-black uppercase tracking-widest ${isLight ? "text-slate-900" : "text-white"}`}>
+                    Contacto & Horarios
+                  </h2>
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Toda la información de nuestro local al instante</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* TARJETA 1: INSTAGRAM */}
+                {socialLinks.instagram ? (
+                  <a
+                    href={socialLinks.instagram}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`p-6 rounded-3xl border transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl flex flex-col justify-between group relative overflow-hidden ${
+                      isLight 
+                        ? 'bg-white border-pink-100 hover:border-pink-300 shadow-sm' 
+                        : 'bg-gradient-to-br from-neutral-900/90 to-neutral-950 border-pink-500/20 hover:border-pink-500/50 shadow-xl'
+                    }`}
+                  >
+                    <div className="space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-pink-500/30 group-hover:scale-110 transition-transform">
+                        <Instagram className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h3 className={`text-lg font-black tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                          Instagram
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                          Seguinos para ver nuestras fotos, historias, nuevos platos y novedades diarias.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-bold text-pink-500">
+                      <span>Ver Perfil</span>
+                      <ExternalLink size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                    </div>
+                  </a>
+                ) : null}
+
+                {/* TARJETA 2: WHATSAPP */}
+                {socialLinks.whatsapp ? (
+                  <a
+                    href={`https://wa.me/${formatWhatsAppNumber(socialLinks.whatsapp)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`p-6 rounded-3xl border transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl flex flex-col justify-between group relative overflow-hidden ${
+                      isLight 
+                        ? 'bg-white border-emerald-100 hover:border-emerald-300 shadow-sm' 
+                        : 'bg-gradient-to-br from-neutral-900/90 to-neutral-950 border-emerald-500/20 hover:border-emerald-500/50 shadow-xl'
+                    }`}
+                  >
+                    <div className="space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-[#25D366] text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 group-hover:scale-110 transition-transform">
+                        <MessageCircle className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h3 className={`text-lg font-black tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                          WhatsApp
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                          Chateá con nosotros para consultas personalizadas, dudas o pedidos especiales.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-bold text-emerald-400">
+                      <span>Escribir Mensaje</span>
+                      <ExternalLink size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                    </div>
+                  </a>
+                ) : null}
+
+                {/* TARJETA 3: HORARIOS DE ATENCIÓN */}
+                <div
+                  onClick={() => { setHoursModalTab('business'); setIsHoursModalOpen(true); }}
+                  className={`p-6 rounded-3xl border transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl flex flex-col justify-between cursor-pointer group relative overflow-hidden ${
+                    isLight 
+                      ? 'bg-white border-amber-100 hover:border-amber-300 shadow-sm' 
+                      : 'bg-gradient-to-br from-neutral-900/90 to-neutral-950 border-amber-500/20 hover:border-amber-500/50 shadow-xl'
+                  }`}
+                >
+                  <div className="space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center shadow-lg shadow-amber-500/20 group-hover:scale-110 transition-transform">
+                      <Clock className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className={`text-lg font-black tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                          Horarios de Atención
+                        </h3>
+                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                          isBusinessOpen ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                        }`}>
+                          {isBusinessOpen ? 'Abierto' : 'Cerrado'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                        Turnos de salón y servicio presencial. Consulta los días y franjas de atención.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-bold text-amber-400">
+                    <span>Ver Turnos Semanales</span>
+                    <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </div>
+
+                {/* TARJETA 4: HORARIOS DE ENVÍO */}
+                <div
+                  onClick={() => { setHoursModalTab('delivery'); setIsHoursModalOpen(true); }}
+                  className={`p-6 rounded-3xl border transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl flex flex-col justify-between cursor-pointer group relative overflow-hidden ${
+                    isLight 
+                      ? 'bg-white border-sky-100 hover:border-sky-300 shadow-sm' 
+                      : 'bg-gradient-to-br from-neutral-900/90 to-neutral-950 border-sky-500/20 hover:border-sky-500/50 shadow-xl'
+                  }`}
+                >
+                  <div className="space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-sky-500/20 border border-sky-500/40 text-sky-400 flex items-center justify-center shadow-lg shadow-sky-500/20 group-hover:scale-110 transition-transform">
+                      <Truck className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className={`text-lg font-black tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                          Horarios de Envío
+                        </h3>
+                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                          isDeliveryActiveToday ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30' : 'bg-slate-800 text-slate-400'
+                        }`}>
+                          {isDeliveryActiveToday ? 'Delivery Activo' : 'Cerrado Hoy'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                        Servicio de reparto a domicilio directo a tu casa. Cobertura en zonas seleccionadas.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-bold text-sky-400">
+                    <span>Consultar Horarios</span>
+                    <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </div>
+              </div>
+            </section>
+
             {/* RESEÑAS EN LANDING */}
             <div className="mt-8 pb-8">
               {renderReviewsSection()}
@@ -4145,7 +4317,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                 <div className="flex flex-col w-full rounded-xl overflow-hidden shadow-lg transition-all" style={{ boxShadow: cart.length === 0 ? 'none' : `0 8px 30px -10px ${primaryColor}` }}>
                   {!isBusinessOpen && cart.length > 0 && (
                     <div className="w-full bg-red-500/20 text-red-500 py-2.5 px-4 text-center text-xs font-black uppercase tracking-widest border-b border-red-500/20 backdrop-blur-sm">
-                      ⚠️ Fuera de Horario de Atención
+                      ⚠️ Fuera de Horario (Pedidos solo habilitados de forma presencial por Caja)
                     </div>
                   )}
                   {isBusinessOpen && tableCharge > 0 && cart.length > 0 && (
@@ -4280,13 +4452,16 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                       href={socialLinks.instagram} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className={`flex-1 py-3 px-4 rounded-2xl border text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                      className={`flex-1 py-3 px-4 rounded-2xl border text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                         isLight 
-                          ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200/60' 
-                          : 'bg-white/5 border-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
+                          ? 'bg-pink-50 border-pink-200 text-pink-700 hover:bg-pink-100' 
+                          : 'bg-pink-500/10 border-pink-500/30 text-pink-400 hover:bg-pink-500/20'
                       }`}
                     >
-                      <Instagram size={12} className="text-orange-500" /> Instagram
+                      <div className="w-4 h-4 rounded-md bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 text-white flex items-center justify-center">
+                        <Instagram size={10} />
+                      </div>
+                      <span>Instagram</span>
                     </a>
                   )}
                   {socialLinks.whatsapp && (
@@ -4294,13 +4469,16 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                       href={`https://wa.me/${formatWhatsAppNumber(socialLinks.whatsapp)}`}
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className={`flex-1 py-3 px-4 rounded-2xl border text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                      className={`flex-1 py-3 px-4 rounded-2xl border text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                         isLight 
-                          ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200/60' 
-                          : 'bg-white/5 border-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' 
+                          : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
                       }`}
                     >
-                      <MessageCircle size={12} className="text-orange-500" /> WhatsApp
+                      <div className="w-4 h-4 rounded-md bg-[#25D366] text-white flex items-center justify-center">
+                        <MessageCircle size={10} />
+                      </div>
+                      <span>WhatsApp</span>
                     </a>
                   )}
                 </div>
@@ -4310,15 +4488,15 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         </div>
       )}
 
-      {/* Modal de Horarios de Atención */}
-      {isHoursModalOpen && tenant?.business_hours && (
+      {/* Modal de Horarios de Atención y Envíos */}
+      {isHoursModalOpen && (tenant?.business_hours || tenant?.delivery_hours) && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center px-4 bg-black/60 backdrop-blur-md animate-in fade-in" onClick={() => setIsHoursModalOpen(false)}>
           <div 
             onClick={(e) => e.stopPropagation()} 
-            className={`w-full max-w-sm rounded-[2.5rem] p-6 border shadow-2xl space-y-6 text-center flex flex-col relative animate-in zoom-in-95 duration-300 backdrop-blur-xl ${
+            className={`w-full max-w-sm rounded-[2.5rem] p-6 border shadow-2xl space-y-5 text-center flex flex-col relative animate-in zoom-in-95 duration-300 backdrop-blur-xl ${
               isLight 
-                ? 'bg-white/80 border-slate-200 text-slate-900' 
-                : 'bg-neutral-950/80 border-white/5 text-white'
+                ? 'bg-white/95 border-slate-200 text-slate-900' 
+                : 'bg-neutral-950/90 border-white/10 text-white'
             }`}
           >
             <button 
@@ -4332,44 +4510,119 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               <X size={14} />
             </button>
 
-            <div className="flex flex-col items-center space-y-3 mt-2">
-              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-orange-500/20 bg-neutral-900 flex items-center justify-center shrink-0 text-white">
-                <Clock className="w-8 h-8 text-orange-500" />
-              </div>
-              <h3 className="text-xl font-black uppercase tracking-tight italic text-orange-500" style={{ color: primaryColor }}>
-                Horarios
-              </h3>
+            {/* Pestañas: Atención vs Envíos */}
+            <div className="flex bg-neutral-900/60 p-1 rounded-2xl border border-white/5 mt-2">
+              <button
+                onClick={() => setHoursModalTab('business')}
+                className={`flex-1 py-2 px-3 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
+                  hoursModalTab === 'business'
+                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Clock size={13} /> Atención Local
+              </button>
+              <button
+                onClick={() => setHoursModalTab('delivery')}
+                className={`flex-1 py-2 px-3 rounded-xl font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
+                  hoursModalTab === 'delivery'
+                    ? 'bg-sky-500 text-slate-950 shadow-md font-black'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Truck size={13} /> Envíos Delivery
+              </button>
             </div>
 
-            <div className="space-y-1 text-left w-full mt-4">
-              {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((dayName, index) => {
-                const jsDayMap = [1, 2, 3, 4, 5, 6, 0];
-                const dayIndex = jsDayMap[index];
-                const dayShifts = tenant.business_hours.schedule?.[dayIndex] || [];
-                
-                const currentJsDay = new Date().getDay();
-                const isToday = currentJsDay === dayIndex;
-
-                return (
-                  <div key={dayIndex} className={`flex justify-between items-center py-2 border-b border-white/5 last:border-0 ${isToday ? 'bg-orange-500/10 rounded-lg px-2 -mx-2 border-b-0' : ''}`}>
-                    <span className={`font-bold text-xs uppercase tracking-widest ${isToday ? 'text-orange-500' : isLight ? 'text-slate-700' : 'text-slate-400'}`}>
-                      {dayName} {isToday && '(Hoy)'}
-                    </span>
-                    <div className="flex flex-col items-end gap-1">
-                      {dayShifts.length > 0 ? (
-                        dayShifts.map((shift: any, sIdx: number) => (
-                          <span key={sIdx} className={`text-[11px] font-black bg-neutral-900/50 px-2 py-0.5 rounded-md border border-white/5 ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
-                            {shift.open} - {shift.close}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-[10px] font-bold text-red-500/80 uppercase bg-red-500/10 px-2 py-0.5 rounded-md">Cerrado</span>
-                      )}
-                    </div>
+            {hoursModalTab === 'business' ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-center gap-2">
+                  <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    <Clock className="w-5 h-5" />
                   </div>
-                );
-              })}
-            </div>
+                  <div className="text-left">
+                    <h3 className="text-sm font-black uppercase tracking-wider text-amber-400">
+                      Horarios de Atención del Local
+                    </h3>
+                    <p className="text-[10px] text-slate-400">Turnos presenciales y pedidos en salón</p>
+                  </div>
+                </div>
+
+                <div className="space-y-1 text-left w-full max-h-[45vh] overflow-y-auto pr-1 custom-scrollbar">
+                  {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((dayName, index) => {
+                    const jsDayMap = [1, 2, 3, 4, 5, 6, 0];
+                    const dayIndex = jsDayMap[index];
+                    const dayShifts = tenant?.business_hours?.schedule?.[dayIndex] || [];
+                    const currentJsDay = new Date().getDay();
+                    const isToday = currentJsDay === dayIndex;
+
+                    return (
+                      <div key={dayIndex} className={`flex justify-between items-center py-2 border-b border-white/5 last:border-0 ${isToday ? 'bg-amber-500/10 rounded-xl px-2.5 -mx-1 border-b-0' : ''}`}>
+                        <span className={`font-bold text-xs uppercase tracking-wider ${isToday ? 'text-amber-400' : isLight ? 'text-slate-700' : 'text-slate-400'}`}>
+                          {dayName} {isToday && '(Hoy)'}
+                        </span>
+                        <div className="flex flex-col items-end gap-1">
+                          {dayShifts.length > 0 ? (
+                            dayShifts.map((shift: any, sIdx: number) => (
+                              <span key={sIdx} className={`text-[11px] font-black bg-neutral-900/60 px-2 py-0.5 rounded-md border border-white/5 ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
+                                {shift.open} - {shift.close}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-[10px] font-bold text-red-500/80 uppercase bg-red-500/10 px-2 py-0.5 rounded-md">Cerrado</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-center gap-2">
+                  <div className="p-2 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30">
+                    <Truck className="w-5 h-5" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-sm font-black uppercase tracking-wider text-sky-400">
+                      Horarios de Reparto y Delivery
+                    </h3>
+                    <p className="text-[10px] text-slate-400">Envíos a domicilio en zonas habilitadas</p>
+                  </div>
+                </div>
+
+                <div className="space-y-1 text-left w-full max-h-[45vh] overflow-y-auto pr-1 custom-scrollbar">
+                  {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((dayName, index) => {
+                    const jsDayMap = [1, 2, 3, 4, 5, 6, 0];
+                    const dayIndex = jsDayMap[index];
+                    const deliverySchedule = tenant?.delivery_hours?.schedule || tenant?.business_hours?.schedule;
+                    const dayShifts = deliverySchedule?.[dayIndex] || [];
+                    const currentJsDay = new Date().getDay();
+                    const isToday = currentJsDay === dayIndex;
+                    const isDayActive = (tenant?.delivery_days || [0,1,2,3,4,5,6]).includes(dayIndex);
+
+                    return (
+                      <div key={dayIndex} className={`flex justify-between items-center py-2 border-b border-white/5 last:border-0 ${isToday ? 'bg-sky-500/10 rounded-xl px-2.5 -mx-1 border-b-0' : ''}`}>
+                        <span className={`font-bold text-xs uppercase tracking-wider ${isToday ? 'text-sky-400' : isLight ? 'text-slate-700' : 'text-slate-400'}`}>
+                          {dayName} {isToday && '(Hoy)'}
+                        </span>
+                        <div className="flex flex-col items-end gap-1">
+                          {isDayActive && dayShifts.length > 0 ? (
+                            dayShifts.map((shift: any, sIdx: number) => (
+                              <span key={sIdx} className={`text-[11px] font-black bg-neutral-900/60 px-2 py-0.5 rounded-md border border-white/5 ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
+                                {shift.open} - {shift.close}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-[10px] font-bold text-slate-500 uppercase bg-slate-900 px-2 py-0.5 rounded-md">Sin Envíos</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

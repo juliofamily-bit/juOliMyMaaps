@@ -123,3 +123,18 @@ Para reducir la fricción de entrada de nuevos restaurantes y maximizar la conve
 ### Corrección - Error al Activar Restricciones Horarias
 - **Causa del Error:** En el componente ScheduleEditor, cuando un local no tenía la propiedad schedule inicializada en su registro de business_hours / delivery_hours / reservation_hours, el acceso directo a cfg.schedule[day.id] generaba un TypeError en React, provocando la caída de la página ("no se pudo cargar la página").
 - **Solución Implementada:** Se definió DEFAULT_SCHEDULE de forma global y defensiva para todos los días de la semana. Tanto la carga inicial como la activación del toggle y la adición/eliminación de turnos cuentan con salvaguardas contra valores nulos o indefinidos.
+
+
+### Regla Operativa - Exclusividad de Pedidos Fuera de Horario para Caja (POS)
+- **Bloqueo a Clientes (Web y Mesas):** Fuera del horario de atención configurado en el local, la página web pública y los menús de mesas con código QR quedan 100% bloqueados para pedir (el carrito muestra aviso informativo y el botón de confirmar pedido permanece deshabilitado).
+- **Acceso Exclusivo de Caja:** El panel de Caja (`OrderTab` -> "Registrar Pedido") mantiene habilitada la toma directa de pedidos en todo momento para atender a clientes que ya se encuentren dentro del local o pedidos de última hora.
+
+
+### Rediseño de Contacto, Redes y Horarios (Landing & Menú Público)
+- **Identidad Visual Oficial de Redes:**
+  - **Instagram:** Icono con gradiente oficial de Instagram (`#E1306C` / fucsia / naranja), etiqueta "Instagram" y descripción "Seguinos para ver nuestras fotos, historias y promociones exclusivas".
+  - **WhatsApp:** Icono con verde oficial (`#25D366`), etiqueta "WhatsApp" y descripción "Chateá con nosotros para consultas, dudas o pedidos especiales".
+- **Horarios de Atención y Envíos con Selector / Pestañas:**
+  - **Horarios de Atención (Local):** Icono de reloj dorado/ámbar con indicador de estado ("Abierto" / "Cerrado") y desglose semanal de turnos.
+  - **Horarios de Envío (Delivery):** Icono de reparto en moto/camioneta celeste con indicador de estado ("Delivery Activo" / "Cerrado Hoy") y desglose de franjas horarias de entrega.
+- **Nueva Sección en la Landing Page:** Bloque interactivo con tarjetas descriptivas de contacto rápido, turnos semanales y enlace directo a perfiles y chat.
