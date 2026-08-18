@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { ShieldAlert, LogIn, Activity, Users, Settings, Tag, MessageSquare, Power, Search, Loader2 } from 'lucide-react';
+import { ShieldAlert, LogIn, Activity, Users, Settings, Tag, MessageSquare, Power, Search, Loader2, ChevronDown, ChevronUp, CreditCard, Clock, CheckCircle2, XCircle, RefreshCw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { MaxesLogo, MaxesWatermark, MaxesCornerFrame } from '@/components/MaxesLogo';
 
@@ -14,6 +14,7 @@ export default function MasterAdminPage() {
     const [error, setError] = useState('');
     const [activeTab, setActiveTab] = useState('dashboard');
     const [saasData, setSaasData] = useState<any>(null);
+    const [expandedTenantId, setExpandedTenantId] = useState<string | null>(null);
 
     // Formulario de Cupones
     const [couponForm, setCouponForm] = useState({ code: '', type: 'percentage', value: '70', duration_months: '3' });
@@ -45,6 +46,16 @@ export default function MasterAdminPage() {
         }
     };
 
+    // Helper to generate a random 8-character promo code
+    const generateRandomCode = () => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let code = 'MAX-';
+        for (let i = 0; i < 8; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        setCouponForm(prev => ({...prev, code}));
+    };
+
     // Intentar auto-login si ya había entrado antes
     useEffect(() => {
         const stored = localStorage.getItem('saas_ceo_auth');
@@ -52,6 +63,8 @@ export default function MasterAdminPage() {
             const { email, pass } = JSON.parse(stored);
             setLoginForm({ email, password: pass });
             fetchSaasData(email, pass);
+            // Generate random initial code
+            generateRandomCode();
         }
     }, []);
 
@@ -59,6 +72,7 @@ export default function MasterAdminPage() {
         e.preventDefault();
         setError('');
         await fetchSaasData(loginForm.email, loginForm.password);
+        generateRandomCode();
     };
 
     const handleLogout = () => {
@@ -108,7 +122,11 @@ export default function MasterAdminPage() {
 
         if (data?.success) {
             alert('¡Cupón creado con éxito! Se marcó como código de un solo uso.');
+            // Clean up and generate new code
             setCouponForm({ code: '', type: 'percentage', value: '70', duration_months: '3' });
+            generateRandomCode();
+            
+            // Refresh
             await fetchSaasData(email, password); // refresh data
         } else {
             alert('Error al crear cupón: ' + (error?.message || data?.error));
@@ -364,48 +382,154 @@ export default function MasterAdminPage() {
                                     <thead className="bg-white/5 text-slate-400 uppercase tracking-widest text-[10px]">
                                         <tr>
                                             <th className="px-6 py-4 font-black">Local / Franquicia</th>
-                                            <th className="px-6 py-4 font-black">Plan Actual</th>
-                                            <th className="px-6 py-4 font-black">Estado</th>
-                                            <th className="px-6 py-4 font-black">Vencimiento</th>
+                                            <th className="px-6 py-4 font-black">Estado General</th>
+                                            <th className="px-6 py-4 font-black">Cobro y Pagos</th>
                                             <th className="px-6 py-4 font-black text-right">Acción Maestra</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/5">
-                                        {saasData?.tenants?.map((tenant: any) => (
-                                            <tr key={tenant.id} className="hover:bg-white/5 transition-colors">
-                                                <td className="px-6 py-4">
-                                                    <div className="font-bold text-white">{tenant.name}</div>
-                                                    <div className="text-slate-500 text-xs">{tenant.email}</div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <span className="bg-purple-500/10 text-purple-400 px-2 py-1 rounded-md text-xs font-bold border border-purple-500/20">
-                                                        {tenant.plan_name || 'Sin Plan'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    {tenant.is_suspended ? (
-                                                        <span className="text-red-500 font-bold flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> Suspendido</span>
-                                                    ) : (
-                                                        <span className="text-emerald-400 font-bold flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400"></span> Activo</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 text-slate-300">
-                                                    {tenant.current_period_end ? new Date(tenant.current_period_end).toLocaleDateString() : 'N/A'}
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <button 
-                                                        onClick={() => toggleTenantSuspension(tenant.id, tenant.is_suspended)}
-                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                                                            tenant.is_suspended 
-                                                            ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' 
-                                                            : 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
-                                                        }`}
+                                        {saasData?.tenants?.map((tenant: any) => {
+                                            const isExpanded = expandedTenantId === tenant.id;
+                                            
+                                            // Determine overall status visually
+                                            let statusConfig = { color: 'text-slate-400', bg: 'bg-slate-500/10', label: 'Desconocido', icon: <Activity size={14}/> };
+                                            if (tenant.is_suspended) {
+                                                statusConfig = { color: 'text-red-500', bg: 'bg-red-500/10', label: 'Suspendido (Bloqueado)', icon: <XCircle size={14}/> };
+                                            } else if (tenant.subscription_status === 'canceled') {
+                                                statusConfig = { color: 'text-red-400', bg: 'bg-red-500/10', label: 'Cancelado', icon: <XCircle size={14}/> };
+                                            } else if (tenant.subscription_status === 'trial' || tenant.subscription_status === 'pending_trial') {
+                                                const hasPaymentMethodLocal = !!tenant.mp_payer_email || !!tenant.mp_subscription_id;
+                                                if (hasPaymentMethodLocal) {
+                                                    statusConfig = { color: 'text-orange-400', bg: 'bg-orange-500/10', label: 'En Prueba (Con Tarjeta)', icon: <CreditCard size={14}/> };
+                                                } else {
+                                                    statusConfig = { color: 'text-orange-400', bg: 'bg-orange-500/10', label: 'En Prueba (Sin Tarjeta)', icon: <Clock size={14}/> };
+                                                }
+                                            } else if (tenant.subscription_status === 'active') {
+                                                const hasPaymentMethodLocal = !!tenant.mp_payer_email || !!tenant.mp_subscription_id;
+                                                const hasPromoLocal = tenant.promo_pro_ends_at && new Date(tenant.promo_pro_ends_at) > new Date();
+                                                
+                                                if (hasPromoLocal && hasPaymentMethodLocal) {
+                                                    statusConfig = { color: 'text-purple-400', bg: 'bg-purple-500/10', label: 'Activo (Promo + Tarjeta)', icon: <CheckCircle2 size={14}/> };
+                                                } else if (hasPromoLocal && !hasPaymentMethodLocal) {
+                                                    statusConfig = { color: 'text-purple-400', bg: 'bg-purple-500/10', label: 'Activo (Solo Promo)', icon: <CheckCircle2 size={14}/> };
+                                                } else {
+                                                    statusConfig = { color: 'text-emerald-400', bg: 'bg-emerald-500/10', label: 'Activo / Pagando', icon: <CheckCircle2 size={14}/> };
+                                                }
+                                            } else {
+                                                statusConfig = { color: 'text-slate-400', bg: 'bg-slate-500/10', label: tenant.subscription_status || 'Sin datos', icon: <Activity size={14}/> };
+                                            }
+
+                                            // Determine payment status
+                                            const hasPaymentMethod = !!tenant.mp_payer_email || !!tenant.mp_subscription_id;
+
+                                            return (
+                                                <React.Fragment key={tenant.id}>
+                                                    <tr 
+                                                        className="hover:bg-white/5 transition-colors cursor-pointer"
+                                                        onClick={() => setExpandedTenantId(isExpanded ? null : tenant.id)}
                                                     >
-                                                        {tenant.is_suspended ? 'Reactivar' : 'Suspender'}
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex items-center justify-between">
+                                                                <div>
+                                                                    <div className="font-bold text-white flex items-center gap-2">
+                                                                        {tenant.name}
+                                                                        {tenant.promo_pro_ends_at && new Date(tenant.promo_pro_ends_at) > new Date() && (
+                                                                            <span className="bg-purple-500/20 text-purple-400 text-[9px] px-1.5 py-0.5 rounded border border-purple-500/30 uppercase tracking-widest">PROMO</span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="text-slate-500 text-xs">{tenant.email}</div>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border ${statusConfig.bg} ${statusConfig.color} border-current/20`}>
+                                                                {statusConfig.icon}
+                                                                {statusConfig.label}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            {hasPaymentMethod ? (
+                                                                <div className="space-y-1">
+                                                                    <span className="text-emerald-400 font-bold text-xs flex items-center gap-1">
+                                                                        <CreditCard size={14}/> Tarjeta/MP Vinculada
+                                                                    </span>
+                                                                    {tenant.subscription_status === 'active' ? (
+                                                                        <span className="text-[10px] text-emerald-500 font-semibold block">Suscripción: Activa</span>
+                                                                    ) : tenant.subscription_status === 'canceled' ? (
+                                                                        <span className="text-[10px] text-red-400 font-semibold block">Suscripción: Desactivada (Cancelada)</span>
+                                                                    ) : (
+                                                                        <span className="text-[10px] text-amber-500 font-semibold block">Suscripción: Inactiva / Pendiente</span>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-slate-500 font-bold text-xs flex items-center gap-1"><CreditCard size={14}/> Sin método de pago</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-right">
+                                                            <div className="flex items-center justify-end gap-3">
+                                                                <button 
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        toggleTenantSuspension(tenant.id, tenant.is_suspended);
+                                                                    }}
+                                                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                                                        tenant.is_suspended 
+                                                                        ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20' 
+                                                                        : 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20'
+                                                                    }`}
+                                                                >
+                                                                    {tenant.is_suspended ? 'Reactivar' : 'Bloquear'}
+                                                                </button>
+                                                                <button className="p-1.5 rounded-md hover:bg-white/10 text-slate-400 transition-colors">
+                                                                    {isExpanded ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                    
+                                                    {/* DETALLES EXPANSIBLES */}
+                                                    {isExpanded && (
+                                                        <tr className="bg-slate-900/50 border-t border-white/5 border-b border-white/5">
+                                                            <td colSpan={4} className="px-6 py-6">
+                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                                    {/* Columna 1: Plan y Vencimientos */}
+                                                                    <div className="space-y-3">
+                                                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-white/10 pb-2">Plan y Estado</h4>
+                                                                        <div className="text-xs space-y-2">
+                                                                            <div className="flex justify-between"><span className="text-slate-500">Plan Actual:</span> <span className="font-bold text-white">{tenant.plan_name || 'Ninguno'}</span></div>
+                                                                            <div className="flex justify-between"><span className="text-slate-500">Status Interno:</span> <span className="font-mono text-slate-300">{tenant.subscription_status}</span></div>
+                                                                            <div className="flex justify-between"><span className="text-slate-500">Trial Iniciado:</span> <span className="text-slate-300">{tenant.trial_started_at ? new Date(tenant.trial_started_at).toLocaleDateString() : 'Aún no inicia (Esperando 1ra venta)'}</span></div>
+                                                                            <div className="flex justify-between"><span className="text-slate-500">Vencimiento Ciclo:</span> <span className="text-slate-300">{tenant.current_period_end ? new Date(tenant.current_period_end).toLocaleDateString() : 'N/A'}</span></div>
+                                                                        </div>
+                                                                    </div>
+                                                                    
+                                                                    {/* Columna 2: Pagos y Facturación */}
+                                                                    <div className="space-y-3">
+                                                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-white/10 pb-2">Información de Pago</h4>
+                                                                        <div className="text-xs space-y-2">
+                                                                            <div className="flex justify-between"><span className="text-slate-500">Cuenta MercadoPago:</span> <span className="font-bold text-white">{tenant.mp_payer_email || 'No vinculada'}</span></div>
+                                                                            <div className="flex justify-between"><span className="text-slate-500">ID Suscripción MP:</span> <span className="font-mono text-[10px] text-slate-400">{tenant.mp_subscription_id || 'N/A'}</span></div>
+                                                                            <div className="flex justify-between"><span className="text-slate-500">Precio del Plan:</span> <span className="text-emerald-400 font-bold">${tenant.price_ars || 0} ARS</span></div>
+                                                                            <div className="flex justify-between"><span className="text-slate-500">Aviso Downgrade Activo:</span> <span className="text-slate-300">{tenant.show_downgrade_alert ? 'Sí (Avisado)' : 'No'}</span></div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Columna 3: Promos y Descuentos */}
+                                                                    <div className="space-y-3">
+                                                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-white/10 pb-2">Descuentos Aplicados</h4>
+                                                                        <div className="text-xs space-y-2">
+                                                                            <div className="flex justify-between"><span className="text-slate-500">Promo Pro Gratis hasta:</span> <span className="font-bold text-purple-400">{tenant.promo_pro_ends_at ? new Date(tenant.promo_pro_ends_at).toLocaleDateString() : 'No tiene'}</span></div>
+                                                                            <div className="flex justify-between"><span className="text-slate-500">Descuento %:</span> <span className="text-slate-300">{tenant.discount_percentage ? tenant.discount_percentage + '%' : 'Ninguno'}</span></div>
+                                                                            <div className="flex justify-between"><span className="text-slate-500">Descuento Termina:</span> <span className="text-slate-300">{tenant.discount_ends_at ? new Date(tenant.discount_ends_at).toLocaleDateString() : 'N/A'}</span></div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </React.Fragment>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
@@ -418,15 +542,24 @@ export default function MasterAdminPage() {
                             
                             <div className="glass p-6 rounded-2xl border border-white/5">
                                 <form onSubmit={handleCreateCoupon} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-                                    <div className="md:col-span-1">
-                                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Código Único</label>
+                                    <div className="md:col-span-1 relative">
+                                        <label className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                                            <span>Código Único</span>
+                                            <button 
+                                                type="button" 
+                                                onClick={generateRandomCode}
+                                                className="text-orange-500 hover:text-orange-400 flex items-center gap-1 text-[10px]"
+                                            >
+                                                <RefreshCw size={12} /> Regenerar
+                                            </button>
+                                        </label>
                                         <input 
                                             type="text" 
                                             required
                                             value={couponForm.code}
                                             onChange={e => setCouponForm({...couponForm, code: e.target.value.toUpperCase()})}
-                                            className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-white focus:border-orange-500 uppercase"
-                                            placeholder="PROMO2026"
+                                            className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-2 text-white focus:border-orange-500 uppercase font-mono tracking-wider"
+                                            placeholder="MAX-XXXXXX"
                                         />
                                     </div>
                                     <div className="md:col-span-1">

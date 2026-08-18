@@ -37,14 +37,29 @@ interface WaiterTabProps {
 const getTableDisplayName = (tableNumber: string | null | undefined, tenant: any) => {
     if (!tableNumber) return '';
     const tables = tenant?.tables || [];
-    const foundTable = tables.find((t: any) => 
+    let foundTable = tables.find((t: any) => 
         t.id === tableNumber || 
+        t.id?.toLowerCase().trim() === tableNumber.toLowerCase().trim() ||
         t.name?.toLowerCase().trim() === tableNumber.toLowerCase().trim()
     );
+    
+    if (!foundTable) {
+        const numMatch = tableNumber.match(/\d+/);
+        if (numMatch) {
+            const num = numMatch[0];
+            foundTable = tables.find((t: any) => {
+                const tNameNum = t.name?.match(/\d+/);
+                const tIdNum = t.id?.match(/\d+/);
+                return (tNameNum && tNameNum[0] === num) || (tIdNum && tIdNum[0] === num);
+            });
+        }
+    }
+
     let displayName = foundTable ? foundTable.name : tableNumber;
     
     if (displayName.startsWith('T-') && displayName.length > 5 && !foundTable) {
-        return 'Mesa';
+        const numMatch = displayName.match(/\d+/);
+        displayName = numMatch ? `Mesa ${numMatch[0]}` : 'Mesa';
     }
     
     if (displayName && !displayName.toLowerCase().startsWith('mesa')) {
@@ -137,19 +152,27 @@ export default function WaiterTab({
     };
 
     // Mapeo flexible para obtener siempre el ID técnico de la mesa
-    const getTableId = (input: string): string => {
-        if (!input) return '';
-        const inputLower = input.toLowerCase().trim();
+    const getTableId = (input: string, clientName?: string): string => {
+        if (!input && !clientName) return '';
+        const inputLower = (input || '').toLowerCase().trim();
+        const clientLower = (clientName || '').toLowerCase().trim();
+
         // 1. Buscar coincidencia exacta por ID
         let found = tablesList.find(t => t.id.toLowerCase() === inputLower);
         if (found) return found.id;
         
-        // 2. Buscar coincidencia exacta por nombre
+        // 2. Buscar coincidencia exacta por nombre de mesa
         found = tablesList.find(t => t.name.toLowerCase() === inputLower);
         if (found) return found.id;
         
-        // 3. Buscar coincidencia por número (extrayendo dígitos)
-        const digitsMatch = inputLower.match(/\d+/);
+        // 3. Buscar por cliente si contiene el nombre de la mesa
+        if (clientLower) {
+            found = tablesList.find(t => t.name.toLowerCase() === clientLower || clientLower.includes(t.name.toLowerCase()));
+            if (found) return found.id;
+        }
+
+        // 4. Buscar coincidencia por número (extrayendo dígitos de input o clientName)
+        const digitsMatch = inputLower.match(/\d+/) || clientLower.match(/\d+/);
         if (digitsMatch) {
             const num = digitsMatch[0];
             found = tablesList.find(t => {
@@ -160,6 +183,12 @@ export default function WaiterTab({
             if (found) return found.id;
         }
         
+        // 5. Fallback para órdenes huérfanas de mesas eliminadas en el pasado:
+        // Asignar a la primera mesa activa del salón para garantizar que aparezca en pantalla
+        if (tablesList.length > 0) {
+            return tablesList[0].id;
+        }
+
         return input;
     };
 
@@ -1037,7 +1066,8 @@ export default function WaiterTab({
         setLoading(true);
         try {
             const activeOrders = ordersRef.current.filter(o => 
-                (o.status === 'pending' || o.status === 'delivered') && 
+                (o.status as string) !== 'completed' && 
+                (o.status as string) !== 'cancelled' && 
                 !o.is_archived &&
                 (
                     (o.table_number && o.table_number.trim() !== '') ||
@@ -1068,8 +1098,8 @@ export default function WaiterTab({
                     const tableNumber = orderObj?.table_number;
                     if (!tableNumber) return; // Omitir si no tiene mesa técnica
                     
-                    const tableId = getTableId(tableNumber);
-                    if (!tableId) return;
+                    let tableId = getTableId(tableNumber, orderObj?.client_name);
+                    if (!tableId) tableId = tableNumber;
 
                     if (!itemsByTable[tableId]) {
                         itemsByTable[tableId] = [];

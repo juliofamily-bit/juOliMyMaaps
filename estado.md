@@ -100,3 +100,16 @@ Para reducir la fricciÃ³n de entrada de nuevos restaurantes y maximizar la conve
 ### Correcciones Checkpoint 43 (Fondo Oscuro en Landing Page y Contraste)
 - **ResoluciÃ³n Landing Oscura en Modo Claro:** Se corrigiÃ³ un error en PublicMenu.tsx donde la parte inferior de la vista pÃºblica (muro social, slider de ofertas, opiniones y tarjetas de productos en la landing) tenÃ­a fondos negros (g-neutral-900/950) estÃ¡ticos (hardcodeados). Ahora todos los contenedores principales respetan la variable isLight, cambiando de manera dinÃ¡mica a blancos y grises claros (g-white / g-slate-50) en Modo Claro, manteniendo la legibilidad sin sacrificar la elegancia de la marca.
 - **Mejora de Contraste en Modo Claro:** Se aumentaron los pesos de color para las descripciones en Modo Claro, pasando de grises pÃ¡lidos (	ext-slate-500) a grises mÃ¡s oscuros y definidos (	ext-slate-700), tal como solicitÃ³ el usuario, aumentando el contraste.
+### Refactorizacion - Panel de Personalizacion
+- Se agruparon las secciones 'Identidad de Color', 'Horarios de Atencion', 'Perfil y Redes Sociales' y 'Landing Page' bajo una nueva super-categoria de 'Personalizacion del Local' en el AdminTab.tsx.
+- El objetivo fue limpiar la interfaz y facilitar la experiencia del usuario sin perder o alterar ninguna de las logicas internas (ux_and_value_equation).
+
+### Hotfix 4 - Logica de Planes Pro y Bloqueos (Balance y Muro Interactivo)
+- Se reescribieron los textos de bloqueo del modal (AdminTab.tsx) para que digan Función Pro en lugar de Función Premium y Premium VIP, solucionando la disonancia cognitiva y unificando el nombre de los planes.
+- Se inyectó la feature 'Muro Interactivo' en page.tsx para los usuarios que están cursando el Trial de 14 días o la Promo Pro de 30 días, permitiéndoles desbloquear la rockola.
+- Se des-hardcodeó el panel de 'Muro Interactivo' (Rockola) en AdminTab.tsx. Antes mostraba invariablemente un candado; ahora, si el sistema detecta que el local tiene el feature activado, permite abrir el panel exitosamente (mostrando un mensaje de 'activado').
+- Se garantizó que 'Balance Financiero Avanzado' siga inyectándose correctamente en 14 días, el usuario no debería ver más el cartel bloqueador.
+
+### Hotfix 5 - QA Bug de Planes y Caducidad de Trial
+- Se detectó y arregló un bug de ruteo en el Modal del candado (AdminTab.tsx) que al hacer click en 'Ver Planes y Precios' asignaba la vista incorrecta y enviaba al usuario a una pantalla vacía (negra). Ahora redirige de forma exitosa a la vista de configuración y expande el acordeón de Suscripción.
+- QA (Seguridad de Trial): El usuario estaba siendo bloqueado en Balance Financiero a pesar de nuestro arreglo previo porque, según la Base de Datos de Producción/Local (Supabase), su periodo de 14 días había comenzado el 05 de Julio de 2026. Al ser Agosto, sus 14 días expiraron legítimamente, por lo que el sistema cortó sus permisos automáticamente y pasó a comportarse como un plan Básico (ya que los feature flags condicionales de page.tsx evalúan la fecha exacta mediante Date.now()). Se reseteó su trial_started_at a la fecha de HOY mediante script para permitir la continuación de sus pruebas funcionales.

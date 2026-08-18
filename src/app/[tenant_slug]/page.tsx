@@ -175,7 +175,7 @@ export default function TenantApp({ params }: TenantPageProps) {
         const isPromoActive = subData?.promo_pro_ends_at && new Date(subData.promo_pro_ends_at).getTime() > Date.now();
         
         // Determinar si es un trial sin iniciar (antes del primer pedido)
-        const isPendingTrial = subData?.status === 'pending_trial';
+        const isPendingTrial = subData?.status === 'pending_trial' || (subData?.status === 'trial' && !subData?.trial_started_at);
 
         if (isPromoActive || isTrialActive || isPendingTrial) {
           activeFeatures = [
@@ -185,7 +185,8 @@ export default function TenantApp({ params }: TenantPageProps) {
             'Programa de Fidelización', 
             'Balance Financiero Avanzado', 
             'Módulo Delivery', 
-            'Panel de Barra'
+            'Panel de Barra',
+            'Muro Interactivo'
           ];
         } else if (subData && (subData.status === 'active' || subData.status === 'trial')) {
           let dbFeats = (subData.saas_plans as any)?.features || [];
