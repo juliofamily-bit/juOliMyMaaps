@@ -466,6 +466,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     return false;
   };
 
+  const hasDelivery = tenant?.has_delivery === true || (tenant?.active_roles || []).includes('delivery');
   const isBusinessOpen = checkIsCurrentlyOpen(tenant?.business_hours);
   const isDeliveryHoursOpen = checkIsCurrentlyOpen(tenant?.delivery_hours);
   const isDeliveryPanicActive = tenant?.delivery_panic_button === true;
@@ -473,7 +474,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   // Delivery and Payment State
   const currentDayOfWeek = new Date().getDay();
   const tenantDeliveryDays = tenant?.delivery_days || [0,1,2,3,4,5,6];
-  const isDeliveryActiveToday = tenantDeliveryDays.includes(currentDayOfWeek) && !isDeliveryPanicActive && isDeliveryHoursOpen;
+  const isDeliveryActiveToday = hasDelivery && tenantDeliveryDays.includes(currentDayOfWeek) && !isDeliveryPanicActive && isDeliveryHoursOpen;
 
 
   const [deliveryType, setDeliveryType] = useState<'local' | 'llevar' | 'delivery'>('llevar'); // 'local' es salón (con mesa), 'llevar' (Take Away), 'delivery' (Envío)
@@ -2457,7 +2458,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     </span>
                   </button>
                 )}
-                {tenant?.delivery_hours?.enabled && (
+                {hasDelivery && tenant?.delivery_hours?.enabled && (
                   <button 
                     onClick={() => { setHoursModalTab('delivery'); setIsHoursModalOpen(true); }}
                     className={`px-3 py-2 rounded-2xl border transition-all hover:scale-105 active:scale-95 flex items-center gap-1.5 shadow-lg text-[11px] font-black uppercase tracking-wider ${
@@ -3020,38 +3021,86 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     <div className="p-2 rounded-xl bg-green-500/20 text-green-500 border border-green-500/30">
                       <Utensils className="w-6 h-6 fill-current" />
                     </div>
-                    <h2 className={`text-2xl md:text-3xl font-black uppercase tracking-widest   ${isLight ? "text-slate-900" : "text-white"}`}>
+                    <h2 className={`text-2xl md:text-3xl font-black uppercase tracking-widest ${isLight ? "text-slate-900" : "text-white"}`}>
                       Lo Más Destacado
                     </h2>
                   </div>
-                  <button onClick={goToMenu} className={`text-xs font-bold text-slate-400 hover:  transition-colors uppercase tracking-widest flex items-center gap-1 ${isLight ? "text-slate-900" : "text-white"}`}>
+                  <button onClick={goToMenu} className={`text-xs font-bold text-slate-400 hover:text-white transition-colors uppercase tracking-widest flex items-center gap-1 ${isLight ? "text-slate-900" : "text-white"}`}>
                     Ver Menú <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
                 
-                {/* Scroll horizontal de productos */}
+                {/* Scroll horizontal de productos destacados y top */}
                 <AutoCarousel gapClass="gap-4">
-                  {products.filter(p => p.is_active !== false).slice(0, 6).map((product) => (
-                    <div key={product.id} className={`min-w-[260px] md:min-w-[300px] snap-center border rounded-3xl overflow-hidden shadow-xl transition-all duration-300 flex flex-col cursor-pointer ${isLight ? "bg-white border-slate-200 hover:border-slate-400 text-slate-900" : "bg-neutral-900/60 border-white/5 hover:border-white/20 text-white"}`} onClick={goToMenu}>
-                      <div className={`h-48 w-full relative overflow-hidden ${isLight ? "bg-slate-200" : "bg-neutral-800"}`}>
-                        {product.image_url ? (
-                          <img src={product.image_url} alt={product.name} className="w-full h-full object-cover transition-transform duration-700 hover:scale-110 opacity-90 hover:opacity-100" />
-                        ) : (
-                          <div className={`w-full h-full flex items-center justify-center ${isLight ? "bg-slate-200/50" : "bg-neutral-800/50"}`}>
-                            <Utensils className="w-10 h-10 text-neutral-600" />
+                  {(() => {
+                    const featuredIds: string[] = tenant?.landing_config?.featured_product_ids || [];
+                    const activeProds = products.filter(p => p.is_active !== false);
+                    
+                    // Ordenar: primero los explícitamente marcados como destacados, luego los demás
+                    const sortedList = [...activeProds].sort((a, b) => {
+                      const aFeat = featuredIds.includes(a.id) ? 1 : 0;
+                      const bFeat = featuredIds.includes(b.id) ? 1 : 0;
+                      return bFeat - aFeat;
+                    }).slice(0, 10);
+
+                    return sortedList.map((product) => {
+                      const isManuallyFeatured = featuredIds.includes(product.id);
+                      return (
+                        <div 
+                          key={product.id} 
+                          className={`min-w-[260px] md:min-w-[300px] snap-center border rounded-3xl overflow-hidden shadow-xl transition-all duration-300 flex flex-col cursor-pointer group ${
+                            isLight 
+                              ? "bg-white border-slate-200 hover:border-orange-400 text-slate-900" 
+                              : "bg-neutral-900/80 border-white/10 hover:border-orange-500/40 text-white"
+                          }`} 
+                          onClick={() => {
+                            goToMenu();
+                            addToCart(product);
+                          }}
+                        >
+                          <div className={`h-48 w-full relative overflow-hidden ${isLight ? "bg-slate-100" : "bg-neutral-950"}`}>
+                            {product.image_url ? (
+                              <img 
+                                src={product.image_url} 
+                                alt={product.name} 
+                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+                              />
+                            ) : (
+                              <div className={`w-full h-full flex items-center justify-center ${isLight ? "bg-slate-100" : "bg-neutral-900"}`}>
+                                <Utensils className="w-10 h-10 text-neutral-600" />
+                              </div>
+                            )}
+                            
+                            {/* Badge de Precio */}
+                            <div className="absolute bottom-3 right-3 px-3 py-1.5 bg-black/85 backdrop-blur-md rounded-xl font-black text-sm shadow-xl border border-white/15 text-white">
+                              ${product.price}
+                            </div>
+
+                            {/* Badge de Destacado Especial */}
+                            {isManuallyFeatured && (
+                              <div className="absolute top-3 left-3 px-2.5 py-1 bg-amber-500 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-xl shadow-lg flex items-center gap-1">
+                                <Star size={11} className="fill-slate-950" /> Destacado
+                              </div>
+                            )}
                           </div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 via-transparent to-transparent" />
-                        <div className={`absolute bottom-3 right-3 px-3 py-1.5 bg-black/80 backdrop-blur-md rounded-xl font-bold   text-sm shadow-lg border border-white/10 ${isLight ? "text-slate-900" : "text-white"}`}>
-                          ${product.price}
+                          <div className="p-5 flex-1 flex flex-col justify-between">
+                            <div>
+                              <h3 className={`text-lg font-black leading-tight mb-1.5 line-clamp-1 ${isLight ? "text-slate-900" : "text-white"}`}>
+                                {product.name}
+                              </h3>
+                              <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                                {product.description || 'Deliciosa opción preparada con ingredientes de primera calidad.'}
+                              </p>
+                            </div>
+                            <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-bold text-orange-500">
+                              <span>Pedir Ahora</span>
+                              <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <div className="p-5 flex-1 flex flex-col">
-                        <h3 className={`text-lg font-black   leading-tight mb-2 line-clamp-1 ${isLight ? "text-slate-900" : "text-white"}`}>{product.name}</h3>
-                        <p className="text-sm text-slate-400 line-clamp-2 leading-relaxed flex-1">{product.description}</p>
-                      </div>
-                    </div>
-                  ))}
+                      );
+                    });
+                  })()}
                 </AutoCarousel>
               </section>
             )}
@@ -3134,24 +3183,20 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             {/* Muro Interactivo Social Dining */}
             {tenant?.landing_config?.interactive_wall_enabled !== false && (
               <section className="pt-8">
-                <div className="relative">
-                  {/* Decoración detrás del muro */}
-                  <div className="absolute -inset-4 bg-gradient-to-r from-orange-500/10 via-purple-500/10 to-blue-500/10 rounded-[3rem] blur-xl opacity-50" />
-                  <div className="relative">
-                    <SocialWall 
-                      tenantId={tenant?.id || ''} 
-                      primaryColor={primaryColor} 
-                      isLight={false}
-                      hasPremiumVIP={tenant?.hasPremiumVIP}
-                      currentTable={tableName || tableParamId}
-                      tables={tenant?.tables || []}
-                      onStartGiftMode={(from, to, anon, hint) => {
-                        setGiftMode({ isActive: true, fromTable: from, toTable: to, isAnonymous: anon, giftHint: hint });
-                        setDeliveryType('local');
-                        goToMenu();
-                      }}
-                    />
-                  </div>
+                <div className="relative rounded-[2.5rem] overflow-hidden">
+                  <SocialWall 
+                    tenantId={tenant?.id || ''} 
+                    primaryColor={primaryColor} 
+                    isLight={false}
+                    hasPremiumVIP={tenant?.hasPremiumVIP}
+                    currentTable={tableName || tableParamId}
+                    tables={tenant?.tables || []}
+                    onStartGiftMode={(from, to, anon, hint) => {
+                      setGiftMode({ isActive: true, fromTable: from, toTable: to, isAnonymous: anon, giftHint: hint });
+                      setDeliveryType('local');
+                      goToMenu();
+                    }}
+                  />
                 </div>
               </section>
             )}
@@ -3179,12 +3224,12 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     rel="noopener noreferrer"
                     className={`p-6 rounded-3xl border transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl flex flex-col justify-between group relative overflow-hidden ${
                       isLight 
-                        ? 'bg-white border-pink-100 hover:border-pink-300 shadow-sm' 
-                        : 'bg-gradient-to-br from-neutral-900/90 to-neutral-950 border-pink-500/20 hover:border-pink-500/50 shadow-xl'
+                        ? 'bg-white border-slate-200 hover:border-pink-400 shadow-sm' 
+                        : 'bg-neutral-900/90 border-white/10 hover:border-pink-500/50 shadow-xl'
                     }`}
                   >
                     <div className="space-y-3">
-                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-pink-500/30 group-hover:scale-110 transition-transform">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-pink-500/20 group-hover:scale-105 transition-transform">
                         <Instagram className="w-6 h-6" />
                       </div>
                       <div>
@@ -3270,38 +3315,67 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   </div>
                 </div>
 
-                {/* TARJETA 4: HORARIOS DE ENVÍO */}
+                {/* TARJETA 4: HORARIOS DE ENVÍO / ESTADO DE DELIVERY */}
                 <div
-                  onClick={() => { setHoursModalTab('delivery'); setIsHoursModalOpen(true); }}
-                  className={`p-6 rounded-3xl border transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl flex flex-col justify-between cursor-pointer group relative overflow-hidden ${
+                  onClick={() => { 
+                    if (hasDelivery) {
+                      setHoursModalTab('delivery'); 
+                      setIsHoursModalOpen(true); 
+                    }
+                  }}
+                  className={`p-6 rounded-3xl border transition-all duration-300 flex flex-col justify-between group relative overflow-hidden ${
+                    hasDelivery ? 'cursor-pointer hover:-translate-y-1 hover:shadow-2xl' : 'opacity-85'
+                  } ${
                     isLight 
-                      ? 'bg-white border-sky-100 hover:border-sky-300 shadow-sm' 
-                      : 'bg-gradient-to-br from-neutral-900/90 to-neutral-950 border-sky-500/20 hover:border-sky-500/50 shadow-xl'
+                      ? (hasDelivery ? 'bg-white border-sky-100 hover:border-sky-300 shadow-sm' : 'bg-slate-50 border-slate-200') 
+                      : (hasDelivery ? 'bg-gradient-to-br from-neutral-900/90 to-neutral-950 border-sky-500/20 hover:border-sky-500/50 shadow-xl' : 'bg-neutral-900/40 border-white/5')
                   }`}
                 >
                   <div className="space-y-3">
-                    <div className="w-12 h-12 rounded-2xl bg-sky-500/20 border border-sky-500/40 text-sky-400 flex items-center justify-center shadow-lg shadow-sky-500/20 group-hover:scale-110 transition-transform">
+                    <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center shadow-lg transition-transform ${
+                      hasDelivery 
+                        ? 'bg-sky-500/20 border-sky-500/40 text-sky-400 shadow-sky-500/20 group-hover:scale-110' 
+                        : 'bg-slate-800/80 border-slate-700 text-slate-500'
+                    }`}>
                       <Truck className="w-6 h-6" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className={`text-lg font-black tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
-                          Horarios de Envío
+                          {hasDelivery ? 'Horarios de Envío' : 'Envíos a Domicilio'}
                         </h3>
                         <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                          isDeliveryActiveToday ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30' : 'bg-slate-800 text-slate-400'
+                          !hasDelivery 
+                            ? 'bg-slate-800 text-slate-400 border border-white/5'
+                            : isDeliveryPanicActive
+                            ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            : isDeliveryActiveToday 
+                            ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30' 
+                            : 'bg-slate-800 text-slate-400'
                         }`}>
-                          {isDeliveryActiveToday ? 'Delivery Activo' : 'Cerrado Hoy'}
+                          {!hasDelivery 
+                            ? 'No disponible'
+                            : isDeliveryPanicActive
+                            ? 'Envíos Pausados'
+                            : isDeliveryActiveToday 
+                            ? 'Delivery Activo' 
+                            : 'Cerrado por Horario'}
                         </span>
                       </div>
                       <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                        Servicio de reparto a domicilio directo a tu casa. Cobertura en zonas seleccionadas.
+                        {!hasDelivery
+                          ? 'Por el momento no hacemos envíos a domicilio. Te esperamos para disfrutar en el local o pedir para retirar (Takeaway).'
+                          : isDeliveryPanicActive
+                          ? 'El servicio de reparto se encuentra momentáneamente pausado. Puedes pedir para retirar en el local.'
+                          : 'Servicio de reparto a domicilio directo a tu casa en zonas seleccionadas.'}
                       </p>
                     </div>
                   </div>
-                  <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-bold text-sky-400">
-                    <span>Consultar Horarios</span>
-                    <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                  <div className={`mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-bold ${
+                    hasDelivery ? 'text-sky-400' : 'text-slate-500'
+                  }`}>
+                    <span>{hasDelivery ? 'Consultar Horarios de Reparto' : 'Solo Salón y Retiro en Local'}</span>
+                    {hasDelivery && <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />}
                   </div>
                 </div>
               </div>
@@ -4576,6 +4650,16 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     );
                   })}
                 </div>
+              </div>
+            ) : !hasDelivery ? (
+              <div className="p-6 rounded-3xl bg-neutral-900/60 border border-white/5 text-center space-y-3 my-2">
+                <div className="w-12 h-12 rounded-2xl bg-slate-800/80 border border-slate-700 text-slate-400 mx-auto flex items-center justify-center shadow-lg">
+                  <Truck className="w-6 h-6" />
+                </div>
+                <h4 className="text-sm font-black uppercase text-white tracking-wide">Envíos a Domicilio no disponibles</h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Por el momento este local no realiza envíos a domicilio. Te esperamos para disfrutar en nuestras mesas o retirar tu pedido por el local (Takeaway).
+                </p>
               </div>
             ) : (
               <div className="space-y-3">

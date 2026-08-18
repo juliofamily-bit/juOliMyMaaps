@@ -708,6 +708,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
     const [prodIngredients, setProdIngredients] = useState<ProductIngredient[]>([]);
     const [prodCustomQuestion, setProdCustomQuestion] = useState('');
     const [prodIsQuestionRequired, setProdIsQuestionRequired] = useState(false);
+    const [prodIsFeatured, setProdIsFeatured] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [prodIngredientSearchTerm, setProdIngredientSearchTerm] = useState('');
     const [isListeningProdIng, setIsListeningProdIng] = useState(false);
@@ -2334,8 +2335,24 @@ const AdminTab: React.FC<AdminTabProps> = ({
             }
         }
 
+        // Sincronizar estado de Destacado en landing_config
+        if (prodId) {
+            const currentFeatured = cfgLandingConfig.featured_product_ids || [];
+            const isCurrentlyFeat = currentFeatured.includes(prodId);
+            if (prodIsFeatured !== isCurrentlyFeat) {
+                const updatedFeatured = prodIsFeatured
+                    ? Array.from(new Set([...currentFeatured, prodId]))
+                    : currentFeatured.filter((id: string) => id !== prodId);
+                const updatedLanding = { ...cfgLandingConfig, featured_product_ids: updatedFeatured };
+                setCfgLandingConfig(updatedLanding);
+                if (tenant?.id) {
+                    await supabase.from('tenants').update({ landing_config: updatedLanding }).eq('id', tenant.id);
+                }
+            }
+        }
+
         setProdName(''); setProdDesc(''); setProdPrice(''); setProdImage(PRESET_IMAGES[0].url); setProdIngredients([]);
-        setProdCustomQuestion(''); setProdIsQuestionRequired(false);
+        setProdCustomQuestion(''); setProdIsQuestionRequired(false); setProdIsFeatured(false);
         setEditingProductId(null);
         setIsProductModalOpen(false);
         refetchData?.();
@@ -2351,11 +2368,28 @@ const AdminTab: React.FC<AdminTabProps> = ({
         setProdImage(prod.image_url || PRESET_IMAGES[0].url);
         setProdCustomQuestion(prod.custom_question || '');
         setProdIsQuestionRequired(prod.is_question_required || false);
+        const isFeat = (cfgLandingConfig.featured_product_ids || []).includes(prod.id);
+        setProdIsFeatured(isFeat);
         
         const existingIngs = productIngredients.filter(pi => pi.product_id === prod.id);
         setProdIngredients(existingIngs);
         setProdIngredientSearchTerm('');
         setIsProductModalOpen(true);
+    };
+
+    const toggleProductFeatured = async (prodId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        const currentFeatured = cfgLandingConfig.featured_product_ids || [];
+        const isFeat = currentFeatured.includes(prodId);
+        const updatedFeatured = isFeat
+            ? currentFeatured.filter((id: string) => id !== prodId)
+            : [...currentFeatured, prodId];
+        const updatedLanding = { ...cfgLandingConfig, featured_product_ids: updatedFeatured };
+        setCfgLandingConfig(updatedLanding);
+        if (tenant?.id) {
+            await supabase.from('tenants').update({ landing_config: updatedLanding }).eq('id', tenant.id);
+            broadcastTenantChange(tenant.id);
+        }
     };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3328,6 +3362,23 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                     <span className="text-orange-500 font-mono font-black">{formatARS(prod.price)}</span>
                                                 )}
                                                 <div className="flex gap-1.5">
+                                                    {/* Botón Destacado en Portada */}
+                                                    {(() => {
+                                                        const isFeatured = (cfgLandingConfig.featured_product_ids || []).includes(prod.id);
+                                                        return (
+                                                            <button
+                                                                onClick={(e) => toggleProductFeatured(prod.id, e)}
+                                                                className={`p-2 rounded-lg transition-all ${
+                                                                    isFeatured 
+                                                                        ? 'text-amber-400 bg-amber-500/20 border border-amber-500/40 shadow-md scale-105' 
+                                                                        : 'text-slate-500 bg-slate-800/40 hover:text-amber-400 hover:bg-amber-500/10'
+                                                                }`}
+                                                                title={isFeatured ? "⭐ Destacado en Portada (Clic para quitar)" : "⭐ Destacar en Portada"}
+                                                            >
+                                                                <Star size={12} className={isFeatured ? "fill-amber-400" : ""} />
+                                                            </button>
+                                                        );
+                                                    })()}
                                                     {activeOffer && (
                                                         <button 
                                                             onClick={(e) => { e.stopPropagation(); handleRemoveProductFromOffer(prod.id, activeOffer); }}
@@ -7546,6 +7597,24 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Precio Venta (ARS $)</label>
                                     <input type="number" value={prodPrice} onChange={e => setProdPrice(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white font-bold outline-none" placeholder="0" />
                                 </div>
+
+                                {/* Toggle Destacar en Portada / Landing Page */}
+                                <label className="flex items-center justify-between p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl cursor-pointer hover:bg-amber-500/20 transition-all">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400">
+                                            <Star size={16} className={prodIsFeatured ? "fill-amber-400" : ""} />
+                                        </div>
+                                        <div>
+                                            <span className="text-[11px] font-black text-white uppercase block">Destacar en Portada / Landing</span>
+                                            <span className="text-[9px] text-slate-400">Aparecerá en el carrusel 'Lo Más Destacado' de la página web</span>
+                                        </div>
+                                    </div>
+                                    <div className="relative flex items-center">
+                                        <input type="checkbox" checked={prodIsFeatured} onChange={e => setProdIsFeatured(e.target.checked)} className="sr-only" />
+                                        <div className={`w-9 h-5 rounded-full transition-colors ${prodIsFeatured ? 'bg-amber-500' : 'bg-slate-700'}`}></div>
+                                        <div className={`absolute w-3.5 h-3.5 bg-white rounded-full top-0.75 transition-transform ${prodIsFeatured ? 'translate-x-4.5' : 'translate-x-1'}`}></div>
+                                    </div>
+                                </label>
 
                                 {/* Calculadora Financiera en Tiempo Real */}
                                 {(() => {

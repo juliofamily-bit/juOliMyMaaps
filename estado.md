@@ -138,3 +138,24 @@ Para reducir la fricción de entrada de nuevos restaurantes y maximizar la conve
   - **Horarios de Atención (Local):** Icono de reloj dorado/ámbar con indicador de estado ("Abierto" / "Cerrado") y desglose semanal de turnos.
   - **Horarios de Envío (Delivery):** Icono de reparto en moto/camioneta celeste con indicador de estado ("Delivery Activo" / "Cerrado Hoy") y desglose de franjas horarias de entrega.
 - **Nueva Sección en la Landing Page:** Bloque interactivo con tarjetas descriptivas de contacto rápido, turnos semanales y enlace directo a perfiles y chat.
+
+
+### Sincronización de Envíos en Landing & Menú con Módulo de Administración
+- **Control Maestro (`has_delivery`):** Si en Administración -> "Módulo y zonas de envío" la opción "Activar Envíos (Delivery)" está desactivada:
+  - En la Landing Page, la tarjeta de envíos muestra claramente: **"Por el momento no hacemos envíos a domicilio. Te esperamos para disfrutar en el local o pedir para retirar (Takeaway)"** con el indicador `No disponible`.
+  - En la barra superior (Header) no se muestra el botón de horarios de envío.
+  - En el modal de horarios, la pestaña de Envíos informa cordialmente que el local no cuenta con delivery activo.
+- **Envíos Activos:** Si está activado, refleja fielmente los días de reparto, turnos horarios de envío configurados y el estado del botón de pánico (`Envíos Pausados`).
+
+
+### Corrección Visual en Landing & Sistema de Productos Destacados
+- **Corrección de Artefacto Visual (Instagram / Muro):**
+  - Se eliminó el resplandor de fondo desbordado (`blur-xl`) que provocaba distorsión en forma de rayas o efecto de pantalla rota en tablets y móviles encima del bloque de contacto.
+  - Se optimizó el renderizado de la tarjeta de Instagram con bordes limpios y fondos sólidos.
+- **Sistema de Productos Destacados en Portada:**
+  - **En Menú de Administración:**
+    - Se agregó un botón rápido de Estrella (⭐) en cada tarjeta de producto para marcarlo/desmarcarlo como destacado en 1 solo clic.
+    - Se agregó un switch interactivo dentro del formulario/modal de creación y edición de productos: *"Destacar en Portada / Landing"*.
+  - **En Landing Page ("Lo Más Destacado"):**
+    - Se priorizan automáticamente primero los platos elegidos como destacados por el administrador (mostrando su badge dorado de Destacado).
+    - Se mejoró el renderizado visual para que las fotos subidas por el comercio se vean 100% nítidas, brillantes y sin filtros oscuros que tapen la imagen real.
