@@ -1120,6 +1120,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                 events: loadedLanding.events || [],
                 about_text: loadedLanding.about_text || '',
                 featured_products_enabled: loadedLanding.featured_products_enabled !== false,
+                featured_product_ids: loadedLanding.featured_product_ids || [],
                 hero_position: loadedLanding.hero_position || 'center',
                 custom_carousel: (loadedLanding.custom_carousel && loadedLanding.custom_carousel.length > 0)
                     ? loadedLanding.custom_carousel

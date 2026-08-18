@@ -262,6 +262,52 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     fetchBookings();
   }, [reservationDate, tenant?.id]);
 
+  // Carga de ranking de ventas para los más vendidos
+  const [productSalesCount, setProductSalesCount] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!tenant?.id) return;
+    const fetchSalesRanking = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('order_items')
+          .select('product_id, quantity')
+          .eq('tenant_id', tenant.id);
+
+        if (!error && data) {
+          const counts: Record<string, number> = {};
+          data.forEach((it: any) => {
+            if (it.product_id) {
+              counts[it.product_id] = (counts[it.product_id] || 0) + (Number(it.quantity) || 1);
+            }
+          });
+          setProductSalesCount(counts);
+        }
+      } catch (err) {
+        console.error("Error al cargar ranking de ventas:", err);
+      }
+    };
+    fetchSalesRanking();
+  }, [tenant?.id]);
+
+  // Lista ordenada: 1. Destacados por Admin, 2. Más Vendidos, 3. Resto de productos
+  const featuredAndTopProducts = useMemo(() => {
+    const featuredIds: string[] = tenant?.landing_config?.featured_product_ids || [];
+    const activeProds = products.filter(p => p.is_active !== false);
+
+    return [...activeProds].sort((a, b) => {
+      const aFeat = featuredIds.includes(a.id) ? 1 : 0;
+      const bFeat = featuredIds.includes(b.id) ? 1 : 0;
+      if (aFeat !== bFeat) return bFeat - aFeat; // 1. Destacados primero
+
+      const aSales = productSalesCount[a.id] || 0;
+      const bSales = productSalesCount[b.id] || 0;
+      if (aSales !== bSales) return bSales - aSales; // 2. Más vendidos
+
+      return 0;
+    });
+  }, [products, tenant?.landing_config?.featured_product_ids, productSalesCount]);
+
   // Horarios de reserva disponibles (calculados)
   const availableReservationTimes = useMemo(() => {
     if (!reservationDate) return [];
@@ -2664,6 +2710,99 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
           </div>
         </section>
 
+        {/* CARRUSEL DE DESTACADOS Y MÁS VENDIDOS EN EL MENÚ */}
+        {activeCategory === 'all' && !searchQuery.trim() && featuredAndTopProducts.length > 0 && (
+          <section className="space-y-4 pt-1">
+            <div className="flex items-center gap-2.5 px-1">
+              <div className="p-1.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                <Star className="w-5 h-5 fill-amber-400" />
+              </div>
+              <div>
+                <h2 className={`text-lg md:text-xl font-black uppercase tracking-wider ${isLight ? "text-slate-900" : "text-white"}`}>
+                  Destacados & Más Vendidos
+                </h2>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Los favoritos de nuestra cocina</p>
+              </div>
+            </div>
+
+            <AutoCarousel gapClass="gap-3.5">
+              {featuredAndTopProducts.slice(0, 8).map((product) => {
+                const isManuallyFeatured = (tenant?.landing_config?.featured_product_ids || []).includes(product.id);
+                const salesQty = productSalesCount[product.id] || 0;
+                const availableStock = getAvailableStockForProduct(product.id);
+                const isSoldOut = availableStock <= 0;
+
+                return (
+                  <div
+                    key={`menu-feat-${product.id}`}
+                    onClick={() => {
+                      if (!isSoldOut) {
+                        addToCart(product);
+                      }
+                    }}
+                    className={`min-w-[200px] max-w-[220px] md:min-w-[240px] snap-center rounded-2xl border overflow-hidden shadow-lg transition-all duration-300 flex flex-col justify-between cursor-pointer group ${
+                      isSoldOut ? 'opacity-60 grayscale-[0.6]' : 'hover:-translate-y-1 hover:shadow-xl'
+                    } ${
+                      isLight
+                        ? 'bg-white border-slate-200 hover:border-amber-400 text-slate-900'
+                        : 'bg-neutral-900/90 border-white/10 hover:border-amber-500/50 text-white'
+                    }`}
+                  >
+                    <div className="h-32 w-full relative overflow-hidden bg-neutral-950">
+                      {product.image_url ? (
+                        <img
+                          src={product.image_url}
+                          alt={product.name}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-neutral-900">
+                          <Utensils className="w-8 h-8 text-neutral-600" />
+                        </div>
+                      )}
+                      
+                      {/* Badge de Precio */}
+                      <div className="absolute bottom-2 right-2 px-2.5 py-1 bg-black/85 backdrop-blur-md rounded-xl font-black text-xs shadow-lg border border-white/15 text-white">
+                        ${product.price}
+                      </div>
+
+                      {/* Badges de Estado */}
+                      <div className="absolute top-2 left-2 flex flex-col gap-1">
+                        {isManuallyFeatured ? (
+                          <span className="px-2 py-0.5 bg-amber-500 text-slate-950 font-black text-[9px] uppercase tracking-wider rounded-lg shadow-md flex items-center gap-1">
+                            <Star size={9} className="fill-slate-950" /> Destacado
+                          </span>
+                        ) : salesQty > 0 ? (
+                          <span className="px-2 py-0.5 bg-gradient-to-r from-orange-500 to-red-500 text-white font-black text-[9px] uppercase tracking-wider rounded-lg shadow-md flex items-center gap-1">
+                            🔥 Top Ventas
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 flex-1 flex flex-col justify-between">
+                      <div>
+                        <h4 className={`text-sm font-black leading-tight line-clamp-1 ${isLight ? "text-slate-900" : "text-white"}`}>
+                          {product.name}
+                        </h4>
+                        {product.description && (
+                          <p className="text-[10px] text-slate-400 line-clamp-2 mt-1 leading-relaxed">
+                            {product.description}
+                          </p>
+                        )}
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-white/5 flex items-center justify-between text-[11px] font-bold text-amber-500">
+                        <span>{isSoldOut ? 'Agotado' : 'Pedir'}</span>
+                        <Plus size={14} className="group-hover:scale-125 transition-transform" />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </AutoCarousel>
+          </section>
+        )}
+
         {/* Grilla de Productos */}
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredProducts.map(product => {
@@ -3013,94 +3152,92 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               );
             })()}
 
-            {/* CARRUSEL DE PRODUCTOS DESTACADOS */}
-            {tenant?.landing_config?.featured_products_enabled && (
+            {/* CARRUSEL DE PRODUCTOS DESTACADOS EN LANDING */}
+            {tenant?.landing_config?.featured_products_enabled && featuredAndTopProducts.length > 0 && (
               <section className="space-y-6">
                 <div className="flex items-center justify-between px-2">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-green-500/20 text-green-500 border border-green-500/30">
-                      <Utensils className="w-6 h-6 fill-current" />
+                    <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                      <Star className="w-6 h-6 fill-amber-400" />
                     </div>
-                    <h2 className={`text-2xl md:text-3xl font-black uppercase tracking-widest ${isLight ? "text-slate-900" : "text-white"}`}>
-                      Lo Más Destacado
-                    </h2>
+                    <div>
+                      <h2 className={`text-2xl md:text-3xl font-black uppercase tracking-widest ${isLight ? "text-slate-900" : "text-white"}`}>
+                        Lo Más Destacado & Top Ventas
+                      </h2>
+                      <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Los favoritos elegidos por nuestros clientes</p>
+                    </div>
                   </div>
                   <button onClick={goToMenu} className={`text-xs font-bold text-slate-400 hover:text-white transition-colors uppercase tracking-widest flex items-center gap-1 ${isLight ? "text-slate-900" : "text-white"}`}>
-                    Ver Menú <ChevronRight className="w-4 h-4" />
+                    Ver Todo <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
                 
                 {/* Scroll horizontal de productos destacados y top */}
                 <AutoCarousel gapClass="gap-4">
-                  {(() => {
-                    const featuredIds: string[] = tenant?.landing_config?.featured_product_ids || [];
-                    const activeProds = products.filter(p => p.is_active !== false);
-                    
-                    // Ordenar: primero los explícitamente marcados como destacados, luego los demás
-                    const sortedList = [...activeProds].sort((a, b) => {
-                      const aFeat = featuredIds.includes(a.id) ? 1 : 0;
-                      const bFeat = featuredIds.includes(b.id) ? 1 : 0;
-                      return bFeat - aFeat;
-                    }).slice(0, 10);
-
-                    return sortedList.map((product) => {
-                      const isManuallyFeatured = featuredIds.includes(product.id);
-                      return (
-                        <div 
-                          key={product.id} 
-                          className={`min-w-[260px] md:min-w-[300px] snap-center border rounded-3xl overflow-hidden shadow-xl transition-all duration-300 flex flex-col cursor-pointer group ${
-                            isLight 
-                              ? "bg-white border-slate-200 hover:border-orange-400 text-slate-900" 
-                              : "bg-neutral-900/80 border-white/10 hover:border-orange-500/40 text-white"
-                          }`} 
-                          onClick={() => {
-                            goToMenu();
-                            addToCart(product);
-                          }}
-                        >
-                          <div className={`h-48 w-full relative overflow-hidden ${isLight ? "bg-slate-100" : "bg-neutral-950"}`}>
-                            {product.image_url ? (
-                              <img 
-                                src={product.image_url} 
-                                alt={product.name} 
-                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
-                              />
-                            ) : (
-                              <div className={`w-full h-full flex items-center justify-center ${isLight ? "bg-slate-100" : "bg-neutral-900"}`}>
-                                <Utensils className="w-10 h-10 text-neutral-600" />
-                              </div>
-                            )}
-                            
-                            {/* Badge de Precio */}
-                            <div className="absolute bottom-3 right-3 px-3 py-1.5 bg-black/85 backdrop-blur-md rounded-xl font-black text-sm shadow-xl border border-white/15 text-white">
-                              ${product.price}
+                  {featuredAndTopProducts.slice(0, 10).map((product) => {
+                    const isManuallyFeatured = (tenant?.landing_config?.featured_product_ids || []).includes(product.id);
+                    const salesQty = productSalesCount[product.id] || 0;
+                    return (
+                      <div 
+                        key={product.id} 
+                        className={`min-w-[260px] md:min-w-[300px] snap-center border rounded-3xl overflow-hidden shadow-xl transition-all duration-300 flex flex-col cursor-pointer group ${
+                          isLight 
+                            ? "bg-white border-slate-200 hover:border-amber-400 text-slate-900" 
+                            : "bg-neutral-900/80 border-white/10 hover:border-amber-500/40 text-white"
+                        }`} 
+                        onClick={() => {
+                          goToMenu();
+                          addToCart(product);
+                        }}
+                      >
+                        <div className={`h-48 w-full relative overflow-hidden ${isLight ? "bg-slate-100" : "bg-neutral-950"}`}>
+                          {product.image_url ? (
+                            <img 
+                              src={product.image_url} 
+                              alt={product.name} 
+                              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+                            />
+                          ) : (
+                            <div className={`w-full h-full flex items-center justify-center ${isLight ? "bg-slate-100" : "bg-neutral-900"}`}>
+                              <Utensils className="w-10 h-10 text-neutral-600" />
                             </div>
-
-                            {/* Badge de Destacado Especial */}
-                            {isManuallyFeatured && (
-                              <div className="absolute top-3 left-3 px-2.5 py-1 bg-amber-500 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-xl shadow-lg flex items-center gap-1">
-                                <Star size={11} className="fill-slate-950" /> Destacado
-                              </div>
-                            )}
+                          )}
+                          
+                          {/* Badge de Precio */}
+                          <div className="absolute bottom-3 right-3 px-3 py-1.5 bg-black/85 backdrop-blur-md rounded-xl font-black text-sm shadow-xl border border-white/15 text-white">
+                            ${product.price}
                           </div>
-                          <div className="p-5 flex-1 flex flex-col justify-between">
-                            <div>
-                              <h3 className={`text-lg font-black leading-tight mb-1.5 line-clamp-1 ${isLight ? "text-slate-900" : "text-white"}`}>
-                                {product.name}
-                              </h3>
-                              <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                                {product.description || 'Deliciosa opción preparada con ingredientes de primera calidad.'}
-                              </p>
-                            </div>
-                            <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-bold text-orange-500">
-                              <span>Pedir Ahora</span>
-                              <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
-                            </div>
+
+                          {/* Badges de Estado */}
+                          <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                            {isManuallyFeatured ? (
+                              <span className="px-2.5 py-1 bg-amber-500 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-xl shadow-lg flex items-center gap-1">
+                                <Star size={11} className="fill-slate-950" /> Destacado
+                              </span>
+                            ) : salesQty > 0 ? (
+                              <span className="px-2.5 py-1 bg-gradient-to-r from-orange-500 to-red-500 text-white font-black text-[10px] uppercase tracking-wider rounded-xl shadow-lg flex items-center gap-1">
+                                🔥 Top Ventas
+                              </span>
+                            ) : null}
                           </div>
                         </div>
-                      );
-                    });
-                  })()}
+                        <div className="p-5 flex-1 flex flex-col justify-between">
+                          <div>
+                            <h3 className={`text-lg font-black leading-tight mb-1.5 line-clamp-1 ${isLight ? "text-slate-900" : "text-white"}`}>
+                              {product.name}
+                            </h3>
+                            <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                              {product.description || 'Deliciosa opción preparada con ingredientes de primera calidad.'}
+                            </p>
+                          </div>
+                          <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-bold text-amber-500">
+                            <span>Pedir Ahora</span>
+                            <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </AutoCarousel>
               </section>
             )}
