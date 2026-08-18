@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { DEFAULT_LANDING_CONFIG } from '@/lib/constants';
 import { ChevronRight, LayoutGrid, MapPin, Store, Loader2, ArrowLeft, Paintbrush, Shield, ShoppingBag, ChefHat, Check, UserPlus, LogIn, Search, AlertCircle, Mail, Sun, Moon, Navigation } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -187,6 +188,7 @@ export default function WelcomePage() {
           bartender_password: '',
           waiter_password: '',
           delivery_password: '',
+          landing_config: DEFAULT_LANDING_CONFIG,
           terms_accepted: true,
           terms_accepted_at: new Date().toISOString()
         }])

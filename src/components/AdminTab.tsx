@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { supabase as rawSupabase, broadcastTenantChange } from '@/lib/supabase';
 import { Product, Ingredient, Order, Expense, OrderStatus, Category, ProductIngredient, IngredientBatch, ProductOffer } from '@/types/database';
-import { PRESET_IMAGES, NEON_ICONS } from '@/lib/constants';
+import { PRESET_IMAGES, NEON_ICONS, DEFAULT_CAROUSEL_SLIDES, DEFAULT_LANDING_CONFIG } from '@/lib/constants';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, ReferenceLine } from 'recharts';
-import { CreditCard, BarChart2, QrCode, FileText, Plus, Trash2, Edit, TrendingUp, DollarSign, Package, Layers, History, ChevronRight, X, Save, Check, Upload, Image as ImageIcon, Wallet, Receipt, ArrowUpCircle, ArrowDownCircle, Calendar, FilterX, Star, StarOff, PieChart, Paintbrush, LayoutGrid, Sun, Moon, CheckCircle, AlertCircle, Loader2, Share2, AlertTriangle, CalendarRange, Trophy, Smartphone, Instagram, Facebook, Phone, Printer, Download, Award, Coins, Search, MessageCircle, Gift, RefreshCw, Settings, ChevronUp, ChevronDown, Users, Truck, Map as MapIcon, Utensils, Lock } from 'lucide-react';
+import { CreditCard, BarChart2, QrCode, FileText, Plus, Trash2, Edit, TrendingUp, DollarSign, Package, Layers, History, ChevronRight, X, Save, Check, Upload, Image as ImageIcon, Wallet, Receipt, ArrowUpCircle, ArrowDownCircle, Calendar, FilterX, Star, StarOff, PieChart, Paintbrush, LayoutGrid, Sun, Moon, CheckCircle, AlertCircle, Loader2, Share2, AlertTriangle, CalendarRange, Trophy, Smartphone, Instagram, Facebook, Phone, Printer, Download, Award, Coins, Search, MessageCircle, Gift, RefreshCw, Settings, ChevronUp, ChevronDown, Users, Truck, Map as MapIcon, Utensils, Lock, Mic, MicOff } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { PrintableQRPoster } from './PrintableQRPoster';
 import { AdminEmployeeTab } from './AdminEmployeeTab';
@@ -680,6 +680,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
     const [prodCustomQuestion, setProdCustomQuestion] = useState('');
     const [prodIsQuestionRequired, setProdIsQuestionRequired] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [prodIngredientSearchTerm, setProdIngredientSearchTerm] = useState('');
+    const [isListeningProdIng, setIsListeningProdIng] = useState(false);
 
     // Stock Form State
     const [stkName, setStkName] = useState('');
@@ -692,6 +694,39 @@ const AdminTab: React.FC<AdminTabProps> = ({
     const [stkExpirationDate, setStkExpirationDate] = useState('');
     const [stockUpdateMode, setStockUpdateMode] = useState<'add' | 'set'>('add');
     const [stkQtyToAdd, setStkQtyToAdd] = useState<string>('');
+
+    // Search and Voice Search States
+    const [menuSearchTerm, setMenuSearchTerm] = useState('');
+    const [stockSearchTerm, setStockSearchTerm] = useState('');
+    const [isListeningMenu, setIsListeningMenu] = useState(false);
+    const [isListeningStock, setIsListeningStock] = useState(false);
+
+    const handleVoiceSearch = (setSearchTerm: (term: string) => void, setIsListening: (state: boolean) => void) => {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("Tu navegador no soporta la búsqueda por voz.");
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'es-AR';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => setIsListening(true);
+        recognition.onresult = (event: any) => {
+            const transcript = event.results[0][0].transcript;
+            // Remover el punto final que suele agregar el reconocimiento
+            setSearchTerm(transcript.replace(/\.$/, ''));
+        };
+        recognition.onerror = (event: any) => {
+            console.error("Error en reconocimiento de voz:", event.error);
+            setIsListening(false);
+        };
+        recognition.onend = () => setIsListening(false);
+
+        recognition.start();
+    };
 
     // Expense Form State
     const [expDesc, setExpDesc] = useState('');
@@ -793,16 +828,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
     const [cfgDeliveryPanic, setCfgDeliveryPanic] = useState(false);
 
     // Landing Config State
-    const [cfgLandingConfig, setCfgLandingConfig] = useState<any>({
-        enabled: false,
-        hero_style: 'modern',
-        interactive_wall_enabled: false,
-        hero_video_url: '',
-        hero_image_url: '',
-        promos: [],
-        events: [],
-        custom_carousel: []
-    });
+    const [cfgLandingConfig, setCfgLandingConfig] = useState<any>({ ...DEFAULT_LANDING_CONFIG });
 
 
     // Product Offer Form State
@@ -1032,18 +1058,22 @@ const AdminTab: React.FC<AdminTabProps> = ({
             }
 
             // Cargar configuración de Landing Page
-            if ((tenant as any).landing_config) {
-                setCfgLandingConfig({
-                    enabled: (tenant as any).landing_config.enabled || false,
-                    hero_style: (tenant as any).landing_config.hero_style || 'modern',
-                    interactive_wall_enabled: (tenant as any).landing_config.interactive_wall_enabled || false,
-                    hero_video_url: (tenant as any).landing_config.hero_video_url || '',
-                    hero_image_url: (tenant as any).landing_config.hero_image_url || '',
-                    promos: (tenant as any).landing_config.promos || [],
-                    events: (tenant as any).landing_config.events || [],
-                    custom_carousel: (tenant as any).landing_config.custom_carousel || []
-                });
-            }
+            const loadedLanding = (tenant as any).landing_config || {};
+            setCfgLandingConfig({
+                enabled: loadedLanding.enabled || false,
+                hero_style: loadedLanding.hero_style || 'modern',
+                interactive_wall_enabled: loadedLanding.interactive_wall_enabled !== false,
+                hero_video_url: loadedLanding.hero_video_url || '',
+                hero_image_url: loadedLanding.hero_image_url || '',
+                promos: loadedLanding.promos || [],
+                events: loadedLanding.events || [],
+                about_text: loadedLanding.about_text || '',
+                featured_products_enabled: loadedLanding.featured_products_enabled !== false,
+                hero_position: loadedLanding.hero_position || 'center',
+                custom_carousel: (loadedLanding.custom_carousel && loadedLanding.custom_carousel.length > 0)
+                    ? loadedLanding.custom_carousel
+                    : DEFAULT_CAROUSEL_SLIDES
+            });
 
             // Cargar Business Hours & Delivery Hours
             if ((tenant as any).business_hours) {
@@ -1642,7 +1672,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             bartender_password: cfgBartenderPassword,
                             waiter_password: cfgWaiterPassword,
                             description: cfgDescription,
-                            delivery_days: cfgDeliveryDays
+                            delivery_days: cfgDeliveryDays,
+                            landing_config: cfgLandingConfig
                         });
                         const fallbackResult = { data: dataApi, error: null };
 
@@ -1650,7 +1681,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                     error = fallbackResult.error;
 
                     if (!error && data) {
-                        alert("⚠️ AJUSTES GUARDADOS EN MODO COMPATIBILIDAD BÁSICA:\n\nSe guardaron los roles, contraseñas y descripción con éxito. Sin embargo, no se pudieron guardar los ajustes de Mercado Pago, Envíos a Domicilio ni Reservas porque las columnas correspondientes no existen o no están cacheadas en tu base de datos de Supabase.\n\nPara habilitar las funciones premium, por favor asegúrate de ejecutar el script de migración SQL en el SQL Editor de tu panel de Supabase.");
+                        alert("⚠️ AJUSTES GUARDADOS EN MODO COMPATIBILIDAD BÁSICA:\n\nSe guardaron los roles, contraseñas, descripción y landing page con éxito. Sin embargo, no se pudieron guardar los ajustes de Mercado Pago, Envíos a Domicilio ni Reservas porque las columnas correspondientes no existen o no están cacheadas en tu base de datos de Supabase.\n\nPara habilitar las funciones premium, por favor asegúrate de ejecutar el script de migración SQL en el SQL Editor de tu panel de Supabase.");
                     }
                 }
             } catch (err: any) {
@@ -1666,7 +1697,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
                         delivery_password: cfgDeliveryPassword,
                         bartender_password: cfgBartenderPassword,
                         waiter_password: cfgWaiterPassword,
-                        delivery_days: cfgDeliveryDays
+                        delivery_days: cfgDeliveryDays,
+                        landing_config: cfgLandingConfig
                     });
                         const fallbackResult = { data: dataApi, error: null };
 
@@ -2264,6 +2296,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
         
         const existingIngs = productIngredients.filter(pi => pi.product_id === prod.id);
         setProdIngredients(existingIngs);
+        setProdIngredientSearchTerm('');
         setIsProductModalOpen(true);
     };
 
@@ -2820,8 +2853,42 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             onClick={() => { setEditingStockId(null); setStkName(''); setStkPrice(''); setStkLevel(''); setIsStockModalOpen(true); }}
                             className="bg-orange-500 p-2 rounded-xl text-white shadow-lg"><Plus size={18} /></button>
                     </div>
+                    
+                    {/* Buscador de Stock */}
+                    <div className="flex gap-2">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                            <input
+                                type="text"
+                                value={stockSearchTerm}
+                                onChange={(e) => setStockSearchTerm(e.target.value)}
+                                placeholder="Buscar insumo..."
+                                className="w-full bg-slate-900 border border-slate-800 rounded-xl py-3 pl-10 pr-4 text-sm text-white font-bold outline-none focus:border-orange-500/50 transition-colors"
+                            />
+                            {stockSearchTerm && (
+                                <button onClick={() => setStockSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
+                        <button
+                            onClick={() => {
+                                if (isListeningStock) return;
+                                handleVoiceSearch(setStockSearchTerm, setIsListeningStock);
+                            }}
+                            className={`p-3 rounded-xl border flex items-center justify-center transition-colors ${
+                                isListeningStock 
+                                    ? 'bg-red-500/20 border-red-500 text-red-500 animate-pulse' 
+                                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white'
+                            }`}
+                            title="Buscar por voz"
+                        >
+                            {isListeningStock ? <Mic size={18} /> : <MicOff size={18} />}
+                        </button>
+                    </div>
+
                     <div className="space-y-3">
-                        {ingredients.map(item => {
+                        {ingredients.filter(item => !stockSearchTerm || item.name.toLowerCase().includes(stockSearchTerm.toLowerCase())).map(item => {
                             // Buscar los lotes cargados de este ingrediente
                             const lotesDeEsteIngrediente = (ingredientBatches || []).filter(b => b.ingredient_id === item.id);
                             
@@ -3026,8 +3093,48 @@ const AdminTab: React.FC<AdminTabProps> = ({
                         </div>
                     )}
 
+                    {/* Buscador de Menú */}
+                    <div className="flex gap-2 mb-4">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                            <input
+                                type="text"
+                                value={menuSearchTerm}
+                                onChange={(e) => setMenuSearchTerm(e.target.value)}
+                                placeholder="Buscar en menú..."
+                                className="w-full bg-slate-900 border border-slate-800 rounded-xl py-3 pl-10 pr-4 text-sm text-white font-bold outline-none focus:border-orange-500/50 transition-colors"
+                            />
+                            {menuSearchTerm && (
+                                <button onClick={() => setMenuSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
+                        <button
+                            onClick={() => {
+                                if (isListeningMenu) return; // Optional: stop listening if already listening
+                                handleVoiceSearch(setMenuSearchTerm, setIsListeningMenu);
+                            }}
+                            className={`p-3 rounded-xl border flex items-center justify-center transition-colors ${
+                                isListeningMenu 
+                                    ? 'bg-red-500/20 border-red-500 text-red-500 animate-pulse' 
+                                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white'
+                            }`}
+                            title="Buscar por voz"
+                        >
+                            {isListeningMenu ? <Mic size={18} /> : <MicOff size={18} />}
+                        </button>
+                    </div>
+
                     {categories.map(cat => {
-                        const catActiveProducts = products.filter(p => p.category_id === cat.id && p.is_active !== false);
+                        let catActiveProducts = products.filter(p => p.category_id === cat.id && p.is_active !== false);
+                        if (menuSearchTerm) {
+                            const term = menuSearchTerm.toLowerCase();
+                            catActiveProducts = catActiveProducts.filter(p => p.name.toLowerCase().includes(term));
+                        }
+
+                        if (menuSearchTerm && catActiveProducts.length === 0) return null;
+
                         const activeProdIds = catActiveProducts.map(p => p.id);
                         const areAllSelected = activeProdIds.length > 0 && activeProdIds.every(id => selectedProductIds.includes(id));
 
@@ -3060,7 +3167,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                             </button>
                                         )}
                                         <button
-                                            onClick={() => { setActiveCategoryId(cat.id); setEditingProductId(null); setProdName(''); setProdPrice(''); setProdImage(PRESET_IMAGES[0].url); setProdIngredients([]); setIsProductModalOpen(true); }}
+                                            onClick={() => { setActiveCategoryId(cat.id); setEditingProductId(null); setProdName(''); setProdPrice(''); setProdImage(PRESET_IMAGES[0].url); setProdIngredients([]); setProdIngredientSearchTerm(''); setIsProductModalOpen(true); }}
                                             className="text-green-500 bg-green-500/10 p-2 rounded-lg"><Plus size={14} /></button>
                                         <button onClick={(e) => { e.stopPropagation(); openEditCategory(cat); }} className="text-blue-500/40 hover:text-blue-500 p-2"><Edit size={14} /></button>
                                         <button onClick={async () => {
@@ -3068,7 +3175,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                         }} className="text-red-500/40 p-2"><Trash2 size={14} /></button>
                                     </div>
                                 </div>
-                                {products.filter(p => p.category_id === cat.id).map(prod => {
+                                {products.filter(p => p.category_id === cat.id && (!menuSearchTerm || p.name.toLowerCase().includes(menuSearchTerm.toLowerCase()))).map(prod => {
                                 // Calcular costo de receta para este producto
                                 const recipeIngredients = productIngredients.filter(pi => pi.product_id === prod.id);
                                 const costTotal = recipeIngredients.reduce((sum, pi) => {
@@ -7338,8 +7445,43 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-2 block">Insumos Necesarios</label>
+                                    
+                                    {/* Buscador de Insumos para Receta */}
+                                    <div className="flex gap-2">
+                                        <div className="relative flex-1">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                                            <input
+                                                type="text"
+                                                value={prodIngredientSearchTerm}
+                                                onChange={(e) => setProdIngredientSearchTerm(e.target.value)}
+                                                placeholder="Buscar insumo..."
+                                                className="w-full bg-slate-900/50 border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-[10px] text-white font-bold outline-none focus:border-orange-500/50 transition-colors"
+                                            />
+                                            {prodIngredientSearchTerm && (
+                                                <button onClick={() => setProdIngredientSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
+                                                    <X size={12} />
+                                                </button>
+                                            )}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (isListeningProdIng) return;
+                                                handleVoiceSearch(setProdIngredientSearchTerm, setIsListeningProdIng);
+                                            }}
+                                            className={`p-2 rounded-xl border flex items-center justify-center transition-colors ${
+                                                isListeningProdIng 
+                                                    ? 'bg-red-500/20 border-red-500 text-red-500 animate-pulse' 
+                                                    : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white'
+                                            }`}
+                                            title="Buscar por voz"
+                                        >
+                                            {isListeningProdIng ? <Mic size={14} /> : <MicOff size={14} />}
+                                        </button>
+                                    </div>
+
                                     <div className="max-h-48 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                                        {ingredients.map(inv => {
+                                        {ingredients.filter(inv => !prodIngredientSearchTerm || inv.name.toLowerCase().includes(prodIngredientSearchTerm.toLowerCase())).map(inv => {
                                             const selected = prodIngredients.find(i => i.ingredient_id === inv.id);
                                             return (
                                                 <div key={inv.id} className={`p-3 rounded-2xl border transition-all flex items-center justify-between ${selected ? 'bg-orange-500/10 border-orange-500/50' : 'bg-slate-900/50 border-slate-800'}`}>

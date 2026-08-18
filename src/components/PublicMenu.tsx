@@ -7,6 +7,7 @@ import { MaxesLogo } from '@/components/MaxesLogo';
 import { useRealtimeData } from '@/hooks/useRealtimeData';
 import { supabase, broadcastTenantChange } from '@/lib/supabase';
 import { SocialWall } from '@/components/SocialWall';
+import { DEFAULT_CAROUSEL_SLIDES } from '@/lib/constants';
 
 const triggerTrialStart = (tenantId: string) => {
   fetch('/api/trial/start', {
@@ -404,6 +405,12 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         setShowLanding(false);
       }
     };
+
+    // Sincronizar estado inicial / actualizado con la configuración de la base de datos
+    if (window.location.hash !== '#menu' && window.location.hash !== '#cart') {
+      setShowLanding(tenant?.landing_config?.enabled || false);
+    }
+
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [tenant?.landing_config?.enabled, setIsCartOpen]);
@@ -2880,46 +2887,54 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             )}
 
             {/* CARRUSEL DINÁMICO (CUSTOM CAROUSEL) */}
-            {tenant?.landing_config?.custom_carousel?.length > 0 && (
-              <section className="space-y-6 animate-in slide-in-from-bottom-8 duration-700">
-                <div className="flex items-center gap-3 px-2">
-                  <div className="p-2 rounded-xl bg-orange-500/20 text-orange-500 border border-orange-500/30">
-                    <Star className="w-6 h-6 fill-current" />
+            {(() => {
+              const carouselSlides = (tenant?.landing_config?.custom_carousel && tenant.landing_config.custom_carousel.length > 0)
+                ? tenant.landing_config.custom_carousel
+                : DEFAULT_CAROUSEL_SLIDES;
+
+              if (!carouselSlides || carouselSlides.length === 0) return null;
+
+              return (
+                <section className="space-y-6 animate-in slide-in-from-bottom-8 duration-700">
+                  <div className="flex items-center gap-3 px-2">
+                    <div className="p-2 rounded-xl bg-orange-500/20 text-orange-500 border border-orange-500/30">
+                      <Star className="w-6 h-6 fill-current" />
+                    </div>
+                    <h2 className={`text-2xl md:text-3xl font-black uppercase tracking-widest   ${isLight ? "text-slate-900" : "text-white"}`}>
+                      Novedades
+                    </h2>
                   </div>
-                  <h2 className={`text-2xl md:text-3xl font-black uppercase tracking-widest   ${isLight ? "text-slate-900" : "text-white"}`}>
-                    Novedades
-                  </h2>
-                </div>
-                
-                <AutoCarousel gapClass="gap-4 md:gap-6">
-                  {tenant.landing_config.custom_carousel.map((slide: any) => (
-                    <div key={slide.id} className={`min-w-[300px] md:min-w-[400px] snap-center border rounded-[2rem] overflow-hidden shadow-2xl relative group transition-colors ${isLight ? "bg-slate-50 border-slate-200 text-slate-900" : "bg-neutral-900/60 border-white/5 text-white"}`}>
-                      <div className={`h-64 md:h-72 w-full relative overflow-hidden ${isLight ? "bg-slate-200" : "bg-neutral-800"}`}>
-                        {slide.image_url ? (
-                          <img src={slide.image_url} alt={slide.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-orange-500/10 to-purple-500/10">
-                            <ImageIcon className={`w-12 h-12  /20 ${isLight ? "text-slate-900" : "text-white"}`} />
+                  
+                  <AutoCarousel gapClass="gap-4 md:gap-6">
+                    {carouselSlides.map((slide: any) => (
+                      <div key={slide.id} className={`min-w-[300px] md:min-w-[400px] snap-center border rounded-[2rem] overflow-hidden shadow-2xl relative group transition-colors ${isLight ? "bg-slate-50 border-slate-200 text-slate-900" : "bg-neutral-900/60 border-white/5 text-white"}`}>
+                        <div className={`h-64 md:h-72 w-full relative overflow-hidden ${isLight ? "bg-slate-200" : "bg-neutral-800"}`}>
+                          {slide.image_url ? (
+                            <img src={slide.image_url} alt={slide.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-orange-500/10 to-purple-500/10">
+                              <ImageIcon className={`w-12 h-12  /20 ${isLight ? "text-slate-900" : "text-white"}`} />
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-90" />
+                          
+                          {slide.badge_text && (
+                            <div className={`absolute top-4 left-4 px-3 py-1.5 bg-white/10 backdrop-blur-md rounded-xl font-bold   text-xs border border-white/20 shadow-lg ${isLight ? "text-slate-900" : "text-white"}`}>
+                              ✨ {slide.badge_text}
+                            </div>
+                          )}
+                          
+                          <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-col justify-end">
+                            <h3 className={`text-xl md:text-2xl font-black   leading-tight mb-2 drop-shadow-md ${isLight ? "text-slate-900" : "text-white"}`}>{slide.title}</h3>
+                            <p className="text-sm text-slate-300 line-clamp-3 leading-relaxed drop-shadow-sm">{slide.description}</p>
                           </div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent opacity-90" />
-                        
-                        {slide.badge_text && (
-                          <div className={`absolute top-4 left-4 px-3 py-1.5 bg-white/10 backdrop-blur-md rounded-xl font-bold   text-xs border border-white/20 shadow-lg ${isLight ? "text-slate-900" : "text-white"}`}>
-                            ✨ {slide.badge_text}
-                          </div>
-                        )}
-                        
-                        <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-col justify-end">
-                          <h3 className={`text-xl md:text-2xl font-black   leading-tight mb-2 drop-shadow-md ${isLight ? "text-slate-900" : "text-white"}`}>{slide.title}</h3>
-                          <p className="text-sm text-slate-300 line-clamp-3 leading-relaxed drop-shadow-sm">{slide.description}</p>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </AutoCarousel>
-              </section>
-            )}
+                    ))}
+                  </AutoCarousel>
+                </section>
+              );
+            })()}
 
             {/* CARRUSEL DE PRODUCTOS DESTACADOS */}
             {tenant?.landing_config?.featured_products_enabled && (

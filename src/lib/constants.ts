@@ -1,3 +1,37 @@
+export const DEFAULT_CAROUSEL_SLIDES = [
+    {
+        id: "slide_1",
+        title: "Alta Cocina en Cada Plato",
+        image_url: "/carousel/dish.png",
+        badge_text: "Top Seleccionado",
+        description: "Descubre nuestra selección de ingredientes premium. Cada detalle está pensado para ofrecerte una experiencia gastronómica inolvidable."
+    },
+    {
+        id: "slide_2",
+        title: "Higiene Impecable",
+        image_url: "/carousel/kitchen.png",
+        badge_text: "Certificación de Calidad",
+        description: "Nos tomamos la limpieza muy en serio. Nuestra cocina cuenta con los más altos estándares de sanitización diarios para tu tranquilidad."
+    },
+    {
+        id: "slide_3",
+        title: "Eventos Inolvidables",
+        image_url: "/carousel/event.png",
+        badge_text: "¡Este Finde!",
+        description: "Música en vivo, degustaciones y promociones especiales todos los fines de semana. Vení a disfrutar de la mejor atmósfera."
+    }
+];
+
+export const DEFAULT_LANDING_CONFIG = {
+    enabled: true,
+    hero_style: 'modern',
+    interactive_wall_enabled: true,
+    hero_video_url: '',
+    hero_image_url: '',
+    promos: [],
+    events: [],
+    custom_carousel: DEFAULT_CAROUSEL_SLIDES
+};
 
 export const PRESET_IMAGES = [
     { url: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3", label: "Burger" },
