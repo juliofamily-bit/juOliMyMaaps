@@ -3,7 +3,7 @@ import { supabase as rawSupabase, broadcastTenantChange } from '@/lib/supabase';
 import { Product, Ingredient, Order, Expense, OrderStatus, Category, ProductIngredient, IngredientBatch, ProductOffer } from '@/types/database';
 import { PRESET_IMAGES, NEON_ICONS, DEFAULT_CAROUSEL_SLIDES, DEFAULT_LANDING_CONFIG } from '@/lib/constants';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, ReferenceLine } from 'recharts';
-import { CreditCard, BarChart2, QrCode, FileText, Plus, Trash2, Edit, TrendingUp, DollarSign, Package, Layers, History, ChevronRight, X, Save, Check, Upload, Image as ImageIcon, Wallet, Receipt, ArrowUpCircle, ArrowDownCircle, Calendar, FilterX, Star, StarOff, PieChart, Paintbrush, LayoutGrid, Sun, Moon, CheckCircle, AlertCircle, Loader2, Share2, AlertTriangle, CalendarRange, Trophy, Smartphone, Instagram, Facebook, Phone, Printer, Download, Award, Coins, Search, MessageCircle, Gift, RefreshCw, Settings, ChevronUp, ChevronDown, Users, Truck, Map as MapIcon, Utensils, Lock, Mic, MicOff, Video, Film, Link as LinkIcon, Info } from 'lucide-react';
+import { Send, Copy, Sparkles, Megaphone, BellOff, ArrowLeft, ArrowRight, RotateCw, CheckCheck, CreditCard, BarChart2, QrCode, FileText, Plus, Trash2, Edit, TrendingUp, DollarSign, Package, Layers, History, ChevronRight, X, Save, Check, Upload, Image as ImageIcon, Wallet, Receipt, ArrowUpCircle, ArrowDownCircle, Calendar, FilterX, Star, StarOff, PieChart, Paintbrush, LayoutGrid, Sun, Moon, CheckCircle, AlertCircle, Loader2, Share2, AlertTriangle, CalendarRange, Trophy, Smartphone, Instagram, Facebook, Phone, Printer, Download, Award, Coins, Search, MessageCircle, Gift, RefreshCw, Settings, ChevronUp, ChevronDown, Users, Truck, Map as MapIcon, Utensils, Lock, Mic, MicOff, Video, Film, Link as LinkIcon, Info } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { PrintableQRPoster } from './PrintableQRPoster';
 import { AdminEmployeeTab } from './AdminEmployeeTab';
@@ -12,6 +12,7 @@ import { AdminSupportFloatingButton } from './AdminSupportFloatingButton';
 import AdminDeliverySettlement from './AdminDeliverySettlement';
 import AdminWaiterSettlement from './AdminWaiterSettlement';
 import HelpButton from './HelpButton';
+import { cleanArgPhone, isSamePhone, mergeClientNames } from '@/lib/phoneUtils';
 interface AdminTabProps {
     products: Product[];
     categories: Category[];
@@ -331,6 +332,21 @@ const AdminTab: React.FC<AdminTabProps> = ({
     const [editingLoyaltyAccount, setEditingLoyaltyAccount] = useState<any | null>(null);
     const [newBalance, setNewBalance] = useState('');
     const [isSavingLoyaltyConfig, setIsSavingLoyaltyConfig] = useState(false);
+
+    // Estados para Campañas Masivas de WhatsApp y Sincronización Histórica (mmmTodoLoQuiero)
+    const [isSyncingOrders, setIsSyncingOrders] = useState(false);
+    const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
+    const [campaignTarget, setCampaignTarget] = useState<'all' | 'balance' | 'dormant' | 'vip'>('all');
+    const [campaignTemplate, setCampaignTemplate] = useState<string>(
+        `Hola {nombre}, te comento que tenés un descuento de {saldo} para gastar en cualquiera de nuestros productos ({porcentaje} acumulado). Te dejo el enlace de mi página para que compres directamente desde tu casa o para que veas los precios: {enlace_local}\n\n*(Si preferís no recibir más promos, avísanos con la palabra "BAJA" 🙂)*`
+    );
+    const [campaignExcludedIds, setCampaignExcludedIds] = useState<string[]>([]);
+    const [isDispatchingCampaign, setIsDispatchingCampaign] = useState(false);
+    const [dispatcherIndex, setDispatcherIndex] = useState(0);
+    const [dispatcherSentIds, setDispatcherSentIds] = useState<string[]>([]);
+    const [dispatcherSkippedIds, setDispatcherSkippedIds] = useState<string[]>([]);
+    const [isCopiedMsg, setIsCopiedMsg] = useState(false);
+    const [showClubSettingsDrawer, setShowClubSettingsDrawer] = useState(false);
 
     // Estados para editar configuración del club de clientes
     const [loyConfigEnabled, setLoyConfigEnabled] = useState(true);
@@ -1189,7 +1205,89 @@ const AdminTab: React.FC<AdminTabProps> = ({
                 .order('total_spent', { ascending: false });
 
             if (error) throw error;
-            setLoyaltyAccounts(data || []);
+            const rawList = data || [];
+
+            // Unificar por teléfono físico garantizando un solo cliente por número
+            const groups: any[][] = [];
+            for (const acc of rawList) {
+                const existingGroup = groups.find(g => isSamePhone(g[0].phone_number, acc.phone_number));
+                if (existingGroup) {
+                    existingGroup.push(acc);
+                } else {
+                    groups.push([acc]);
+                }
+            }
+
+            const consolidatedList: any[] = [];
+            const tiers = loyConfigTiers || [
+                { name: 'bronce', min_orders: 0, max_orders: 5, cashback_pct: 5 },
+                { name: 'plata', min_orders: 6, max_orders: 15, cashback_pct: 7 },
+                { name: 'oro', min_orders: 16, max_orders: 99999, cashback_pct: 10 }
+            ];
+
+            for (const group of groups) {
+                if (group.length === 1) {
+                    consolidatedList.push(group[0]);
+                } else {
+                    // Múltiples cuentas para el mismo teléfono: consolidar en una sola
+                    const primary = group[0];
+                    const mergedName = mergeClientNames(...group.map(a => a.client_name));
+                    const totalBalance = group.reduce((sum, a) => sum + (parseFloat(a.balance) || 0), 0);
+                    const totalSpent = group.reduce((sum, a) => sum + (parseFloat(a.total_spent) || 0), 0);
+                    const totalOrders = group.reduce((sum, a) => sum + (Number(a.total_orders) || 0), 0);
+
+                    const sortedDates = group
+                        .map(a => a.last_order_date)
+                        .filter(Boolean)
+                        .sort((d1, d2) => new Date(d2).getTime() - new Date(d1).getTime());
+                    const latestDate = sortedDates[0] || primary.last_order_date;
+
+                    let tier = 'bronce';
+                    for (const t of tiers) {
+                        if (totalOrders >= t.min_orders && totalOrders <= t.max_orders) {
+                            tier = t.name;
+                            break;
+                        }
+                    }
+
+                    const consolidatedAcc = {
+                        ...primary,
+                        client_name: mergedName,
+                        balance: totalBalance,
+                        total_spent: totalSpent,
+                        total_orders: totalOrders,
+                        last_order_date: latestDate,
+                        tier: tier
+                    };
+                    consolidatedList.push(consolidatedAcc);
+
+                    // Saneamiento proactivo en Supabase: actualiza el principal y elimina duplicados
+                    supabase
+                        .from('loyalty_accounts')
+                        .update({
+                            client_name: mergedName,
+                            balance: totalBalance,
+                            total_spent: totalSpent,
+                            total_orders: totalOrders,
+                            last_order_date: latestDate,
+                            tier: tier
+                        })
+                        .eq('id', primary.id)
+                        .then(() => {});
+
+                    const duplicateIds = group.slice(1).map(a => a.id);
+                    if (duplicateIds.length > 0) {
+                        supabase
+                            .from('loyalty_accounts')
+                            .delete()
+                            .in('id', duplicateIds)
+                            .then(() => {});
+                    }
+                }
+            }
+
+            consolidatedList.sort((a, b) => (parseFloat(b.total_spent) || 0) - (parseFloat(a.total_spent) || 0));
+            setLoyaltyAccounts(consolidatedList);
         } catch (err) {
             console.error('Error fetching loyalty accounts:', err);
         } finally {
@@ -1244,10 +1342,199 @@ const AdminTab: React.FC<AdminTabProps> = ({
     };
 
     useEffect(() => {
-        if (view === 'loyalty') {
+        if (tenant?.id && (view === 'loyalty' || view === 'config' || expandedConfigSection === 'loyalty')) {
             fetchLoyaltyAccounts();
         }
-    }, [view, tenant?.id]);
+    }, [view, expandedConfigSection, tenant?.id]);
+
+    const getClientCashbackPct = (acc: any): number => {
+        const tiers = loyConfigTiers || [];
+        const tierName = acc?.tier || 'bronce';
+        const found = tiers.find((t: any) => t.name === tierName);
+        if (found && found.cashback_pct !== undefined) {
+            return found.cashback_pct;
+        }
+        return loyConfigCashbackPct || 5;
+    };
+
+    const buildCampaignMessage = (template: string, acc: any): string => {
+        const name = (acc?.client_name || '').trim() || 'estimado cliente';
+        const balance = formatARS(parseFloat(acc?.balance) || 0);
+        const pct = `${getClientCashbackPct(acc)}%`;
+        const localName = tenant?.name || 'nuestro local';
+        const tier = (acc?.tier || 'bronce').toUpperCase();
+        const localMenuUrl = typeof window !== 'undefined' 
+            ? `${window.location.origin}/${tenant?.slug || ''}`
+            : `https://mymenulocal.com/${tenant?.slug || ''}`;
+
+        return template
+            .replace(/{nombre}/g, name)
+            .replace(/{saldo}/g, balance)
+            .replace(/{porcentaje}/g, pct)
+            .replace(/{enlace_local}/g, localMenuUrl)
+            .replace(/{local}/g, localName)
+            .replace(/{nivel}/g, tier);
+    };
+
+    const handleToggleOptOut = async (account: any) => {
+        try {
+            const newStatus = !account.opt_out;
+            const { error } = await supabase
+                .from('loyalty_accounts')
+                .update({ opt_out: newStatus })
+                .eq('id', account.id);
+
+            if (error) throw error;
+            setLoyaltyAccounts(prev => prev.map(a => a.id === account.id ? { ...a, opt_out: newStatus } : a));
+        } catch (err: any) {
+            console.error("Error toggling opt out:", err);
+            alert("Error al actualizar estado: " + err.message);
+        }
+    };
+
+    const handleSyncHistoricalOrders = async () => {
+        if (!tenant?.id) return;
+        setIsSyncingOrders(true);
+        try {
+            const { data: ordersData, error: ordersError } = await supabase
+                .from('orders')
+                .select('id, client_name, phone_number, total_price, payment_status, created_at')
+                .eq('tenant_id', tenant.id);
+
+            if (ordersError) throw ordersError;
+            if (!ordersData || ordersData.length === 0) {
+                alert("ℹ️ No se encontraron pedidos con teléfono en el historial para sincronizar.");
+                setIsSyncingOrders(false);
+                return;
+            }
+
+            const clientsMap: Record<string, {
+                name: string;
+                phone: string;
+                total_spent: number;
+                total_orders: number;
+                last_order_date: string;
+            }> = {};
+
+            for (const o of ordersData) {
+                const rawPhone = (o.phone_number || '').trim();
+                if (!rawPhone || rawPhone.toLowerCase() === 'sin número' || rawPhone.toLowerCase() === 'n/a' || rawPhone.length < 6) {
+                    continue;
+                }
+                const phone = cleanArgPhone(rawPhone);
+                if (!phone) continue;
+
+                const spent = Number(o.total_price) || 0;
+                const orderDate = o.created_at || new Date().toISOString();
+
+                // Buscar si ya existe un cliente con este mismo número usando isSamePhone
+                const existingKey = Object.keys(clientsMap).find(k => isSamePhone(k, phone));
+                const targetKey = existingKey || phone;
+
+                if (!clientsMap[targetKey]) {
+                    clientsMap[targetKey] = {
+                        name: (o.client_name || '').trim() || 'Cliente Frecuente',
+                        phone: phone,
+                        total_spent: spent,
+                        total_orders: 1,
+                        last_order_date: orderDate
+                    };
+                } else {
+                    clientsMap[targetKey].total_spent += spent;
+                    clientsMap[targetKey].total_orders += 1;
+                    // Combinar nombres: ej "Maxes" + "Max" => "Maxes / Max"
+                    clientsMap[targetKey].name = mergeClientNames(clientsMap[targetKey].name, o.client_name);
+                    if (new Date(orderDate) > new Date(clientsMap[targetKey].last_order_date)) {
+                        clientsMap[targetKey].last_order_date = orderDate;
+                    }
+                }
+            }
+
+            const uniquePhones = Object.keys(clientsMap);
+            if (uniquePhones.length === 0) {
+                alert("ℹ️ No se encontraron números de teléfono válidos en los pedidos registrados.");
+                setIsSyncingOrders(false);
+                return;
+            }
+
+            const { data: existingAccounts } = await supabase
+                .from('loyalty_accounts')
+                .select('*')
+                .eq('tenant_id', tenant.id);
+
+            const existingAccountsList = existingAccounts || [];
+            const findExistingAccount = (phoneStr: string) => {
+                return existingAccountsList.find(a => isSamePhone(a.phone_number, phoneStr)) || null;
+            };
+
+            const tiers = loyConfigTiers || [
+                { name: 'bronce', min_orders: 0, max_orders: 5, cashback_pct: 5 },
+                { name: 'plata', min_orders: 6, max_orders: 15, cashback_pct: 7 },
+                { name: 'oro', min_orders: 16, max_orders: 99999, cashback_pct: 10 }
+            ];
+
+            let insertedCount = 0;
+            let updatedCount = 0;
+
+            for (const phone of uniquePhones) {
+                const client = clientsMap[phone];
+                const existing = findExistingAccount(phone);
+
+                let tier: 'bronce' | 'plata' | 'oro' = 'bronce';
+                for (const t of tiers) {
+                    if (client.total_orders >= t.min_orders && client.total_orders <= t.max_orders) {
+                        tier = t.name as any;
+                        break;
+                    }
+                }
+
+                if (!existing) {
+                    const defaultPct = (tiers.find(t => t.name === tier)?.cashback_pct) || loyConfigCashbackPct || 5;
+                    const calculatedBalance = Math.round(client.total_spent * (defaultPct / 100));
+
+                    const { error: insErr } = await supabase
+                        .from('loyalty_accounts')
+                        .insert({
+                            tenant_id: tenant.id,
+                            phone_number: phone,
+                            client_name: client.name,
+                            balance: calculatedBalance,
+                            total_spent: client.total_spent,
+                            total_orders: client.total_orders,
+                            last_order_date: client.last_order_date,
+                            tier: tier
+                        });
+                    if (!insErr) insertedCount++;
+                } else {
+                    const newTotalSpent = Math.max(Number(existing.total_spent) || 0, client.total_spent);
+                    const newTotalOrders = Math.max(Number(existing.total_orders) || 0, client.total_orders);
+                    const newName = mergeClientNames(existing.client_name, client.name);
+                    const lastDate = new Date(client.last_order_date) > new Date(existing.last_order_date) ? client.last_order_date : existing.last_order_date;
+
+                    const { error: upErr } = await supabase
+                        .from('loyalty_accounts')
+                        .update({
+                            client_name: newName,
+                            total_spent: newTotalSpent,
+                            total_orders: newTotalOrders,
+                            last_order_date: lastDate,
+                            tier: tier
+                        })
+                        .eq('id', existing.id);
+                    if (!upErr) updatedCount++;
+                }
+            }
+
+            alert(`✅ Sincronización finalizada con éxito:\n\n✨ ${insertedCount} clientes nuevos incorporados al Club.\n🔄 ${updatedCount} clientes actualizados con sus compras.`);
+            await fetchLoyaltyAccounts();
+        } catch (err: any) {
+            console.error("Error al sincronizar pedidos históricos:", err);
+            alert("Error al sincronizar: " + (err.message || err));
+        } finally {
+            setIsSyncingOrders(false);
+        }
+    };
+
 
     const handleCreateCode = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -2153,20 +2440,28 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
     const bestSellers = useMemo(() => {
         const counts: Record<string, number> = {};
+        const allTimeCounts: Record<string, number> = {};
         const now = new Date();
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth();
 
         orders.forEach(o => {
             const oDate = new Date(o.created_at);
-            // Filtrar para sumar únicamente los pedidos del mes calendario actual
-            if (oDate.getFullYear() === currentYear && oDate.getMonth() === currentMonth) {
-                o.items?.forEach(item => {
-                    if (item.product_id) counts[item.product_id] = (counts[item.product_id] || 0) + item.quantity;
-                });
-            }
+            const isCurrentMonth = oDate.getFullYear() === currentYear && oDate.getMonth() === currentMonth;
+
+            o.items?.forEach(item => {
+                if (item.product_id) {
+                    allTimeCounts[item.product_id] = (allTimeCounts[item.product_id] || 0) + item.quantity;
+                    if (isCurrentMonth) {
+                        counts[item.product_id] = (counts[item.product_id] || 0) + item.quantity;
+                    }
+                }
+            });
         });
-        return Object.entries(counts)
+
+        const activeCounts = Object.keys(counts).length > 0 ? counts : allTimeCounts;
+
+        return Object.entries(activeCounts)
             .map(([id, qty]) => ({ id, qty, name: products.find(p => p.id === id)?.name || 'Desconocido' }))
             .sort((a, b) => b.qty - a.qty);
     }, [orders, products]);
@@ -6689,17 +6984,32 @@ const AdminTab: React.FC<AdminTabProps> = ({
                         {/* Accordion: Club de Clientes */}
                         <div className="flex flex-col gap-2">
                             <button
-                                onClick={() => setExpandedConfigSection(prev => prev === 'loyalty' ? null : 'loyalty')}
-                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                                    expandedConfigSection === 'loyalty' ? 'bg-orange-500/10 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.1)]' : 'bg-slate-900/80 border-orange-500/30 text-orange-400'
+                                onClick={() => {
+                                    setExpandedConfigSection(prev => {
+                                        const next = prev === 'loyalty' ? null : 'loyalty';
+                                        if (next === 'loyalty') fetchLoyaltyAccounts();
+                                        return next;
+                                    });
+                                }}
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all relative overflow-hidden ${
+                                    expandedConfigSection === 'loyalty' 
+                                        ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.35)] ring-2 ring-emerald-400/60' 
+                                        : 'bg-emerald-950/40 border-emerald-500/60 text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/30'
                                 }`}
                             >
                                 <div className="flex items-center gap-3">
-                                    <Users className="w-5 h-5" />
-                                    <span className="font-bold uppercase text-sm tracking-wider">Club de Clientes / Fidelización</span>
-                                    <HelpButton helpKey="admin-settings-loyalty" size="sm" primaryColor={tenant?.theme_colors?.primary} />
+                                    <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 border border-emerald-500/40 shadow-inner">
+                                        <Users className="w-4 h-4" />
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="font-black uppercase text-sm tracking-wider text-emerald-400">Club de Clientes / Fidelización</span>
+                                        <span className="text-[7.5px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm flex items-center gap-1">
+                                            💵 Diferenciador Clave
+                                        </span>
+                                    </div>
+                                    <HelpButton helpKey="admin-settings-loyalty" size="sm" primaryColor="#10b981" />
                                 </div>
-                                {expandedConfigSection === 'loyalty' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                                {expandedConfigSection === 'loyalty' ? <ChevronUp className="w-5 h-5 text-emerald-400" /> : <ChevronDown className="w-5 h-5 text-emerald-400" />}
                             </button>
             {expandedConfigSection === 'loyalty' && (
                 <div className="space-y-6 animate-in slide-in-from-bottom-4">
@@ -6708,12 +7018,35 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             <h3 className="font-black uppercase italic text-sm">Fidelización y Club de Clientes</h3>
                             <p className="text-slate-500 text-[10px] uppercase font-bold mt-1">Monitorea y premia a tus clientes más fieles con monedero virtual</p>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap items-center">
                             <button
-                                onClick={fetchLoyaltyAccounts}
-                                className="py-2.5 px-4 bg-slate-900 border border-slate-800 text-[9px] font-black uppercase text-slate-400 rounded-xl hover:text-white transition-all active:scale-95 flex items-center gap-1.5"
+                                type="button"
+                                onClick={() => {
+                                    setCampaignTarget('all');
+                                    setIsCampaignModalOpen(true);
+                                }}
+                                className="py-2.5 px-4 bg-emerald-500 text-slate-950 hover:bg-emerald-400 text-[9px] font-black uppercase rounded-xl transition-all flex items-center gap-1.5 shadow-lg active:scale-95 font-bold"
                             >
-                                <RefreshCw size={10} className={isFetchingLoyalty ? "animate-spin" : ""} /> Refrescar
+                                <Megaphone size={12} />
+                                Nueva Campaña WhatsApp
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSyncHistoricalOrders}
+                                disabled={isSyncingOrders}
+                                className="py-2.5 px-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 text-[9px] font-black uppercase rounded-xl transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+                                title="Escanear todos los pedidos históricos y registrar a los clientes en el Club"
+                            >
+                                <Sparkles size={11} className={isSyncingOrders ? "animate-spin text-emerald-500" : "text-emerald-400"} />
+                                {isSyncingOrders ? "Sincronizando..." : "⚡ Sincronizar Pedidos"}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={fetchLoyaltyAccounts}
+                                className="py-2.5 px-3 bg-slate-900 border border-slate-800 text-slate-400 hover:text-white rounded-xl transition-all"
+                                title="Refrescar lista"
+                            >
+                                <RefreshCw size={11} className={isFetchingLoyalty ? "animate-spin" : ""} />
                             </button>
                         </div>
                     </div>
@@ -6882,9 +7215,28 @@ const AdminTab: React.FC<AdminTabProps> = ({
                         </div>
                     </div>
 
+                    {/* AVISO SI ESTÁ INACTIVO */}
+                    {!loyConfigEnabled && (
+                        <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl flex items-center justify-between gap-3 text-left">
+                            <div className="flex items-center gap-3">
+                                <span className="text-xl">⚠️</span>
+                                <div>
+                                    <p className="text-xs font-black text-amber-400 uppercase">El Club de Fidelización está Inactivo en este local</p>
+                                    <p className="text-[10px] text-slate-300 font-bold">Activa el interruptor arriba y guarda los cambios para que tus comensales puedan acumular cashback en sus pedidos.</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setLoyConfigEnabled(true)}
+                                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[9px] uppercase rounded-xl transition-all shrink-0"
+                            >
+                                Activar Ahora
+                            </button>
+                        </div>
+                    )}
+
                     {/* ANALÍTICA DEL CLUB Y CRM */}
-                    {loyConfigEnabled && (
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-left">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-left">
                             <div className="glass p-5 rounded-[2.5rem] border border-white/5 flex items-center gap-4">
                                 <div className="w-12 h-12 rounded-2xl bg-orange-500/10 text-orange-400 flex items-center justify-center shrink-0">
                                     <Award size={22} />
@@ -6928,11 +7280,9 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 </div>
                             </div>
                         </div>
-                    )}
 
                     {/* BUSCADOR Y TABLA CRM */}
-                    {loyConfigEnabled && (
-                        <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-6">
+                    <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-6">
                             <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center text-left">
                                 <div>
                                     <h4 className="font-black text-white text-[12px] uppercase">Base de Datos de Clientes y Trazabilidad</h4>
@@ -7005,7 +7355,18 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                 return (
                                                     <tr>
                                                         <td colSpan={8} className="py-8 text-center text-slate-500 font-bold uppercase tracking-wider">
-                                                            No se encontraron clientes que coincidan con la búsqueda.
+                                                            <p>No se encontraron clientes {loyaltySearch ? 'que coincidan con la búsqueda' : 'registrados en el Club'}.</p>
+                                                            {!loyaltySearch && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={handleSyncHistoricalOrders}
+                                                                    disabled={isSyncingOrders}
+                                                                    className="mt-3 inline-flex items-center gap-1.5 py-2 px-3 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-xl text-[9px] font-black uppercase hover:bg-orange-500/30 transition-all shadow-sm"
+                                                                >
+                                                                    <Sparkles size={11} className={isSyncingOrders ? "animate-spin text-orange-500" : "text-orange-400"} />
+                                                                    {isSyncingOrders ? "Sincronizando..." : "⚡ Sincronizar Clientes de Pedidos Anteriores"}
+                                                                </button>
+                                                            )}
                                                         </td>
                                                     </tr>
                                                 );
@@ -7097,7 +7458,6 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 </table>
                             </div>
                         </div>
-                    )}
                 </div>
             )}
                         </div>
@@ -7111,15 +7471,24 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                     }
                                     setExpandedConfigSection(prev => prev === 'rockola_vip' ? null : 'rockola_vip')
                                 }}
-                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                                    expandedConfigSection === 'rockola_vip' ? 'bg-purple-500/10 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.1)]' : 'bg-slate-900/80 border-purple-500/30 text-purple-400'
+                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all relative overflow-hidden ${
+                                    expandedConfigSection === 'rockola_vip' 
+                                        ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.35)] ring-2 ring-emerald-400/60' 
+                                        : 'bg-emerald-950/40 border-emerald-500/60 text-emerald-400 hover:bg-emerald-900/40 hover:border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/30'
                                 }`}
                             >
                                 <div className="flex items-center gap-3">
-                                    <span className="text-xl">🌟</span>
-                                    <span className="font-bold uppercase text-sm tracking-wider">Muro Interactivo</span>
+                                    <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400 border border-emerald-500/40 shadow-inner">
+                                        <span className="text-base">🌟</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="font-black uppercase text-sm tracking-wider text-emerald-400">Muro Interactivo (Pantallas en Vivo)</span>
+                                        <span className="text-[7.5px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm flex items-center gap-1">
+                                            💵 Diferenciador Clave
+                                        </span>
+                                    </div>
                                 </div>
-                                {expandedConfigSection === 'rockola_vip' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                                {expandedConfigSection === 'rockola_vip' ? <ChevronUp className="w-5 h-5 text-emerald-400" /> : <ChevronDown className="w-5 h-5 text-emerald-400" />}
                             </button>
                             {expandedConfigSection === 'rockola_vip' && !isViewLocked('rockola') && (
                                 <div className="p-6 bg-slate-950/80 border border-purple-500/20 rounded-2xl animate-in slide-in-from-bottom-2 text-center space-y-4">
@@ -7170,6 +7539,851 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
                 </div>
             )}
+
+            {/* VISTA DEDICADA: CLUB DE FIDELIZACIÓN & CRM DE CAMPAÑAS WHATSAPP */}
+            {view === 'loyalty' && (
+                <div className="space-y-6 animate-in fade-in pb-20">
+                    {/* Header Banner */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/5 pb-4">
+                        <div>
+                            <div className="flex items-center gap-3">
+                                <span className="text-2xl">🪙</span>
+                                <h3 className="font-black uppercase italic text-lg text-white">
+                                    Club de Fidelización & Campañas WhatsApp
+                                </h3>
+                                <HelpButton helpKey="admin-settings-loyalty" size="sm" primaryColor={tenant?.theme_colors?.primary} />
+                            </div>
+                            <p className="text-slate-500 text-xs font-bold uppercase mt-1">
+                                Monedero virtual, base de clientes (CRM) y difusiones personalizadas por WhatsApp en 1 clic
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                                onClick={handleSyncHistoricalOrders}
+                                disabled={isSyncingOrders}
+                                className="py-2.5 px-4 bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 text-[10px] font-black uppercase rounded-xl transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+                                title="Escanear todos los pedidos y cargar los clientes en el Club"
+                            >
+                                <Sparkles size={12} className={isSyncingOrders ? "animate-spin text-orange-500" : "text-orange-400"} />
+                                {isSyncingOrders ? "Sincronizando..." : "⚡ Sincronizar Pedidos"}
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setCampaignTarget('all');
+                                    setIsCampaignModalOpen(true);
+                                }}
+                                className="py-2.5 px-4 bg-emerald-500 text-slate-950 hover:bg-emerald-400 text-[10px] font-black uppercase rounded-xl transition-all flex items-center gap-1.5 shadow-lg active:scale-95"
+                            >
+                                <Megaphone size={12} />
+                                Nueva Campaña WhatsApp
+                            </button>
+                            <button
+                                onClick={() => setShowClubSettingsDrawer(prev => !prev)}
+                                className={`py-2.5 px-3 border text-[10px] font-black uppercase rounded-xl transition-all flex items-center gap-1.5 ${
+                                    showClubSettingsDrawer ? 'bg-slate-800 text-white border-slate-700' : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                                }`}
+                            >
+                                <Settings size={12} />
+                                {showClubSettingsDrawer ? "Ocultar Ajustes" : "Ajustes Cashback"}
+                            </button>
+                            <button
+                                onClick={fetchLoyaltyAccounts}
+                                className="py-2.5 px-3 bg-slate-900 border border-slate-800 text-slate-400 hover:text-white rounded-xl transition-all"
+                                title="Refrescar lista"
+                            >
+                                <RefreshCw size={12} className={isFetchingLoyalty ? "animate-spin" : ""} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* KPI CARDS */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-left">
+                        <div className="glass p-5 rounded-[2rem] border border-white/5 flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-orange-500/10 text-orange-400 flex items-center justify-center shrink-0">
+                                <Users size={22} />
+                            </div>
+                            <div className="space-y-0.5">
+                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-wider">Clientes Identificados</p>
+                                <h3 className="text-xl font-black text-white font-mono">{loyaltyAccounts.length}</h3>
+                                <p className="text-[7px] text-slate-400 font-bold uppercase">Registrados por teléfono</p>
+                            </div>
+                        </div>
+
+                        <div className="glass p-5 rounded-[2rem] border border-white/5 flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
+                                <Coins size={22} />
+                            </div>
+                            <div className="space-y-0.5">
+                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-wider">Saldo en Circulación</p>
+                                <h3 className="text-xl font-black text-emerald-400 font-mono">
+                                    {formatARS(loyaltyAccounts.reduce((sum, item) => sum + (parseFloat(item.balance) || 0), 0))}
+                                </h3>
+                                <p className="text-[7px] text-slate-400 font-bold uppercase">Monedero total disponible</p>
+                            </div>
+                        </div>
+
+                        <div className="glass p-5 rounded-[2rem] border border-white/5 flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
+                                <TrendingUp size={22} />
+                            </div>
+                            <div className="space-y-0.5">
+                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-wider">Ticket Promedio</p>
+                                <h3 className="text-xl font-black text-blue-400 font-mono">
+                                    {(() => {
+                                        const validSpent = loyaltyAccounts.filter(a => a.total_orders > 0);
+                                        if (validSpent.length === 0) return '$0';
+                                        const totalOrders = validSpent.reduce((sum, item) => sum + item.total_orders, 0);
+                                        const totalSpent = validSpent.reduce((sum, item) => sum + (parseFloat(item.total_spent) || 0), 0);
+                                        return formatARS(Math.round(totalSpent / totalOrders));
+                                    })()}
+                                </h3>
+                                <p className="text-[7px] text-slate-400 font-bold uppercase">Gasto por visita</p>
+                            </div>
+                        </div>
+
+                        <div className="glass p-5 rounded-[2rem] border border-white/5 flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-400 flex items-center justify-center shrink-0">
+                                <Award size={22} />
+                            </div>
+                            <div className="space-y-0.5">
+                                <p className="text-[8px] text-slate-500 font-black uppercase tracking-wider">Oportunidad Reactivación</p>
+                                <h3 className="text-xl font-black text-purple-400 font-mono">
+                                    {loyaltyAccounts.filter(a => {
+                                        const diff = Date.now() - new Date(a.last_order_date).getTime();
+                                        return diff > 30 * 24 * 60 * 60 * 1000;
+                                    }).length}
+                                </h3>
+                                <p className="text-[7px] text-slate-400 font-bold uppercase">Inactivos ({'>'}30 días)</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* DRAWER DE CONFIGURACIÓN DEL CLUB (TOGGLEABLE) */}
+                    {showClubSettingsDrawer && (
+                        <div className="glass p-6 rounded-[2.5rem] border border-orange-500/20 bg-orange-500/5 space-y-6 animate-in slide-in-from-top-4">
+                            <div className="flex items-center justify-between border-b border-white/5 pb-4">
+                                <div className="flex items-center gap-3 text-left">
+                                    <div className="w-10 h-10 rounded-2xl bg-orange-500/10 text-orange-500 flex items-center justify-center">
+                                        <Settings size={18} />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-black text-white text-[12px] uppercase">Ajustes del Programa de Fidelidad</h4>
+                                        <p className="text-[9px] text-slate-400 font-bold uppercase">Controla cómo los clientes ganan y gastan su cashback</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${loyConfigEnabled ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                        {loyConfigEnabled ? 'Activo' : 'Inactivo'}
+                                    </span>
+                                    <input
+                                        type="checkbox"
+                                        checked={loyConfigEnabled}
+                                        onChange={(e) => setLoyConfigEnabled(e.target.checked)}
+                                        className="w-9 h-5 bg-slate-950 rounded-full appearance-none checked:bg-orange-500 border border-slate-800 cursor-pointer relative after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:rounded-full after:h-4 after:w-4 after:transition-all checked:after:translate-x-4 checked:after:bg-white"
+                                    />
+                                </div>
+                            </div>
+
+                            {loyConfigEnabled && (
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
+                                    <div className="bg-slate-950/40 p-4 rounded-3xl border border-white/5 space-y-2">
+                                        <label className="text-[8.5px] font-black uppercase text-slate-500 block">Canal de Acumulación (Ganar)</label>
+                                        <select
+                                            value={loyConfigEarnChan}
+                                            onChange={(e) => setLoyConfigEarnChan(e.target.value as any)}
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500/50 font-bold"
+                                        >
+                                            <option value="both">Ambos (Online + Salón/Caja)</option>
+                                            <option value="online">Solo Pedidos Online (PublicMenu)</option>
+                                            <option value="salon">Solo Salón (Mesas/Caja)</option>
+                                        </select>
+                                        <p className="text-[7.5px] text-slate-500 font-bold leading-normal uppercase">Canal donde las compras suman dinero al monedero.</p>
+                                    </div>
+
+                                    <div className="bg-slate-950/40 p-4 rounded-3xl border border-white/5 space-y-2">
+                                        <label className="text-[8.5px] font-black uppercase text-slate-500 block">Canal de Canje (Gastar)</label>
+                                        <select
+                                            value={loyConfigRedeemChan}
+                                            onChange={(e) => setLoyConfigRedeemChan(e.target.value as any)}
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500/50 font-bold"
+                                        >
+                                            <option value="both">Ambos (Online + Salón/Caja)</option>
+                                            <option value="online">Solo Pedidos Online (PublicMenu)</option>
+                                            <option value="salon">Solo Salón (Mesas/Caja)</option>
+                                        </select>
+                                        <p className="text-[7.5px] text-slate-500 font-bold leading-normal uppercase">Canal donde los comensales pueden descontar saldo.</p>
+                                    </div>
+
+                                    <div className="bg-slate-950/40 p-4 rounded-3xl border border-white/5 space-y-2">
+                                        <label className="text-[8.5px] font-black uppercase text-slate-500 block">Tasa de Cashback Base (%)</label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                value={loyConfigCashbackPct}
+                                                onChange={(e) => setLoyConfigCashbackPct(parseFloat(e.target.value) || 0)}
+                                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-bold outline-none focus:border-orange-500/50 pr-8"
+                                            />
+                                            <span className="absolute right-3 top-2 text-[9px] font-black text-slate-500">%</span>
+                                        </div>
+                                        <p className="text-[7.5px] text-slate-500 font-bold leading-normal uppercase">Porcentaje de la compra que se acredita al monedero.</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* CONFIGURACIÓN DE NIVELES (TIERS) */}
+                            {loyConfigEnabled && (
+                                <div className="space-y-4 text-left border-t border-white/5 pt-5">
+                                    <h5 className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1.5">
+                                        <Trophy size={12} /> Configuración de Niveles y Beneficios del Club
+                                    </h5>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {loyConfigTiers.map((t, idx) => (
+                                            <div key={t.name} className="bg-slate-950/30 border border-white/5 rounded-3xl p-5 space-y-4">
+                                                <div className="flex justify-between items-center">
+                                                    <span className={`text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full ${
+                                                        t.name === 'oro' ? 'bg-yellow-500/10 text-yellow-400' :
+                                                        t.name === 'plata' ? 'bg-slate-300/10 text-slate-350' : 'bg-orange-500/10 text-orange-400'
+                                                    }`}>
+                                                        ⭐ {t.name}
+                                                    </span>
+                                                    <span className="text-[8px] font-bold text-slate-500 uppercase">Nivel {idx + 1}</span>
+                                                </div>
+
+                                                <div className="space-y-3">
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <label className="text-[7.5px] font-black text-slate-500 uppercase block mb-1">Mín. Pedidos</label>
+                                                            <input
+                                                                type="number"
+                                                                value={t.min_orders}
+                                                                onChange={(e) => {
+                                                                    const val = parseInt(e.target.value) || 0;
+                                                                    setLoyConfigTiers(prev => prev.map(item => item.name === t.name ? { ...item, min_orders: val } : item));
+                                                                }}
+                                                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-[11px] text-white font-mono font-bold"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[7.5px] font-black text-slate-500 uppercase block mb-1">Máx. Pedidos</label>
+                                                            <input
+                                                                type="number"
+                                                                value={t.max_orders}
+                                                                onChange={(e) => {
+                                                                    const val = parseInt(e.target.value) || 0;
+                                                                    setLoyConfigTiers(prev => prev.map(item => item.name === t.name ? { ...item, max_orders: val } : item));
+                                                                }}
+                                                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-[11px] text-white font-mono font-bold"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <label className="text-[7.5px] font-black text-slate-500 uppercase block mb-1">Cashback %</label>
+                                                            <input
+                                                                type="number"
+                                                                value={t.cashback_pct}
+                                                                onChange={(e) => {
+                                                                    const val = parseFloat(e.target.value) || 0;
+                                                                    setLoyConfigTiers(prev => prev.map(item => item.name === t.name ? { ...item, cashback_pct: val } : item));
+                                                                }}
+                                                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-[11px] text-white font-mono font-bold"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="text-[7.5px] font-black text-slate-500 uppercase block mb-1">Desc. Extra %</label>
+                                                            <input
+                                                                type="number"
+                                                                value={t.discount_pct}
+                                                                onChange={(e) => {
+                                                                    const val = parseFloat(e.target.value) || 0;
+                                                                    setLoyConfigTiers(prev => prev.map(item => item.name === t.name ? { ...item, discount_pct: val } : item));
+                                                                }}
+                                                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-[11px] text-white font-mono font-bold"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex justify-end border-t border-white/5 pt-4">
+                                <button
+                                    onClick={handleUpdateLoyaltyConfig}
+                                    disabled={isSavingLoyaltyConfig}
+                                    className="px-6 py-3 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-[10px] font-black uppercase text-white rounded-xl active:scale-95 transition-all shadow-md flex items-center gap-1.5"
+                                    style={{ backgroundColor: tenant?.theme_colors?.primary || '#f97316' }}
+                                >
+                                    {isSavingLoyaltyConfig ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                                    Guardar Cambios del Club
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* BUSCADOR, FILTROS Y CRM */}
+                    <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-6">
+                        <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center text-left">
+                            <div>
+                                <h4 className="font-black text-white text-sm uppercase flex items-center gap-2">
+                                    <span>👥 Base de Clientes y Trazabilidad de Consumo</span>
+                                </h4>
+                                <p className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">
+                                    Audita saldos, historial de compras y envía mensajes personalizados directos por WhatsApp
+                                </p>
+                            </div>
+
+                            <div className="flex gap-2 w-full md:w-auto flex-wrap sm:flex-nowrap">
+                                {/* Buscador */}
+                                <div className="relative flex-1 sm:w-64">
+                                    <Search size={12} className="absolute left-3.5 top-3 text-slate-500" />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar por teléfono o nombre..."
+                                        value={loyaltySearch}
+                                        onChange={(e) => setLoyaltySearch(e.target.value)}
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white outline-none focus:border-orange-500/50 font-bold"
+                                    />
+                                </div>
+                                {/* Filtro */}
+                                <select
+                                    value={selectedLoyaltyTier}
+                                    onChange={(e) => setSelectedLoyaltyTier(e.target.value as any)}
+                                    className="bg-slate-950 border border-slate-800 text-xs text-white rounded-xl px-3 py-2 outline-none font-bold cursor-pointer"
+                                >
+                                    <option value="all">Todos los Clientes</option>
+                                    <option value="bronce">⭐ Bronce</option>
+                                    <option value="plata">⭐ Plata</option>
+                                    <option value="oro">⭐ Oro</option>
+                                    <option value="dormant">💤 Inactivos ({'>'}30 días)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* TABLA CRM DE CLIENTES */}
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-[10px] text-left border-collapse">
+                                <thead>
+                                    <tr className="border-b border-white/5 text-slate-500 uppercase tracking-widest text-[8px] font-black">
+                                        <th className="py-3 px-4">Cliente / Contacto</th>
+                                        <th className="py-3 px-4 text-center">Nivel & %</th>
+                                        <th className="py-3 px-4 text-center">Pedidos</th>
+                                        <th className="py-3 px-4 text-right">Consumo Total</th>
+                                        <th className="py-3 px-4 text-right">Saldo Monedero</th>
+                                        <th className="py-3 px-4 text-center">Última Visita</th>
+                                        <th className="py-3 px-4 text-center">WhatsApp / Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {(() => {
+                                        const filtered = loyaltyAccounts.filter(acc => {
+                                            if (loyaltySearch) {
+                                                const q = loyaltySearch.toLowerCase();
+                                                const name = (acc.client_name || '').toLowerCase();
+                                                const phone = acc.phone_number || '';
+                                                if (!name.includes(q) && !phone.includes(q)) return false;
+                                            }
+                                            if (selectedLoyaltyTier === 'dormant') {
+                                                const diff = Date.now() - new Date(acc.last_order_date).getTime();
+                                                return diff > 30 * 24 * 60 * 60 * 1000;
+                                            } else if (selectedLoyaltyTier !== 'all') {
+                                                return acc.tier === selectedLoyaltyTier;
+                                            }
+                                            return true;
+                                        });
+
+                                        if (filtered.length === 0) {
+                                            return (
+                                                <tr>
+                                                    <td colSpan={7} className="py-10 text-center text-slate-500 font-bold uppercase tracking-wider">
+                                                        No se encontraron clientes que coincidan con la búsqueda.
+                                                    </td>
+                                                </tr>
+                                            );
+                                        }
+
+                                        return filtered.map((acc) => {
+                                            const lastDate = new Date(acc.last_order_date);
+                                            const diffDays = Math.floor((Date.now() - lastDate.getTime()) / 1000 / 60 / 60 / 24);
+                                            const isClientDormant = diffDays > 30;
+                                            const pct = getClientCashbackPct(acc);
+                                            const cleanPhone = cleanArgPhone(acc.phone_number);
+                                            const personalMsg = buildCampaignMessage(campaignTemplate, acc);
+
+                                            return (
+                                                <tr key={acc.id} className="hover:bg-slate-900/40 transition-all font-bold">
+                                                    <td className="py-3.5 px-4">
+                                                        <div className="flex flex-col text-left">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-white text-xs leading-tight">
+                                                                    {acc.client_name || 'Cliente Frecuente'}
+                                                                </span>
+                                                                {acc.opt_out && (
+                                                                    <span className="text-[7px] font-black uppercase px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/20" title="Pidió baja de promociones">
+                                                                        BAJA
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <a
+                                                                href={`https://wa.me/${cleanPhone}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-slate-400 hover:text-emerald-400 text-[9px] mt-0.5 font-mono flex items-center gap-1 transition-colors"
+                                                            >
+                                                                📱 {acc.phone_number}
+                                                            </a>
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3.5 px-4 text-center align-middle">
+                                                        <div className="flex flex-col items-center">
+                                                            <span className={`text-[7.5px] uppercase font-black px-2.5 py-0.5 rounded-full ${
+                                                                acc.tier === 'oro' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' :
+                                                                acc.tier === 'plata' ? 'bg-slate-300/10 text-slate-300 border border-slate-300/20' : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                                                            }`}>
+                                                                ⭐ {acc.tier}
+                                                            </span>
+                                                            <span className="text-[7.5px] text-slate-500 font-mono mt-0.5">
+                                                                {pct}% cashback
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3.5 px-4 text-center text-slate-300 font-mono text-xs">
+                                                        {acc.total_orders}
+                                                    </td>
+                                                    <td className="py-3.5 px-4 text-right text-slate-400 font-mono">
+                                                        {formatARS(parseFloat(acc.total_spent) || 0)}
+                                                    </td>
+                                                    <td className="py-3.5 px-4 text-right">
+                                                        <span className="text-emerald-400 font-mono font-black text-xs bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                                                            {formatARS(parseFloat(acc.balance) || 0)}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-3.5 px-4 text-center">
+                                                        <div className="flex flex-col items-center">
+                                                            <span className="text-slate-300 text-[9px] font-mono">
+                                                                {lastDate.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                                                            </span>
+                                                            <span className={`text-[7px] font-black uppercase mt-0.5 ${isClientDormant ? 'text-red-400' : 'text-slate-500'}`}>
+                                                                {isClientDormant ? `💤 Inactivo (${diffDays}d)` : `Hace ${diffDays}d`}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3.5 px-4">
+                                                        <div className="flex gap-1.5 justify-center items-center">
+                                                            {/* Botón WhatsApp 1-Click con mensaje preescrito */}
+                                                            <a
+                                                                href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(personalMsg)}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                title="Enviar WhatsApp con su Saldo y Menú"
+                                                                className="px-2.5 py-1.5 rounded-xl border flex items-center gap-1 transition-all bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:scale-105 active:scale-95"
+                                                            >
+                                                                <MessageCircle size={12} />
+                                                                <span className="text-[8px] font-black uppercase">Enviar WA</span>
+                                                            </a>
+                                                            {/* Ajuste manual de saldo */}
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingLoyaltyAccount(acc);
+                                                                    setNewBalance(String(acc.balance));
+                                                                }}
+                                                                title="Ajustar Saldo Manualmente"
+                                                                className="p-1.5 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all"
+                                                            >
+                                                                <Edit size={11} />
+                                                            </button>
+                                                            {/* Opt-out toggle */}
+                                                            <button
+                                                                onClick={() => handleToggleOptOut(acc)}
+                                                                title={acc.opt_out ? "Reactivar envíos de campañas" : "Marcar baja de campañas"}
+                                                                className={`p-1.5 rounded-xl border transition-all ${
+                                                                    acc.opt_out ? 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20' : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
+                                                                }`}
+                                                            >
+                                                                {acc.opt_out ? <BellOff size={11} /> : <Phone size={11} />}
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        });
+                                    })()}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL: CONFIGURAR Y LANZAR CAMPAÑA DE WHATSAPP MASIVO */}
+            {isCampaignModalOpen && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in">
+                    <div className="glass w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-[2.5rem] p-6 sm:p-8 space-y-6 shadow-2xl border border-white/10 text-left">
+                        {/* Header */}
+                        <div className="flex justify-between items-start border-b border-white/5 pb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                                    <Megaphone size={22} />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-black uppercase italic text-white">Nueva Campaña de WhatsApp</h3>
+                                    <p className="text-slate-400 text-[10px] uppercase font-bold">Configura el mensaje preescrito con variables y lanza el envío masivo en 1 clic</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsCampaignModalOpen(false)} className="text-slate-500 hover:text-white p-2">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Paso 1: Audiencia / Segmentación */}
+                        <div className="space-y-3">
+                            <label className="text-[10px] font-black uppercase text-slate-400 block tracking-wider">
+                                1. Selecciona a quién enviar:
+                            </label>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                {[
+                                    { id: 'all', label: 'Todos', count: loyaltyAccounts.filter(a => !a.opt_out).length },
+                                    { id: 'balance', label: 'Con Saldo > $0', count: loyaltyAccounts.filter(a => !a.opt_out && (parseFloat(a.balance) || 0) > 0).length },
+                                    { id: 'dormant', label: 'Inactivos > 30d', count: loyaltyAccounts.filter(a => {
+                                        if (a.opt_out) return false;
+                                        const diff = Date.now() - new Date(a.last_order_date).getTime();
+                                        return diff > 30 * 24 * 60 * 60 * 1000;
+                                    }).length },
+                                    { id: 'vip', label: 'VIP (Oro/Plata)', count: loyaltyAccounts.filter(a => !a.opt_out && (a.tier === 'oro' || a.tier === 'plata')).length }
+                                ].map(target => (
+                                    <button
+                                        key={target.id}
+                                        type="button"
+                                        onClick={() => setCampaignTarget(target.id as any)}
+                                        className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between ${
+                                            campaignTarget === target.id
+                                                ? 'bg-emerald-500/15 border-emerald-500 text-emerald-300 shadow-md'
+                                                : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                                        }`}
+                                    >
+                                        <span className="text-[9px] font-black uppercase">{target.label}</span>
+                                        <span className="text-base font-mono font-black text-white mt-1">{target.count}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Paso 2: Editor de Mensaje Preescrito */}
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center flex-wrap gap-2">
+                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                                    2. Mensaje Preescrito con Variables:
+                                </label>
+                                <div className="flex gap-1 flex-wrap">
+                                    <span className="text-[8px] text-slate-500 uppercase font-black self-center mr-1">Insertar:</span>
+                                    {[
+                                        { label: '{nombre}', val: '{nombre}' },
+                                        { label: '{saldo}', val: '{saldo}' },
+                                        { label: '{porcentaje}', val: '{porcentaje}' },
+                                        { label: '{enlace_local}', val: '{enlace_local}' },
+                                        { label: '{local}', val: '{local}' }
+                                    ].map(chip => (
+                                        <button
+                                            key={chip.val}
+                                            type="button"
+                                            onClick={() => setCampaignTemplate(prev => prev + ' ' + chip.val)}
+                                            className="px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 text-[8px] font-mono text-emerald-400 hover:bg-slate-700 transition-colors"
+                                        >
+                                            {chip.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <textarea
+                                rows={5}
+                                value={campaignTemplate}
+                                onChange={(e) => setCampaignTemplate(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs text-white outline-none focus:border-emerald-500/50 leading-relaxed font-sans"
+                                placeholder="Escribe el mensaje aquí..."
+                            />
+
+                            {/* Plantillas Rápidas */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[8px] text-slate-500 uppercase font-black">Plantillas Rápidas:</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setCampaignTemplate(
+                                        `Hola {nombre}, te comento que tenés un descuento de {saldo} para gastar en cualquiera de nuestros productos ({porcentaje} acumulado). Te dejo el enlace de mi página para que compres directamente desde tu casa o para que veas los precios: {enlace_local}\n\n*(Si preferís no recibir más promos, avísanos con la palabra "BAJA" 🙂)*`
+                                    )}
+                                    className="px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 text-[8px] font-bold text-slate-300 hover:text-white"
+                                >
+                                    🎁 Saldo Acumulado
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCampaignTemplate(
+                                        `¡Hola {nombre}! Te extrañamos en {local}. Hace más de un mes que no nos visitas y te guardamos {saldo} en tu monedero ({porcentaje} acumulado) para tu próximo pedido. Pedí desde acá: {enlace_local}\n\n*(Si preferís no recibir más promos, avísanos con la palabra "BAJA" 🙂)*`
+                                    )}
+                                    className="px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 text-[8px] font-bold text-slate-300 hover:text-white"
+                                >
+                                    💤 Reactivación Inactivos
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCampaignTemplate(
+                                        `¡Hola {nombre}! 🎉 Fin de semana especial en {local}. Aprovechá tu saldo acumulado de {saldo} para disfrutar lo que quieras. Mirá los platos y precios en nuestro menú digital: {enlace_local}\n\n*(Si preferís no recibir más promos, avísanos con la palabra "BAJA" 🙂)*`
+                                    )}
+                                    className="px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 text-[8px] font-bold text-slate-300 hover:text-white"
+                                >
+                                    🔥 Promo Fin de Semana
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Paso 3: Vista Previa en Vivo (Simulador WhatsApp) */}
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-slate-400 block tracking-wider">
+                                3. Vista Previa en Vivo (Simulación de Chat):
+                            </label>
+                            <div className="bg-[#0b141a] p-4 rounded-2xl border border-white/5 space-y-2">
+                                <div className="flex items-center gap-2 border-b border-white/5 pb-2">
+                                    <div className="w-7 h-7 rounded-full bg-emerald-700 text-white flex items-center justify-center text-xs font-bold">
+                                        📱
+                                    </div>
+                                    <div className="text-left">
+                                        <span className="text-[10px] font-bold text-white block leading-tight">
+                                            {loyaltyAccounts[0]?.client_name || 'Marta (Cliente de Ejemplo)'}
+                                        </span>
+                                        <span className="text-[8px] text-emerald-400 font-mono">
+                                            {loyaltyAccounts[0]?.phone_number || '+54 9 11 1234-5678'} • {formatARS(parseFloat(loyaltyAccounts[0]?.balance) || 3000)}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="bg-[#005c4b] text-white text-xs p-3.5 rounded-2xl rounded-tl-sm max-w-[90%] whitespace-pre-wrap leading-relaxed shadow-sm font-sans text-left">
+                                    {buildCampaignMessage(
+                                        campaignTemplate,
+                                        loyaltyAccounts[0] || { client_name: 'Marta', balance: 3000, tier: 'plata' }
+                                    )}
+                                </div>
+                            </div>
+                            <p className="text-[8px] text-slate-500 font-bold uppercase">
+                                🔒 Incluye la cláusula "BAJA" para evitar que los clientes marquen spam y proteger el número de tu negocio.
+                            </p>
+                        </div>
+
+                        {/* Footer y Lanzador */}
+                        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t border-white/5">
+                            <div className="text-slate-400 text-xs font-bold">
+                                Destinatarios: <span className="text-white font-mono font-black">{
+                                    loyaltyAccounts.filter(acc => {
+                                        if (acc.opt_out) return false;
+                                        if (campaignTarget === 'balance') return (parseFloat(acc.balance) || 0) > 0;
+                                        if (campaignTarget === 'dormant') {
+                                            const diff = Date.now() - new Date(acc.last_order_date).getTime();
+                                            return diff > 30 * 24 * 60 * 60 * 1000;
+                                        }
+                                        if (campaignTarget === 'vip') return acc.tier === 'oro' || acc.tier === 'plata';
+                                        return true;
+                                    }).length
+                                }</span> clientes listos
+                            </div>
+                            <div className="flex gap-2 w-full sm:w-auto">
+                                <button
+                                    onClick={() => setIsCampaignModalOpen(false)}
+                                    className="flex-1 sm:flex-none px-5 py-3 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 text-[10px] font-black uppercase hover:text-white"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        const eligible = loyaltyAccounts.filter(acc => {
+                                            if (acc.opt_out) return false;
+                                            if (campaignTarget === 'balance') return (parseFloat(acc.balance) || 0) > 0;
+                                            if (campaignTarget === 'dormant') {
+                                                const diff = Date.now() - new Date(acc.last_order_date).getTime();
+                                                return diff > 30 * 24 * 60 * 60 * 1000;
+                                            }
+                                            if (campaignTarget === 'vip') return acc.tier === 'oro' || acc.tier === 'plata';
+                                            return true;
+                                        });
+                                        if (eligible.length === 0) {
+                                            alert("No hay clientes que cumplan con el filtro seleccionado.");
+                                            return;
+                                        }
+                                        setDispatcherIndex(0);
+                                        setDispatcherSentIds([]);
+                                        setDispatcherSkippedIds([]);
+                                        setIsCampaignModalOpen(false);
+                                        setIsDispatchingCampaign(true);
+                                    }}
+                                    className="flex-1 sm:flex-none px-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[10px] font-black uppercase flex items-center justify-center gap-2 shadow-lg active:scale-95"
+                                >
+                                    <Send size={12} />
+                                    Comenzar Difusión en Cola 🚀
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL: ASISTENTE DE ENVÍO EN COLA (QUEUE DISPATCHER) */}
+            {isDispatchingCampaign && (() => {
+                const eligible = loyaltyAccounts.filter(acc => {
+                    if (acc.opt_out) return false;
+                    if (campaignTarget === 'balance') return (parseFloat(acc.balance) || 0) > 0;
+                    if (campaignTarget === 'dormant') {
+                        const diff = Date.now() - new Date(acc.last_order_date).getTime();
+                        return diff > 30 * 24 * 60 * 60 * 1000;
+                    }
+                    if (campaignTarget === 'vip') return acc.tier === 'oro' || acc.tier === 'plata';
+                    return true;
+                });
+
+                const totalClients = eligible.length;
+                const isFinished = dispatcherIndex >= totalClients;
+                const currentClient = eligible[dispatcherIndex];
+                const cleanPhone = currentClient ? cleanArgPhone(currentClient.phone_number) : '';
+                const finalMsg = currentClient ? buildCampaignMessage(campaignTemplate, currentClient) : '';
+                const pctProgress = totalClients > 0 ? Math.round((dispatcherIndex / totalClients) * 100) : 0;
+
+                return (
+                    <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+                        <div className="glass w-full max-w-lg rounded-[2.5rem] p-6 sm:p-8 space-y-6 shadow-2xl border border-white/10 text-left">
+                            {!isFinished ? (
+                                <>
+                                    {/* Header de Progreso */}
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                                                <Megaphone size={12} /> Difusión en Progreso
+                                            </span>
+                                            <span className="text-xs font-mono font-bold text-white">
+                                                Cliente {dispatcherIndex + 1} de {totalClients} ({pctProgress}%)
+                                            </span>
+                                        </div>
+                                        {/* Barra de progreso */}
+                                        <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-white/5">
+                                            <div
+                                                className="bg-gradient-to-r from-emerald-500 to-green-400 h-full transition-all duration-300 rounded-full"
+                                                style={{ width: `${pctProgress}%` }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Ficha del Cliente Actual */}
+                                    <div className="bg-slate-950/60 p-4 rounded-2xl border border-white/5 flex items-center justify-between">
+                                        <div className="space-y-0.5">
+                                            <h4 className="text-sm font-black text-white">{currentClient.client_name || 'Cliente Frecuente'}</h4>
+                                            <p className="text-[9px] font-mono text-slate-400">📱 {currentClient.phone_number}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="text-emerald-400 font-mono font-black text-sm block">
+                                                {formatARS(parseFloat(currentClient.balance) || 0)}
+                                            </span>
+                                            <span className="text-[8px] uppercase font-bold text-slate-500">
+                                                ⭐ {currentClient.tier} ({getClientCashbackPct(currentClient)}%)
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Cuadro del Mensaje Listo */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-[9px] font-black uppercase text-slate-500 block">Mensaje Personalizado:</label>
+                                        <div className="bg-[#005c4b] text-white text-xs p-4 rounded-2xl max-h-48 overflow-y-auto whitespace-pre-wrap leading-relaxed shadow-inner">
+                                            {finalMsg}
+                                        </div>
+                                    </div>
+
+                                    {/* Botón Principal: Enviar por WhatsApp */}
+                                    <button
+                                        onClick={() => {
+                                            window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(finalMsg)}`, '_blank');
+                                            setDispatcherSentIds(prev => [...prev, currentClient.id]);
+                                            setDispatcherIndex(prev => prev + 1);
+                                        }}
+                                        className="w-full py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black uppercase flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all"
+                                    >
+                                        <MessageCircle size={16} />
+                                        Enviar WhatsApp a {currentClient.client_name || 'Cliente'} 🚀
+                                    </button>
+
+                                    {/* Botones de Control Auxiliares */}
+                                    <div className="flex justify-between items-center pt-2">
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(finalMsg);
+                                                    setIsCopiedMsg(true);
+                                                    setTimeout(() => setIsCopiedMsg(false), 2000);
+                                                }}
+                                                className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-[9px] font-black uppercase text-slate-400 hover:text-white flex items-center gap-1"
+                                            >
+                                                <Copy size={10} /> {isCopiedMsg ? '¡Copiado! ✓' : 'Copiar'}
+                                            </button>
+                                            {dispatcherIndex > 0 && (
+                                                <button
+                                                    onClick={() => setDispatcherIndex(prev => Math.max(0, prev - 1))}
+                                                    className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-[9px] font-black uppercase text-slate-400 hover:text-white flex items-center gap-1"
+                                                >
+                                                    <ArrowLeft size={10} /> Anterior
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    setDispatcherSkippedIds(prev => [...prev, currentClient.id]);
+                                                    setDispatcherIndex(prev => prev + 1);
+                                                }}
+                                                className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-[9px] font-black uppercase text-slate-400 hover:text-white flex items-center gap-1"
+                                            >
+                                                Saltar <ArrowRight size={10} />
+                                            </button>
+                                            <button
+                                                onClick={() => setIsDispatchingCampaign(false)}
+                                                className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-[9px] font-black uppercase text-red-400 hover:bg-red-500/20"
+                                            >
+                                                Pausar / Salir
+                                            </button>
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                /* Pantalla de Campaña Finalizada */
+                                <div className="text-center py-6 space-y-4 animate-in zoom-in-95">
+                                    <div className="w-16 h-16 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-3xl">
+                                        🎉
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-black uppercase italic text-white">¡Difusión Finalizada!</h3>
+                                        <p className="text-slate-400 text-xs font-bold uppercase mt-1">Has completado el envío masivo para todos los clientes seleccionados</p>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3 max-w-xs mx-auto">
+                                        <div className="bg-slate-950 p-3 rounded-2xl border border-white/5">
+                                            <span className="text-slate-500 text-[8px] font-black uppercase block">Enviados</span>
+                                            <span className="text-lg font-mono font-black text-emerald-400">{dispatcherSentIds.length}</span>
+                                        </div>
+                                        <div className="bg-slate-950 p-3 rounded-2xl border border-white/5">
+                                            <span className="text-slate-500 text-[8px] font-black uppercase block">Saltados</span>
+                                            <span className="text-lg font-mono font-black text-slate-400">{dispatcherSkippedIds.length}</span>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        onClick={() => setIsDispatchingCampaign(false)}
+                                        className="w-full py-3.5 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-black uppercase shadow-lg transition-all"
+                                    >
+                                        Cerrar Asistente
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            })()}
+
 
             {/* Expense Modal */}
             {isExpenseModalOpen && (

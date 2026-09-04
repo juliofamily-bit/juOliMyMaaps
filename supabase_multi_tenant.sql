@@ -411,6 +411,7 @@ BEGIN
             FROM public.product_ingredients pi
             JOIN public.ingredients i ON i.id = pi.ingredient_id
             WHERE pi.product_id = NEW.product_id
+              AND (pi.is_optional = false OR pi.ingredient_id = ANY(NEW.selected_optional_ingredients))
               AND (NEW.target_departments IS NULL OR i.target_departments && NEW.target_departments)
         LOOP
             UPDATE public.ingredients 
@@ -424,6 +425,7 @@ BEGIN
             FROM public.product_ingredients pi
             JOIN public.ingredients i ON i.id = pi.ingredient_id
             WHERE pi.product_id = NEW.product_id
+              AND (pi.is_optional = false OR pi.ingredient_id = ANY(NEW.selected_optional_ingredients))
               AND (NEW.target_departments IS NULL OR i.target_departments && NEW.target_departments)
         LOOP
             UPDATE public.ingredients 

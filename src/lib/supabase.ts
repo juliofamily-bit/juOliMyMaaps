@@ -51,31 +51,39 @@ export function setSupabaseTenant(tenantId: string | null) {
 }
 
 
-export function broadcastTenantChange(tenantId: string | null) {
-  if (!tenantId) return;
+const broadcastChannelsCache: Record<string, any> = {};
+
+function getBroadcastChannel(tenantId: string) {
   const client = getClient();
-  const channel = client.channel(`tenant-room-${tenantId}`, {
-    config: {
-      broadcast: { self: true } // Permitir broadcast al mismo cliente si fuese necesario
-    }
-  });
-  
-  channel.subscribe((status) => {
-    if (status === 'SUBSCRIBED') {
-      channel.send({
-        type: 'broadcast',
-        event: 'schema-update',
-        payload: { timestamp: Date.now() }
-      }).then(() => {
-        // Remover el canal después de 1.5 segundos para no dejar conexiones huérfanas
-        setTimeout(() => {
-          try {
-            client.removeChannel(channel);
-          } catch (e) {
-            console.error('Error removing realtime channel:', e);
-          }
-        }, 1500);
-      });
-    }
-  });
+  const channelName = `tenant-room-${tenantId}`;
+  if (!broadcastChannelsCache[channelName]) {
+    const chan = client.channel(channelName, {
+      config: {
+        broadcast: { self: true }
+      }
+    });
+    chan.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log(`[BROADCAST HUB] Conectado permanentemente al canal ${channelName}`);
+      }
+    });
+    broadcastChannelsCache[channelName] = chan;
+  }
+  return broadcastChannelsCache[channelName];
+}
+
+export function broadcastTenantChange(tenantId: string | null, event: string = 'schema-update', payload: any = {}) {
+  if (!tenantId) return;
+  try {
+    const channel = getBroadcastChannel(tenantId);
+    channel.send({
+      type: 'broadcast',
+      event,
+      payload: { ...payload, timestamp: Date.now() }
+    }).catch((err: any) => {
+      console.warn('[BROADCAST HUB] Error al enviar evento:', err);
+    });
+  } catch (e) {
+    console.error('[BROADCAST HUB] Error fatal en difusión:', e);
+  }
 }

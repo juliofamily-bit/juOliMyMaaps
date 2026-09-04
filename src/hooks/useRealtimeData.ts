@@ -270,19 +270,74 @@ export function useRealtimeData(tenantId: string | null, isPublic: boolean = fal
             fetchData(true, payload.table);
         };
 
-        const handleBroadcast = (payload: any) => {
-            console.log(`[REALTIME BROADCAST] Recibido evento de recarga para tenant ${tenantId}`, payload);
-            fetchData(true);
+        const handleBroadcast = (data: any) => {
+            const payload = data?.payload;
+            const event = data?.event || 'schema-update';
+            console.log(`[REALTIME BROADCAST] Evento recibido: ${event} para tenant ${tenantId}`, payload);
+
+            if (event === 'order:new' && payload?.order) {
+                // Inyección instantánea en memoria (0 milisegundos de latencia)
+                setOrders(prev => {
+                    const exists = prev.some(o => o.id === payload.order.id);
+                    if (exists) return prev;
+                    return [payload.order, ...prev];
+                });
+                fetchData(true, 'orders');
+                return;
+            }
+
+            if (event === 'order:item_status' && payload?.itemId) {
+                // Actualización instantánea del plato en memoria
+                setOrders(prev => prev.map(order => {
+                    const hasItem = (order.items || []).some((i: any) => i.id === payload.itemId);
+                    if (!hasItem) return order;
+                    const updatedItems = (order.items || []).map((i: any) => {
+                        if (i.id === payload.itemId) {
+                            return { ...i, status: payload.newStatus };
+                        }
+                        return i;
+                    });
+                    const allDelivered = updatedItems.length > 0 && updatedItems.every((i: any) => i.status === 'delivered');
+                    return {
+                        ...order,
+                        items: updatedItems,
+                        ...(allDelivered && payload.orderFinalStatus ? { status: payload.orderFinalStatus } : {})
+                    };
+                }));
+                fetchData(true, 'orders');
+                return;
+            }
+
+            if (event === 'order:status' && payload?.orderId) {
+                setOrders(prev => prev.map(order => {
+                    if (order.id !== payload.orderId) return order;
+                    return {
+                        ...order,
+                        status: payload.status || order.status,
+                        payment_status: payload.payment_status || order.payment_status,
+                        is_archived: payload.is_archived !== undefined ? payload.is_archived : order.is_archived
+                    };
+                }));
+                fetchData(true, 'orders');
+                return;
+            }
+
+            // Recarga quirúrgica si se especifica la tabla, o general si es esquema completo
+            const targetTable = payload?.table || null;
+            fetchData(true, targetTable);
         };
 
-        // 1. Suscribirse al canal de Broadcast para sincronización instantánea independiente de RLS
+        // 1. Suscribirse al canal de Broadcast para sincronización instantánea (<50ms)
         const broadcastChannel = supabase
             .channel(`tenant-room-${tenantId}`, {
                 config: {
-                    broadcast: { self: true } // "Toque invisible": recibe su propio broadcast para refresco inmediato
+                    broadcast: { self: true }
                 }
             })
             .on('broadcast', { event: 'schema-update' }, handleBroadcast)
+            .on('broadcast', { event: 'order:new' }, handleBroadcast)
+            .on('broadcast', { event: 'order:item_status' }, handleBroadcast)
+            .on('broadcast', { event: 'order:status' }, handleBroadcast)
             .subscribe();
 
         // 2. Suscribirse a los cambios en tiempo real específicos por tabla (necesario para usuarios anónimos)
@@ -326,35 +381,37 @@ export function useRealtimeData(tenantId: string | null, isPublic: boolean = fal
             console.log('REALTIME DATABASE STATUS:', status);
         });
 
-        // 3. Fallback de sondeo periódico (Polling) silencioso de 30 segundos para blindar el tiempo real
-        // Esto garantiza que la Cocina y Barra reciban los pedidos de incógnito/QR al instante
-        // incluso ante limitaciones de RLS en WebSockets o fallos temporales de conexión.
-        const pollInterval = setInterval(() => {
-            console.log(`[REALTIME POLLING] Refrescando datos preventivamente para tenant ${tenantId}`);
-            fetchData(true);
-        }, 30000);
+        // 3. Polling Quirúrgico de Alta Velocidad (3.5s) para Órdenes Activas
+        // Garantiza que Cocina, Barra y Mozos NUNCA esperen más de 3 segundos incluso sin WebSockets.
+        let fastOrdersPollInterval: NodeJS.Timeout | null = null;
+        if (!isPublic) {
+            fastOrdersPollInterval = setInterval(() => {
+                fetchData(true, 'orders');
+            }, 3500);
+        }
 
-        // 4. Heartbeat (Latido) para indicar que el local tiene internet
+        // 4. Polling General de Respaldo para Tablas Estáticas (45s)
+        const slowGeneralPollInterval = setInterval(() => {
+            fetchData(true);
+        }, 45000);
+
+        // 5. Heartbeat (Latido) para indicar que el local tiene internet
         let heartbeatInterval: NodeJS.Timeout;
         if (!isPublic && tenantId) {
-            // Enviar un ping inmediatamente al cargar
             supabase.from('tenants').update({ last_online_ping: new Date().toISOString() }).eq('id', tenantId).then();
             
-            // Y luego cada 2 minutos
             heartbeatInterval = setInterval(() => {
                 if (navigator.onLine) {
-                    supabase.from('tenants').update({ last_online_ping: new Date().toISOString() }).eq('id', tenantId).then(({error}) => {
-                        // if (error) console.error("Error enviando heartbeat:", error); // Silenciado por RLS
-                    });
+                    supabase.from('tenants').update({ last_online_ping: new Date().toISOString() }).eq('id', tenantId).then();
                 }
             }, 120000);
         }
 
-        // 5. Refresco Inmediato al volver a la pestaña (soluciona throttling de navegadores)
+        // 6. Refresco Inmediato al volver a la pestaña (soluciona throttling de navegadores)
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
-                console.log(`[REALTIME] Pestaña activa, refrescando datos forzadamente...`);
-                fetchData(true);
+                console.log(`[REALTIME] Pestaña activa, refrescando pedidos forzadamente...`);
+                fetchData(true, 'orders');
             }
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -362,7 +419,8 @@ export function useRealtimeData(tenantId: string | null, isPublic: boolean = fal
         return () => {
             supabase.removeChannel(broadcastChannel);
             supabase.removeChannel(dbChannel);
-            clearInterval(pollInterval);
+            if (fastOrdersPollInterval) clearInterval(fastOrdersPollInterval);
+            clearInterval(slowGeneralPollInterval);
             if (heartbeatInterval) clearInterval(heartbeatInterval);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };

@@ -57,6 +57,63 @@ El sistema opera sobre tres (3) menús claramente diferenciados por su rol, cana
       - **Menú de Mozo (`WaiterTab.tsx`) y Caja / Mostrador (`OrderTab.tsx`):** Ambos sistemas interceptan productos con opciones antes de ingresarlos a la comanda, permitiendo al personal marcar la bebida o variante solicitada por el comensale. Guarda la clave compuesta `productId::optionId` para distinguir entre unidades con opciones diferentes en una misma mesa.
   14. **Descuento de Stock Selectivo (PostgreSQL Trigger):**
       - Se definió la función `reduce_stock_on_delivery()` en PostgreSQL para que cuando un pedido se marque como `delivered`, descuente todos los insumos fijos (`is_optional = false`) y ÚNICAMENTE el insumo opcional seleccionado por el cliente (`selected_optional_ingredients`), evitando descontar todas las bebidas del stock.
+  15. **Animaciones y Delight UX al Añadir Productos en TODOS los Menús (Mesas QR, Delivery, Caja y Mozos):**
+      - **Qué hacemos:** Extensión y estandarización de las animaciones inmersivas y feedback multisensorial a la totalidad de los menús del ecosistema:
+        1. **Menú de Mesas (QR) y Menú del Cliente (Delivery / Take Away en `PublicMenu.tsx`):** Al tocar cualquier parte de la tarjeta o el botón `+`, el producto sale disparado en trayectoria parabólica suave hacia el botón flotante inferior de pedidos, el botón rebota elásticamente, el precio se eleva con una burbuja de incremento `+$... ✨` y suena la campana cristalina.
+        2. **Menú de Caja / Mostrador (`OrderTab.tsx`):** Al buscar productos o tocar platos en las categorías, el clon con la imagen del producto vuela directamente hacia la barra de pedidos inferior de caja, la barra rebota con halo naranja brillante (`animate-cart-bump`), exhibe la burbuja `+$... ✨` con el importe añadido y reproduce el chime sonoro instantáneo.
+        3. **Menú de Mozos / Mesas (`WaiterTab.tsx`):** Al agregar platos para una mesa en salón, el plato vuela hacia el panel inferior de "Total Estimado / Enviar a Cocina", haciendo vibrar el total y disparando la confirmación sonora.
+        4. **Síntesis Sonora Nativa (Web Audio API):** Doble oscilador armónico cristalino de 0ms latencia, 100% offline y sin consumo de datos.
+      - **Por qué lo hacemos:** Solicitud explícita del usuario para unificar la experiencia visual y multisensorial de confirmación de pedidos en todos los puntos de venta (auto-pedido por el cliente, mostrador por el cajero y salón por el mozo), eliminando cualquier incertidumbre y reduciendo el esfuerzo cognitivo a cero (Ecuación de Valor de Alex Hormozi).
+      - **Análisis de Impacto:** `src/app/globals.css`, `src/components/PublicMenu.tsx`, `src/components/OrderTab.tsx`, `src/components/WaiterTab.tsx`. No modifica modelos de datos ni lógica transaccional de cobro.
+  16. **Sistema Integral de Fidelización (Club de Clientes), CRM y Campañas Masivas de WhatsApp (Hito 16):**
+      - **Qué hacemos:**
+        1. **Pestaña Principal y Navegación Directa (`AdminTab.tsx`):** Se incorporó la pestaña `🪙 Club & Campañas` en la barra superior de administración (`view === 'loyalty'`), permitiendo el acceso en 1 solo clic sin navegar por menús ocultos.
+        2. **Métricas Clave del Negocio (KPIs):** Cuatro tarjetas visuales en tiempo real que informan Clientes Registrados, Saldo Total en Circulación en pesos ($), Ticket Promedio de los miembros y Oportunidades de Reactivación (clientes inactivos con más de 30 días sin pedir).
+        3. **Sincronización Inteligente de Pedidos Históricos (1-Click Backfill):** Botón `⚡ Sincronizar Pedidos` que lee la tabla `orders`, extrae y sanitiza los teléfonos con prefijo argentino (`cleanArgPhone`), agrupa las compras, calcula consumo total y cantidad de compras, determina el nivel (Bronce, Plata, Oro) y acredita el saldo inicial acumulado en `loyalty_accounts` sin pisar saldos preexistentes.
+        4. **Tabla CRM de Clientes:** Filtros por nivel, inactividad y buscador por nombre/teléfono. Expone saldo disponible en verde esmeralda, porcentaje de cashback asignado según su nivel, consumo histórico, fecha de última compra con alertas rojas de inactividad, botón de WhatsApp directo 1-Click con mensaje personalizado, ajuste manual de saldo y switch de control de bajas.
+        5. **Asistente de Campañas Masivas de WhatsApp (Queue Dispatcher):** Editor de mensajes preescritos con variables dinámicas (`{nombre}`, `{saldo}`, `{porcentaje}`, `{enlace_local}`, `{local}`), simulador de chat en vivo con cliente real y corredor de cola paso a paso con botón gigante `Enviar por WhatsApp 🚀` para envío 1 a 1 sin costo de APIs y sin riesgo de baneo.
+        6. **Términos de Consentimiento y Protección Anti-Spam:** Leyenda de términos en el menú digital (`PublicMenu.tsx`) al ingresar el WhatsApp y cláusula amable `"BAJA"` al pie de las plantillas para proteger el número del negocio contra reportes de spam.
+      - **Por qué lo hacemos:** Solicitud explícita del usuario para construir la base de datos de clientes, calcular los saldos y porcentajes acumulados de cada cliente y enviar campañas preescritas personalizadas por WhatsApp con el saldo y enlace a la tienda/menú digital del local sin pagar APIs de Meta ni arriesgarse a bloqueos de spam.
+      - **Análisis de Impacto:** `src/components/AdminTab.tsx`, `src/types/database.ts`, `src/components/PublicMenu.tsx`, `src/components/contextualHelpData.ts`.
+  17. **Rediseño del Catálogo en Menú de Caja (`OrderTab.tsx`) - POS de Alta Velocidad Cero Fricción (Hito 17):**
+      - **Qué hacemos:**
+        1. **Categorías Compactas Arriba ("en chiquitito", estilo Menú del Cliente):** Píldoras horizontales scrolleables con botón `"⭐ Todo el Menú"` (muestra conteo total), píldora de alto impacto `"🔥 Ofertas Especiales"` con degradado vibrante y badge numérico de ofertas activas en tiempo real, y píldoras para cada categoría con su respectivo emoji y nombre.
+        2. **Todos los Productos Visibles Abajo por Defecto:** Se eliminó la pantalla intermedia vacía o cuadrícula ciega de categorías. Al ingresar a Nuevo Pedido, el cajero ya tiene frente a sí todos los productos del local desplegados en una grilla ágil, moderna y responsive.
+        3. **Orden Inteligente por Top Ventas:** Los platos se ordenan automáticamente priorizando los más vendidos según el historial acumulado en la tabla `orders`, seguidos por los destacados (`is_featured`) y orden alfabético. Esto permite al cajero encontrar en el primer cuadrante de pantalla los platos estrella sin tener que buscar.
+        4. **Búsqueda Global Instantánea y Prioritaria (Regla de Coincidencia Inicial):** Al escribir en el buscador de texto o dictar por voz, la búsqueda se ejecuta sobre TODO el catálogo de la tienda (ignorando la categoría en la que estuviera previamente). Si el cajero tipea "ha", el sistema sitúa en primer lugar los productos que empiezan exactamente con "ha" (ej. "Hamburguesa Simple"), seguido de coincidencias internas y ordenadas por volumen de ventas. Al borrar lo escrito (vía `X` o backspace), el sistema restaura al instante el catálogo completo ordenado por ventas.
+        5. **Tarjetas de Producto Completas con Delight:** Imagen con fallback gastronómico, precio tachado y valor promocional si tiene oferta activa, badge de Top Ventas (`Flame`), y selector `+` / `[-] cant [+]` con animación parabólica `Fly-to-Cart`, sonido y burbuja flotante `+$... ✨`.
+      - **Por qué lo hacemos:** Requerimiento del usuario para unificar la fluidez visual del menú del cliente en el punto de cobro, permitirle al cajero promocionar ofertas especiales a viva voz en la fila, y maximizar la velocidad de toma de comandas mediante un orden inteligente por ventas y búsqueda global de 0 fricción (Ecuación de Valor de Hormozi).
+      - **Análisis de Impacto:** `src/components/OrderTab.tsx`, `src/types/database.ts`. No altera tablas de base de datos ni afecta pedidos existentes.
+  18. **Unificación de Ajustes y Resaltado en Verde Dólar de Diferenciadores Clave (Hito 18):**
+      - **Qué hacemos:**
+        1. **Restauración de la Barra Superior de Admin (`AdminTab.tsx`):** Se removió la pestaña `🪙 Club & Campañas` del menú superior (Dashboard, Menú, Stock, Ventas, Balance, Ajustes) para evitar sobrecarga y confusión, preservando la barra original.
+        2. **Centralización Integral en Ajustes:** Toda la operativa del Club de Clientes y Fidelización (KPIs, miembros, saldos en pesos, CRM, sincronización histórica, tiers de cashback y envío de campañas de WhatsApp) reside exclusivamente en su acordeón dentro de `Ajustes`.
+        3. **Resaltado en Verde Dólar (`emerald-500`) de Diferenciadores Clave (USPs):** Tanto el **Club de Clientes / Fidelización** como el **Muro Interactivo (Pantallas en Vivo)** han sido vestidos en un tono verde dólar vibrante con bordes esmeralda iluminados, glow suave y la insignia `💵 Diferenciador Clave`, destacándolos nítidamente del resto de configuraciones neutras.
+        4. **Lanzador de Campañas 1-Click:** Se agregó el botón `Nueva Campaña WhatsApp` en verde esmeralda directamente en el encabezado del acordeón.
+      - **Por qué lo hacemos:** Requerimiento del usuario para mantener la barra superior limpia y evidenciar de inmediato los dos activos de mayor valor y diferenciación del sistema frente a cualquier competidor (Fidelización y Muro Interactivo).
+      - **Análisis de Impacto:** `src/components/AdminTab.tsx`. No modifica base de datos.
+  19. **Unificación de Clientes por Teléfono y Combinación de Nombres con Barra (`Maxes / Max`) (Hito 19):**
+      - **Qué hacemos:**
+        1. **Unicidad Estricta por Teléfono Físico:** En la Base de Datos de Clientes y Trazabilidad (`AdminTab.tsx`), en la sincronización histórica de pedidos y en las altas/actualizaciones de pedidos (`PublicMenu.tsx` y `OrderTab.tsx`), cualquier cliente que comparta el mismo número de teléfono (comparando mediante `isSamePhone` y dígitos significativos) se agrupa y consolida obligatoriamente en una sola persona física.
+        2. **Combinación Inteligente de Nombres con Barra (`/`):** Si un cliente realizó pedidos con diferentes identificaciones (ej: en uno colocó *"Maxes"*, en otro *"Max"*, o más adelante *"José"*), el sistema no crea clientes duplicados ni pisa el nombre anterior: combina automáticamente todos sus nombres distintos sin repeticiones: `Maxes / Max` o `Maxes / Max / José`.
+        3. **Consolidación Automática en Base de Datos:** Al consultar las cuentas de fidelización (`fetchLoyaltyAccounts`), si detecta registros previos duplicados para un mismo teléfono en Supabase, fusiona los saldos, pedidos y consumos en la cuenta principal con el nombre unificado (`Maxes / Max`) y elimina las filas redundantes secundarias, saneando la base de datos de manera proactiva.
+        4. **Personalización en Mensajes de WhatsApp y Campañas:** Tanto en el botón directo de contacto de la tabla CRM como en el asistente de campañas masivas de WhatsApp, el tag `{nombre}` y los saludos se envían con el nombre combinado (ej: *"¡Hola Maxes / Max! Te escribimos de..."*), asegurando que el cliente sea reconocido inmediatamente independientemente del nombre con el que se identificó en el local o en el menú digital.
+      - **Por qué lo hacemos:** Instrucción explícita del usuario para evitar duplicidades confusas en la base de clientes cuando una misma persona utiliza variantes de su apodo o diferentes nombres desde el mismo teléfono, manteniendo unificada su trazabilidad de consumo y su monedero de fidelización.
+      - **Análisis de Impacto:** `src/lib/phoneUtils.ts`, `src/components/AdminTab.tsx`, `src/components/PublicMenu.tsx`, `src/components/OrderTab.tsx`.
+  20. **Buscador y Categorías Sticky Fijas en Pantalla en Todos los Menús (Caja, Casa y Mesas) (Hito 20):**
+      - **Qué hacemos:**
+        1. **Menú de Caja / Mostrador (`OrderTab.tsx`):** Se integraron el buscador de productos (con soporte para dictado por voz y botón de limpieza rápida `X`) y la barra horizontal de categorías compactas (`Todo el Menú`, `🔥 Ofertas Especiales`, categorías del local) dentro de un contenedor sticky flotante con `sticky top-0 z-30 backdrop-blur-2xl`. Al deslizar la pantalla hacia abajo para recorrer la carta, el buscador y las categorías quedan fijados permanentemente en la parte superior.
+        2. **Menú de Casa (Delivery / Take Away en `PublicMenu.tsx`):** Se agruparon el input de búsqueda (`¿Qué se te antoja?`) y las píldoras scrolleables de categorías en la cabecera sticky con `sticky top-0 z-40 backdrop-blur-2xl`. A medida que el cliente hace scroll para explorar platos o combos, las categorías y el buscador se mantienen siempre a mano sin necesidad de volver arriba.
+        3. **Menú de Mesas (Salón / QR en `PublicMenu.tsx`):** Comparte el mismo comportamiento sticky que el menú de casa, permitiendo a los comensales en mesa cambiar de categoría o buscar ítems con 1 solo toque mientras navegan por la carta.
+      - **Por qué lo hacemos:** Requerimiento del usuario para eliminar la fricción y el tedio de tener que scrollear todo el menú hacia arriba cada vez que se quiere buscar un producto o cambiar de categoría, optimizando la velocidad de toma de comandas en caja y la experiencia de auto-pedido del cliente (Ecuación de Valor de Hormozi: esfuerzo cognitivo y físico reducido a cero).
+      - **Análisis de Impacto:** `src/components/OrderTab.tsx`, `src/components/PublicMenu.tsx`. No modifica modelos de base de datos ni afecta pedidos existentes.
+  21. **Unificación del Ranking de Más Vendidos del Mes en Todos los Menús (Caja, Casa, Mesas y Balance Admin) (Hito 21):**
+      - **Qué hacemos:**
+        1. **Menú de Caja / Mostrador (`OrderTab.tsx`):** Se unificó la lógica de cálculo de popularidad (`productSalesMap`). Se removió la condición `if (order.is_archived) return;` que provocaba que todas las órdenes finalizadas fueran descartadas erróneamente (dejando el ranking en 0). Ahora calcula el volumen exacto de ventas del mes calendario actual coincidiendo al 100% con la métrica de "Top Más Vendidos del Mes" del panel de Administración (`AdminTab.tsx`), con fallback automático a ventas acumuladas históricas en caso de locales nuevos o comienzos de mes. Los platos más vendidos encabezan el catálogo y lucen su badge `🔥 Top`.
+        2. **Menús Públicos (`PublicMenu.tsx` - Casa y Mesas QR):** Se adaptó la consulta de `order_items` para filtrar por el mes calendario actual (`gte('created_at', startOfMonth)`). El carrusel `"Destacados & Más Vendidos"` prioriza primero los platos destacados manualmente por el dueño y luego los más vendidos del mes, filtrando productos sin movimiento. En la grilla general de platos, cada plato top exhibe su insignia distintiva `🔥 Top` sobre la foto.
+        3. **Búsqueda Inteligente Global Unificada:** Tanto en Caja como en los Menús Públicos, al escribir en el buscador, el sistema sitúa en primer lugar los productos que empiezan con esas letras (ej: "ha" -> "Hamburguesa"), seguido de coincidencias internas y ordenadas por volumen de ventas del mes.
+      - **Por qué lo hacemos:** Solicitud del usuario para que el ranking de productos más vendidos sea 100% canónico, fiel y consistente en todo el sistema: lo que figura en Administración como más vendido del mes debe ser exactamente lo primero que ve el cajero en mostrador y lo primero que ve el comensal en su celular al pedir.
+      - **Análisis de Impacto:** `src/components/OrderTab.tsx`, `src/components/PublicMenu.tsx`, `src/components/AdminTab.tsx`. No altera esquemas de base de datos.
 
 ## 1. Tareas Pendientes / Prioridades
 *   ~~**Restaurar visibilidad de paneles en el footer:** El usuario informa que, aunque los roles existen, los iconos/paneles correspondientes en el footer (navegable inferior) no aparecen. El usuario espera que si tiene perfiles creados (Ej: Animador, Cocina), estos botones aparezcan dinámicamente en el footer para permitirle cambiar de vista.~~ **Status: SOLVED (Se ajustó el check de `Todas las funciones` que ocultaba Mozo, Delivery y Barra en planes Pro).**
@@ -341,4 +398,44 @@ El sistema opera sobre tres (3) menús claramente diferenciados por su rol, cana
   - En la ayuda contextual (`admin-settings-envios`) se agregó explícitamente que al final de la sección se encuentra el módulo de **Liquidación a Repartidores**, donde figura con exactitud lo que se le debe abonar a cada cadete según los viajes realizados.
   - Se sumó la clave `admin-delivery-settlement` y un botón interactivo `?` directamente al lado del título *💰 Liquidación a Repartidores* en `AdminDeliverySettlement.tsx`.
 
+### Actualización - Desduplicación de Ofertas en Caja y Canje de Fidelización al Día Siguiente (04 de Septiembre de 2026)
+- **¿Qué hicimos?:**
+  1. **Desduplicación de "Ofertas Especiales" en Menú de Caja (`OrderTab.tsx`):**
+     - Se eliminó la duplicación del botón de ofertas. Ahora la píldora especial con degradado y fuego 🔥 aparece únicamente al inicio del scroll horizontal de categorías, y se filtraron las categorías de tipo oferta dentro del mapeo estándar para no volver a mostrarlas al final.
+  2. **Regla de Fidelización: Canje al Día Siguiente (Próxima Visita) & Acreditación Inmediata:**
+     - **Regla de Negocio:** El cashback y puntos generados por compras efectuadas en el día de **HOY** se reservan para incentivar la recurrencia del comensal. Por lo tanto, no pueden ser canjeados durante el mismo día de su generación, sino que se activan a partir de la próxima visita (día siguiente).
+     - **Disponibilidad de Saldo Anterior:** Todo saldo acumulado en visitas de días previos se mantiene disponible para canjear de inmediato hasta el total del pedido.
+     - **Fórmula Matemática Canónica:**
+       - `totalBalance = parseFloat(loyaltyAccount.balance) || 0;`
+       - `canRedeemAmount = Math.max(0, totalBalance - loyaltyTodayEarned);`
+       - `todayLockedAmount = Math.min(totalBalance, loyaltyTodayEarned);`
+     - **Transparencia en Tarjeta de Monedero (`PublicMenu.tsx` y `OrderTab.tsx`):**
+       - Si tiene saldo de días anteriores: muestra el importe disponible en verde para aplicar con 1 clic y una aclaración explicativa del saldo de hoy bloqueado: `🔒 +$X acumulados hoy se activarán en tu próxima visita (a partir de mañana)`.
+       - Si todo el saldo fue generado hoy: tarjeta informativa con reloj ⏳ indicando que cada compra de hoy suma para ahorrar a partir de mañana.
+     - **Acreditación Atómica en Supabase:** Al finalizar cada orden tanto desde el Menú Público (`PublicMenu.tsx`) como desde el Mostrador de Caja (`OrderTab.tsx`), el cashback generado se acredita en tiempo real en la tabla `loyalty_accounts` (actualizando balance, saldo total gastado, contador de pedidos y recalibración de nivel Tier de Bronce/Plata/Oro/Platino).
+- **¿Por qué lo hicimos?:**
+  Para proteger la rentabilidad del negocio gastronómico, incentivar el retorno del cliente en los días siguientes y brindar máxima claridad tanto al comensal como al cajero.
+- **Impacto:**
+  - `src/components/PublicMenu.tsx`: Cálculo de `loyaltyTodayEarned`, tarjeta en checkout y totales de cobro.
+  - `src/components/OrderTab.tsx`: Filtro de categorías, búsqueda y cálculo de pedidos de hoy, límite en `handleFinish`, acreditación en Supabase y tarjeta visual en drawer.
+  - `bloc_de_notas.md`: Tarea marcada como completada.
+
+### Actualización - Corrección de Visibilidad de Clientes y Saldos en Club de Fidelización (04 de Septiembre de 2026)
+- **¿Qué hicimos?:**
+  1. **Carga Automática de Clientes en Ajustes y Vista Club (`AdminTab.tsx`):**
+     - Se corrigió el `useEffect` que solo consultaba `fetchLoyaltyAccounts()` en la vista `loyalty`, haciendo que al entrar en `Ajustes` (`view === 'config'`) o desplegar el acordeón `Club de Clientes / Fidelización`, el sistema consulte inmediatamente la base de datos de `loyalty_accounts` en Supabase.
+     - Al hacer clic en el acordeón `Club de Clientes / Fidelización`, se dispara la carga reactiva inmediata sin tener que tocar ningún botón manual.
+  2. **Visibilidad Permanente de las Tarjetas y Tabla CRM:**
+     - Se removió el bloqueo condicional `{loyConfigEnabled && (` que ocultaba las tarjetas de "Miembros Registrados", "Crédito en Circulación", "Ticket Promedio" y la tabla CRM cuando el programa estaba inactivo en el local. Ahora la base de clientes y sus saldos están SIEMPRE visibles para auditoría.
+     - Si el programa está inactivo, se expone un aviso con botón "Activar Ahora".
+  3. **Botón de Sincronización en Acordeón de Ajustes:**
+     - Se añadió el botón `⚡ Sincronizar Pedidos` en el encabezado del acordeón en Ajustes (al lado de `Refrescar`) y un botón de acción rápida directo dentro de la tabla si aún no hay clientes vinculados, permitiendo importar con 1 solo clic los teléfonos y compras del historial de comandas.
+  4. **Etiqueta Clara en Barra de Navegación Principal:**
+     - Se reemplazó el texto `"loyalty"` por el botón temático `"🪙 Club & Campañas"` en la botonera superior de navegación de administración.
+  5. **Compatibilidad Flexible de Teléfonos:**
+     - En `handleSyncHistoricalOrders`, la comparación de números ahora busca por los últimos dígitos (`slice(-8)`), unificando registros con prefijos internacionales (`+54 9...`, `+54...`) o números locales sin código de área.
+- **¿Por qué lo hicimos?:**
+  El usuario reportó que al entrar al apartado de Club de Clientes y Fidelización le aparecían en 0 los miembros registrados y créditos en circulación, a pesar de tener clientes con saldo y puntos para canjear en la base de datos.
+- **Impacto:**
+  - `src/components/AdminTab.tsx`: Visibilidad inmediata, auto-fetch en acordeón, sincronización accesible y compatibilidad de teléfonos.
 

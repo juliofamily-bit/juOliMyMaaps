@@ -2,10 +2,11 @@
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Order, Product, Profile } from '@/types/database';
-import { Clock, CheckCircle2, User, Loader2, Navigation, Phone, Check, MapPin, ExternalLink, MessageCircle, ChefHat, Bell } from 'lucide-react';
+import { Clock, CheckCircle2, User, Loader2, Navigation, Phone, Check, MapPin, ExternalLink, MessageCircle, ChefHat, Bell, X, AlertTriangle, DollarSign } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/lib/store';
 import { cleanArgPhone } from '@/lib/phoneUtils';
+import HelpButton from './HelpButton';
 
 interface DeliveryTabProps {
   orders: Order[];
@@ -69,6 +70,44 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
   // Campana de nuevo pedido de delivery y cuando está listo
   const prevDeliveryStateRef = useRef<Record<string, boolean>>({});
   const [localAlert, setLocalAlert] = useState<{message: string, type: 'new' | 'ready'} | null>(null);
+
+  // Pop-up modal de advertencia de cobro / pago para Repartidor
+  const [paymentAlertModal, setPaymentAlertModal] = useState<{
+    isOpen: boolean;
+    order: Order;
+    triggerReason: 'on_open' | 'en_camino' | 'llegue' | 'finalizar' | 'general';
+    onConfirm?: () => void;
+  } | null>(null);
+
+  const hasShownInitialAlertRef = useRef(false);
+
+  useEffect(() => {
+    if (!hasShownInitialAlertRef.current && activeDeliveries.length > 0) {
+      // Priorizar pedido tomado por el repartidor actual o el primero activo
+      const targetOrder = activeDeliveries.find(o => o.waiter_name === currentEmployee?.full_name) || activeDeliveries[0];
+      if (targetOrder) {
+        setPaymentAlertModal({
+          isOpen: true,
+          order: targetOrder,
+          triggerReason: 'on_open'
+        });
+        hasShownInitialAlertRef.current = true;
+      }
+    }
+  }, [activeDeliveries, currentEmployee]);
+
+  const handleActionWithPaymentAlert = (
+    order: Order,
+    reason: 'en_camino' | 'llegue' | 'finalizar' | 'general',
+    actionCallback?: () => void
+  ) => {
+    setPaymentAlertModal({
+      isOpen: true,
+      order,
+      triggerReason: reason,
+      onConfirm: actionCallback
+    });
+  };
 
   useEffect(() => {
     const currentState: Record<string, boolean> = {};
@@ -186,9 +225,12 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
 
       {/* Sección 1: Envíos Activos */}
       <div className="flex justify-between items-center px-2">
-        <div>
-          <h2 className="text-xl font-black uppercase italic tracking-widest text-white leading-none">Reparto & Despacho 🛵</h2>
-          <p className="text-[8px] font-black uppercase text-slate-500 tracking-wider mt-1">Órdenes a Domicilio aprobadas para producción</p>
+        <div className="flex items-center gap-2">
+          <div>
+            <h2 className="text-xl font-black uppercase italic tracking-widest text-white leading-none">Reparto & Despacho 🛵</h2>
+            <p className="text-[8px] font-black uppercase text-slate-500 tracking-wider mt-1">Órdenes a Domicilio aprobadas para producción</p>
+          </div>
+          <HelpButton helpKey="delivery" size="sm" primaryColor={primaryColor} />
         </div>
         <div className="bg-orange-500 text-slate-950 px-4 py-1.5 rounded-2xl text-[10px] font-black uppercase tracking-widest animate-pulse flex items-center gap-1">
           <Navigation size={11} className="fill-slate-950" /> {activeDeliveries.length} Pendientes
@@ -226,6 +268,7 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
             const isPreparing = hasItems ? !allItemsPrepared : true;
             const deliveryFee = Number((order as any).delivery_fee) || 0;
             const orderSubtotal = order.total_price - deliveryFee;
+            const isPaid = order.payment_status === 'pagado';
 
             return (
               <div
@@ -233,9 +276,49 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
                 className={`glass rounded-[2.5rem] overflow-hidden border transition-all duration-300 ${
                   isPreparing 
                     ? 'border-white/5 bg-slate-900/50' 
-                    : 'border-white/5 bg-gradient-to-br from-orange-500/5 to-transparent hover:border-orange-500/10'
+                    : (!isPaid
+                        ? 'border-2 border-rose-500 shadow-[0_0_35px_rgba(244,63,94,0.25)] bg-gradient-to-br from-rose-950/30 via-slate-900/90 to-slate-950'
+                        : 'border-2 border-emerald-500/60 shadow-[0_0_25px_rgba(16,185,129,0.15)] bg-gradient-to-br from-emerald-950/20 via-slate-900/90 to-slate-950')
                 }`}
               >
+                {/* BANNER VISUAL GIGANTE DE COBRO / PAGADO PARA EL REPARTIDOR */}
+                {!isPaid ? (
+                  <div 
+                    onClick={() => handleActionWithPaymentAlert(order, 'general')}
+                    className="bg-rose-600 hover:bg-rose-500 cursor-pointer text-white px-5 py-3.5 flex items-center justify-between shadow-lg transition-all border-b border-rose-700 animate-pulse"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-2xl animate-bounce">🚨</span>
+                      <div>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-rose-200 block">ATENCIÓN REPARTIDOR:</span>
+                        <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-white">DEBES COBRAR ESTE PEDIDO EN PUERTA</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[8px] font-extrabold uppercase text-rose-200 block">Cobrar al cliente:</span>
+                      <span className="text-sm sm:text-base font-black text-white bg-black/40 px-3 py-1 rounded-xl inline-block shadow-inner border border-white/20">
+                        {formatARS(order.total_price)}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div 
+                    onClick={() => handleActionWithPaymentAlert(order, 'general')}
+                    className="bg-emerald-600 hover:bg-emerald-500 cursor-pointer text-white px-5 py-3.5 flex items-center justify-between shadow-lg transition-all border-b border-emerald-700"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-2xl">✅</span>
+                      <div>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-emerald-100 block">PAGADO ONLINE (MERCADO PAGO):</span>
+                        <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-white">NO COBRAR NADA AL CLIENTE</span>
+                      </div>
+                    </div>
+                    <div className="bg-black/25 text-emerald-100 px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider border border-white/20">
+                      $0 a cobrar
+                    </div>
+                  </div>
+                )}
+
                 {/* 1. SECCIÓN DE ENVÍO DESTACADA: PRIMERO Y EN GRANDE */}
                 <div className="p-6 bg-slate-950/80 border-b border-white/5 space-y-4">
                   <div className={isPreparing ? 'grayscale opacity-40 pointer-events-none space-y-4' : 'space-y-4'}>
@@ -307,14 +390,13 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
                       🗺️ Abrir Ruta en Google Maps
                     </a>
                     {whatsappUrl ? (
-                      <a
-                        href={whatsappUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => handleActionWithPaymentAlert(order, 'general', () => window.open(whatsappUrl, '_blank'))}
                         className="py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-2xl text-[9px] uppercase tracking-widest active:scale-95 transition-all text-center flex items-center justify-center gap-1.5"
                       >
                         <MessageCircle size={13} className="fill-white text-emerald-600" /> WhatsApp Cliente
-                      </a>
+                      </button>
                     ) : (
                       <button
                         disabled
@@ -325,30 +407,32 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
                     )}
                   </div>
 
-                  {/* Botones de Acción Rápida (WhatsApp 1 Clic) */}
+                  {/* Botones de Acción Rápida (WhatsApp 1 Clic con Alerta de Cobro) */}
                   <div>
                     {order.phone_number && (
                       <div className="grid grid-cols-2 gap-3 pt-1">
-                        <a
-                          href={`https://wa.me/${cleanArgPhone(order.phone_number)}?text=${encodeURIComponent(
-                            `Hola ${clientNameClean}, tu pedido de ${tenant?.name || 'nuestro local'} ya va en camino hacia tu domicilio. 🛵 ¡Atento a la puerta!`
-                          )}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const text = `Hola ${clientNameClean}, tu pedido de ${tenant?.name || 'nuestro local'} ya va en camino hacia tu domicilio. 🛵 ¡Atento a la puerta!`;
+                            const url = `https://wa.me/${cleanArgPhone(order.phone_number)}?text=${encodeURIComponent(text)}`;
+                            handleActionWithPaymentAlert(order, 'en_camino', () => window.open(url, '_blank'));
+                          }}
                           className="py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-black rounded-2xl text-[9px] uppercase tracking-widest active:scale-95 transition-all text-center flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
                         >
                           En Camino 🛵
-                        </a>
-                        <a
-                          href={`https://wa.me/${cleanArgPhone(order.phone_number)}?text=${encodeURIComponent(
-                            `Hola ${clientNameClean}, ¡ya estoy en la puerta con tu pedido! 🏠🍔 Por favor, ¿podrías salir a recibirme?`
-                          )}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const text = `Hola ${clientNameClean}, ¡ya estoy en la puerta con tu pedido! 🏠🍔 Por favor, ¿podrías salir a recibirme?`;
+                            const url = `https://wa.me/${cleanArgPhone(order.phone_number)}?text=${encodeURIComponent(text)}`;
+                            handleActionWithPaymentAlert(order, 'llegue', () => window.open(url, '_blank'));
+                          }}
                           className="py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black rounded-2xl text-[9px] uppercase tracking-widest active:scale-95 transition-all text-center flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
                         >
                           Llegué / Estoy afuera 🏠
-                        </a>
+                        </button>
                       </div>
                     )}
                   </div>
@@ -445,16 +529,28 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
                             alert("Todavía no está preparado. Tienes que esperar a que Cocina o Barra terminen de preparar el pedido para poder entregarlo.");
                             return;
                           }
+                          if (order.payment_status !== 'pagado') {
+                            handleActionWithPaymentAlert(order, 'finalizar', () => {
+                              handleDeliverOrder(order.id, order.client_name);
+                            });
+                            return;
+                          }
                           handleDeliverOrder(order.id, order.client_name);
                         }}
                         className={`w-full mt-2 text-white font-black py-4 rounded-2xl shadow-xl transition-all active:scale-95 text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-white/10 ${
                           isPreparing 
                             ? 'bg-slate-800 text-slate-400 cursor-not-allowed' 
-                            : 'hover:shadow-orange-500/10 bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700'
+                            : (order.payment_status === 'pagado'
+                                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-950/40'
+                                : 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 shadow-rose-950/40 animate-pulse')
                         }`}
                       >
                         <Check size={14} className="stroke-[3]" />
-                        {isPreparing ? '⏳ Preparándose en Cocina / Barra' : 'Entregado / Finalizar Pedido'}
+                        {isPreparing 
+                          ? '⏳ Preparándose en Cocina / Barra' 
+                          : (order.payment_status === 'pagado' 
+                              ? '✅ Entregado (Ya Pagado Online) / Finalizar' 
+                              : `💵 Cobrar ${formatARS(order.total_price)} y Finalizar Pedido`)}
                       </button>
                     )}
                   </div>
@@ -523,6 +619,201 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
           );
         })()}
       </div>
+
+      {/* MODAL POP-UP DE ALERTA DE COBRO PARA REPARTIDOR (OBLIGATORIO) */}
+      {paymentAlertModal?.isOpen && paymentAlertModal.order && (() => {
+        const modalOrder = paymentAlertModal.order;
+        const isPaid = modalOrder.payment_status === 'pagado';
+        const clientName = modalOrder.client_name?.split('(')[0]?.trim() || 'Cliente';
+        const address = (modalOrder as any).delivery_address || 'Sin dirección registrada';
+
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
+            <div className={`relative w-full max-w-md rounded-[2.5rem] p-6 shadow-2xl border-4 animate-in zoom-in-95 duration-200 ${
+              isPaid 
+                ? 'bg-slate-950 border-emerald-500 shadow-[0_0_60px_rgba(16,185,129,0.35)] text-white' 
+                : 'bg-slate-950 border-rose-500 shadow-[0_0_70px_rgba(244,63,94,0.45)] text-white'
+            }`}>
+              {/* Botón Crucecita de Cierre Superior */}
+              <button
+                type="button"
+                onClick={() => setPaymentAlertModal(null)}
+                className="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 flex items-center justify-center text-white transition-all border border-white/10 z-10"
+              >
+                <X size={20} className="stroke-[3]" />
+              </button>
+
+              <div className="text-center space-y-4 pt-2">
+                {/* Ícono animado */}
+                <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto shadow-inner ${
+                  isPaid ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-500 animate-pulse'
+                }`}>
+                  {isPaid ? (
+                    <CheckCircle2 size={46} className="stroke-[2.5]" />
+                  ) : (
+                    <span className="text-4xl animate-bounce">🚨</span>
+                  )}
+                </div>
+
+                {/* Encabezado y Contexto del Trigger */}
+                <div className="space-y-1">
+                  {paymentAlertModal.triggerReason === 'en_camino' && (
+                    <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20 inline-block">
+                      🛵 Vas en camino al domicilio
+                    </span>
+                  )}
+                  {paymentAlertModal.triggerReason === 'llegue' && (
+                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 inline-block">
+                      🏠 Llegaste a la puerta del cliente
+                    </span>
+                  )}
+                  {paymentAlertModal.triggerReason === 'finalizar' && (
+                    <span className="text-[10px] font-black uppercase tracking-widest text-rose-400 bg-rose-500/10 px-3 py-1 rounded-full border border-rose-500/20 inline-block">
+                      📦 Finalizando Entrega del Pedido
+                    </span>
+                  )}
+                  {paymentAlertModal.triggerReason === 'on_open' && (
+                    <span className="text-[10px] font-black uppercase tracking-widest text-orange-400 bg-orange-500/10 px-3 py-1 rounded-full border border-orange-500/20 inline-block">
+                      📋 Pedido de Despacho Activo
+                    </span>
+                  )}
+
+                  <h3 className={`text-2xl font-black uppercase tracking-tight leading-tight ${
+                    isPaid ? 'text-emerald-400' : 'text-rose-500'
+                  }`}>
+                    {isPaid 
+                      ? '¡PEDIDO YA PAGADO ONLINE!' 
+                      : '¡TENÉS QUE COBRAR ESTE PEDIDO!'}
+                  </h3>
+                </div>
+
+                {/* Tarjeta con los datos del pedido y el monto */}
+                <div className={`p-4 rounded-2xl border text-left space-y-2.5 ${
+                  isPaid 
+                    ? 'bg-emerald-950/30 border-emerald-500/30' 
+                    : 'bg-rose-950/30 border-rose-500/40'
+                }`}>
+                  <div className="flex justify-between items-center text-xs font-bold text-slate-300">
+                    <span>Pedido <b className="text-white">#{modalOrder.order_number}</b></span>
+                    <span>Cliente: <b className="text-white">{clientName}</b></span>
+                  </div>
+                  
+                  <div className="text-xs text-slate-300">
+                    <span className="text-slate-400 block text-[9px] font-bold uppercase">📍 Dirección:</span>
+                    <span className="font-extrabold text-white text-sm">{address}</span>
+                  </div>
+
+                  <div className="pt-2 border-t border-white/10 flex justify-between items-end">
+                    <div>
+                      <span className={`text-[10px] font-black uppercase tracking-wider block ${
+                        isPaid ? 'text-emerald-400' : 'text-rose-400'
+                      }`}>
+                        {isPaid ? 'Monto Pagado Online:' : 'TOTAL A COBRAR EN PUERTA:'}
+                      </span>
+                      <span className={`text-3xl font-black ${
+                        isPaid ? 'text-emerald-400' : 'text-rose-500'
+                      }`}>
+                        {formatARS(modalOrder.total_price)}
+                      </span>
+                    </div>
+
+                    <span className={`px-2.5 py-1 rounded-xl text-[9px] font-black uppercase tracking-wider ${
+                      isPaid 
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' 
+                        : 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
+                    }`}>
+                      {isPaid ? 'Mercado Pago ✅' : 'Efectivo / Puerta 💵'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Explicación de instrucción al repartidor */}
+                <p className="text-xs font-bold text-slate-300 leading-relaxed px-1">
+                  {isPaid ? (
+                    <span className="text-emerald-300">
+                      🎉 <b>El cliente ya pagó desde su casa con Mercado Pago.</b> No tenés que cobrarle dinero en efectivo, solo entregar la comida.
+                    </span>
+                  ) : (
+                    <span className="text-rose-300">
+                      ⚠️ <b>NO OLVIDES COBRAR EL TOTAL.</b> Pedile al cliente los <b className="text-white">{formatARS(modalOrder.total_price)}</b> antes de entregarle el pedido.
+                    </span>
+                  )}
+                </p>
+
+                {/* Botones de acción del Modal */}
+                <div className="pt-2 space-y-2.5">
+                  {paymentAlertModal.triggerReason === 'finalizar' && !isPaid ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const action = paymentAlertModal.onConfirm;
+                          setPaymentAlertModal(null);
+                          if (action) action();
+                        }}
+                        className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-sm uppercase tracking-wider transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2"
+                      >
+                        <Check size={18} className="stroke-[3]" />
+                        SÍ, YA COBRÉ {formatARS(modalOrder.total_price)} - FINALIZAR
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentAlertModal(null)}
+                        className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-slate-400 rounded-2xl font-bold text-xs uppercase tracking-wider transition-all border border-white/5"
+                      >
+                        Cancelar / Todavía no cobré
+                      </button>
+                    </>
+                  ) : paymentAlertModal.onConfirm ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const action = paymentAlertModal.onConfirm;
+                          setPaymentAlertModal(null);
+                          if (action) action();
+                        }}
+                        className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2 ${
+                          isPaid 
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/30' 
+                            : 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/40 animate-pulse'
+                        }`}
+                      >
+                        <MessageCircle size={16} />
+                        {isPaid 
+                          ? 'ENTENDIDO (NO COBRAR) Y ABRIR WHATSAPP 💬' 
+                          : `ENTENDIDO (COBRAR ${formatARS(modalOrder.total_price)}) Y ABRIR WHATSAPP 💬`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentAlertModal(null)}
+                        className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-400 rounded-2xl font-bold text-[10px] uppercase tracking-wider transition-all border border-white/5"
+                      >
+                        Cerrar aviso sin abrir mensaje
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setPaymentAlertModal(null)}
+                      className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2 ${
+                        isPaid 
+                          ? 'bg-emerald-600 hover:bg-emerald-500 text-white' 
+                          : 'bg-rose-600 hover:bg-rose-500 text-white'
+                      }`}
+                    >
+                      <Check size={16} className="stroke-[3]" />
+                      {isPaid 
+                        ? 'ENTENDIDO, NO DEBO COBRAR NADA' 
+                        : `ENTENDIDO, DEBO COBRAR ${formatARS(modalOrder.total_price)}`}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Historial de Envíos Agrupado por Día (Últimos 7 días) */}
       <div>

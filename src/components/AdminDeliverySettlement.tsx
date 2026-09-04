@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Check, CheckCircle2, ChevronDown, ChevronUp, DollarSign, RefreshCw } from 'lucide-react';
 import { Order } from '@/types/database';
+import HelpButton from './HelpButton';
 
 const formatARS = (amount: number) => {
   return new Intl.NumberFormat('es-AR', {
@@ -92,9 +93,12 @@ export default function AdminDeliverySettlement({ tenant }: { tenant: any }) {
   return (
     <div className="space-y-4 pt-3 border-t border-white/5 animate-in slide-in-from-top-2 duration-300">
       <div className="flex justify-between items-center">
-        <label className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1.5" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
-          💰 Liquidación a Repartidores
-        </label>
+        <div className="flex items-center gap-2">
+          <label className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1.5" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
+            💰 Liquidación a Repartidores
+          </label>
+          <HelpButton helpKey="admin-delivery-settlement" size="sm" primaryColor={tenant?.theme_colors?.primary} />
+        </div>
         <button onClick={fetchUnpaidOrders} className="p-1 text-slate-500 hover:text-white transition-colors" title="Actualizar">
           <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
         </button>

@@ -5,6 +5,7 @@ import { Order, OrderItem } from '@/types/database';
 import { Clock, CheckCircle2, User, Loader2, GlassWater, Sparkles, Check, RefreshCw } from 'lucide-react';
 import { supabase, broadcastTenantChange } from '@/lib/supabase';
 import { useNotifications } from '@/lib/store';
+import HelpButton from './HelpButton';
 
 interface BartenderTabProps {
     orders: Order[];
@@ -78,13 +79,19 @@ export default function BartenderTab({ orders, products, tenant, refetchData }: 
         }
     };
 
-    const handleToggleItemStatus = async (item: OrderItem) => {
-        const newStatus: 'pending' | 'delivered' = item.status === 'delivered' ? 'pending' : 'delivered';
+    const getItemStatus = (item: OrderItem) => {
+        return updatingItems[item.id] !== undefined ? updatingItems[item.id] : item.status;
+    };
 
-        // Agregar al estado optimista antes de la llamada de red
+    const handleToggleItemStatus = async (item: OrderItem) => {
+        const newStatus: 'pending' | 'delivered' = getItemStatus(item) === 'delivered' ? 'pending' : 'delivered';
+
+        // 1. Agregar al estado optimista antes de la llamada de red (0ms)
         setUpdatingItems(prev => ({ ...prev, [item.id]: newStatus }));
 
         try {
+            const targetOrder = orders.find(o => o.id === item.order_id);
+
             const { error } = await supabase
                 .from('order_items')
                 .update({ status: newStatus })
@@ -93,8 +100,6 @@ export default function BartenderTab({ orders, products, tenant, refetchData }: 
             if (error) {
                 throw error;
             }
-
-            const targetOrder = orders.find(o => o.id === item.order_id);
 
             // Crear una notificación elegante y disparar broadcast en tiempo real
             if (newStatus === 'delivered' && targetOrder) {
@@ -118,9 +123,10 @@ export default function BartenderTab({ orders, products, tenant, refetchData }: 
                 .select('status')
                 .eq('order_id', item.order_id);
 
+            let finalStatus: string | null = null;
             if (allItems && allItems.length > 0 && allItems.every(i => i.status === 'delivered')) {
                 const isDelivery = targetOrder && (targetOrder as any).delivery_type === 'delivery';
-                const finalStatus = isDelivery ? 'ready' : 'delivered';
+                finalStatus = isDelivery ? 'ready' : 'delivered';
 
                 const { error: orderError } = await supabase
                     .from('orders')
@@ -144,38 +150,34 @@ export default function BartenderTab({ orders, products, tenant, refetchData }: 
                 }
             }
 
-            // Difundir los cambios de inmediato en tiempo real
+            // Difundir los cambios de inmediato en tiempo real con latencia ultra-baja
             if (targetOrder) {
-                broadcastTenantChange(targetOrder.tenant_id || null);
+                broadcastTenantChange(targetOrder.tenant_id || null, 'order:item_status', {
+                    itemId: item.id,
+                    orderId: item.order_id,
+                    newStatus,
+                    orderFinalStatus: finalStatus
+                });
             }
 
-            // Llamar al refetch local de inmediato para emular el click en el botón de refrescar
             if (refetchData) {
                 refetchData();
             }
         } catch (err: any) {
-            // Revertir cambio optimista
+            // Revertir cambio optimista sólo en caso de error
             setUpdatingItems(prev => {
                 const copy = { ...prev };
                 delete copy[item.id];
                 return copy;
             });
             alert('Error al actualizar el estado de la bebida: ' + err.message);
-        } finally {
-            // Limpiar del estado optimista
-            setUpdatingItems(prev => {
-                const copy = { ...prev };
-                delete copy[item.id];
-                return copy;
-            });
         }
     };
 
-    // Filtrar órdenes que tienen al menos un ítem de barra PENDIENTE
+    // Filtrar órdenes que tienen al menos un ítem de barra PENDIENTE (evaluando estado optimista)
     const ordersWithDrinks = pendingOrders.filter(order => {
         const items = getDrinkItemsForOrder(order);
-        // Solo mostrar si tiene items de barra Y al menos uno NO está entregado
-        return items.length > 0 && items.some(i => i.status !== 'delivered');
+        return items.length > 0 && items.some(i => getItemStatus(i) !== 'delivered');
     });
 
     return (
@@ -186,7 +188,10 @@ export default function BartenderTab({ orders, products, tenant, refetchData }: 
                         <GlassWater size={20} className="animate-bounce" />
                     </div>
                     <div>
-                        <h2 className="text-xl font-black uppercase italic tracking-widest bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">Barra & Bebidas</h2>
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-xl font-black uppercase italic tracking-widest bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent">Barra & Bebidas</h2>
+                            <HelpButton helpKey="bartender" size="sm" primaryColor="#a855f7" />
+                        </div>
                         <p className="text-[8px] font-black uppercase text-slate-500 tracking-wider">Pantalla Operativa de Bartender</p>
                     {ordersWithDrinks.length > 0 && (
                 <div className="bg-purple-500 text-slate-900 px-4 py-1.5 rounded-2xl text-[10px] font-black uppercase tracking-widest animate-pulse">

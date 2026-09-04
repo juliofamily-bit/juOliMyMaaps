@@ -123,6 +123,13 @@ export default function WaiterTab({
     const [searchQuery, setSearchQuery] = useState('');
     const [orderLoading, setOrderLoading] = useState(false);
     const [cartPaymentMethod, setCartPaymentMethod] = useState<'efectivo' | 'mercadopago' | 'debito' | 'credito'>('efectivo');
+
+    // Delight UX & Animaciones en Menú de Mozos
+    const [flyingProducts, setFlyingProducts] = useState<{ id: string; startX: number; startY: number; targetX: number; targetY: number; imageUrl?: string | null; name: string }[]>([]);
+    const [cartBump, setCartBump] = useState(false);
+    const [priceDeltaBubble, setPriceDeltaBubble] = useState<{ id: string; amount: number } | null>(null);
+    const lastClickPos = useRef<{ x: number; y: number }>({ x: typeof window !== 'undefined' ? window.innerWidth / 2 : 200, y: 300 });
+    const cartButtonRef = useRef<HTMLDivElement | null>(null);
     const [pendingPaymentTable, setPendingPaymentTable] = useState<any | null>(null);
     const [waiterManualCode, setWaiterManualCode] = useState('');
     const [waiterManualDiscount, setWaiterManualDiscount] = useState<number>(0);
@@ -454,12 +461,102 @@ export default function WaiterTab({
         return Math.max(0, maxPossible);
     };
 
-    const addToCart = (productId: string) => {
+    const playCartChime = () => {
+        try {
+            const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+            if (!AudioCtx) return;
+            const ctx = new AudioCtx();
+            if (ctx.state === 'suspended') ctx.resume();
+
+            const now = ctx.currentTime;
+            const osc1 = ctx.createOscillator();
+            const gain1 = ctx.createGain();
+            osc1.type = 'sine';
+            osc1.frequency.setValueAtTime(880, now);
+            osc1.frequency.exponentialRampToValueAtTime(1318.5, now + 0.1);
+            gain1.gain.setValueAtTime(0.14, now);
+            gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+            osc1.connect(gain1);
+            gain1.connect(ctx.destination);
+            osc1.start(now);
+            osc1.stop(now + 0.35);
+
+            const osc2 = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc2.type = 'triangle';
+            osc2.frequency.setValueAtTime(1760, now + 0.08);
+            gain2.gain.setValueAtTime(0.08, now + 0.08);
+            gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+            osc2.start(now + 0.08);
+            osc2.stop(now + 0.45);
+        } catch {}
+    };
+
+    const triggerCartBump = (finalPrice: number, product: any) => {
+        const cartRect = cartButtonRef.current?.getBoundingClientRect();
+        const targetX = cartRect 
+            ? (cartRect.left + cartRect.width / 2) 
+            : (typeof window !== 'undefined' ? window.innerWidth / 2 : 200);
+        const targetY = cartRect 
+            ? (cartRect.top + cartRect.height / 2) 
+            : (typeof window !== 'undefined' ? window.innerHeight - 80 : 600);
+
+        const startX = lastClickPos.current?.x || (typeof window !== 'undefined' ? window.innerWidth / 2 : 200);
+        const startY = lastClickPos.current?.y || (typeof window !== 'undefined' ? window.innerHeight / 2 : 300);
+
+        const flyingId = crypto.randomUUID();
+        setFlyingProducts(prev => [
+            ...prev,
+            {
+                id: flyingId,
+                startX,
+                startY,
+                targetX,
+                targetY,
+                imageUrl: product?.image_url,
+                name: product?.name || 'Producto',
+            }
+        ]);
+
+        setTimeout(() => {
+            setFlyingProducts(prev => prev.filter(p => p.id !== flyingId));
+        }, 700);
+
+        setTimeout(() => {
+            setCartBump(true);
+            setPriceDeltaBubble({ id: crypto.randomUUID(), amount: finalPrice });
+            setTimeout(() => setCartBump(false), 550);
+            setTimeout(() => setPriceDeltaBubble(null), 1100);
+        }, 420);
+    };
+
+    const addToCart = (productId: string, event?: React.MouseEvent) => {
         const available = getAvailableStockForProduct(productId);
         if (available <= 0) return;
 
+        if (event) {
+            const targetEl = event.currentTarget as HTMLElement | null;
+            const rect = targetEl?.getBoundingClientRect?.();
+            if (rect) {
+                lastClickPos.current = {
+                    x: rect.left + rect.width / 2,
+                    y: rect.top + rect.height / 2
+                };
+            } else if (event.clientX && event.clientY) {
+                lastClickPos.current = { x: event.clientX, y: event.clientY };
+            }
+        }
+
         const currentQty = cart[productId] || 0;
         setCart(prev => ({ ...prev, [productId]: currentQty + 1 }));
+
+        const prod = products.find(p => p.id === productId);
+        if (prod) {
+            playCartChime();
+            triggerCartBump(prod.price, prod);
+        }
     };
 
     const removeFromCart = (productId: string) => {
@@ -2721,7 +2818,8 @@ export default function WaiterTab({
                                                         return (
                                                             <div
                                                                 key={p.id}
-                                                                className={`rounded-2xl border p-3 flex flex-col justify-between transition-all duration-300 relative overflow-hidden ${
+                                                                onClick={(e) => { if (!isOutOfStock) addToCart(p.id, e); }}
+                                                                className={`rounded-2xl border p-3 flex flex-col justify-between transition-all duration-300 relative overflow-hidden cursor-pointer ${
                                                                     isOutOfStock
                                                                         ? (isLight ? 'border-slate-100 bg-slate-50 opacity-55' : 'border-slate-900/30 bg-slate-950/20 opacity-50')
                                                                         : qtyInCart > 0
@@ -2914,8 +3012,59 @@ export default function WaiterTab({
                                                         </div>
                                                     </div>
 
-                                                    {/* Total y Botón de Confirmación */}
-                                                    <div className={`pt-2.5 border-t flex items-center justify-between ${isLight ? 'border-slate-100' : 'border-white/5'}`}>
+                                                    {/* Clones voladores en panel de mozos */}
+                                                    {flyingProducts.length > 0 && (
+                                                        <div className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden">
+                                                            {flyingProducts.map((flying) => {
+                                                                const dx = flying.targetX - flying.startX;
+                                                                const dy = flying.targetY - flying.startY;
+
+                                                                return (
+                                                                    <div
+                                                                        key={flying.id}
+                                                                        className="absolute animate-fly-to-cart flex items-center justify-center pointer-events-none"
+                                                                        style={{
+                                                                            left: `${flying.startX - 28}px`,
+                                                                            top: `${flying.startY - 28}px`,
+                                                                            width: '56px',
+                                                                            height: '56px',
+                                                                            '--target-x': `${dx}px`,
+                                                                            '--target-y': `${dy}px`,
+                                                                        } as React.CSSProperties}
+                                                                    >
+                                                                        <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-orange-400 shadow-[0_10px_25px_rgba(0,0,0,0.6)] ring-4 ring-orange-400/40 bg-neutral-900 flex items-center justify-center">
+                                                                            {flying.imageUrl ? (
+                                                                                <img
+                                                                                    src={flying.imageUrl}
+                                                                                    alt={flying.name}
+                                                                                    className="w-full h-full object-cover"
+                                                                                />
+                                                                            ) : (
+                                                                                <span className="text-2xl">🍔</span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Total y Botón de Confirmación con Animación y Rebote */}
+                                                    <div 
+                                                        ref={cartButtonRef}
+                                                        className={`pt-2.5 border-t flex items-center justify-between relative transition-transform duration-300 ${
+                                                            cartBump ? 'animate-cart-bump' : ''
+                                                        } ${isLight ? 'border-slate-100' : 'border-white/5'}`}
+                                                    >
+                                                        {priceDeltaBubble && (
+                                                            <span 
+                                                                key={priceDeltaBubble.id}
+                                                                className="absolute -top-3.5 left-8 bg-amber-400 text-neutral-950 font-black text-xs px-2.5 py-0.5 rounded-full shadow-lg border border-white animate-price-float pointer-events-none z-50 flex items-center gap-1"
+                                                            >
+                                                                <span>+${Number(priceDeltaBubble.amount || 0).toLocaleString('es-AR')}</span>
+                                                                <Sparkles size={11} className="text-neutral-950 inline" />
+                                                            </span>
+                                                        )}
                                                         <div>
                                                             <span className={`text-[8px] font-black uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-500'}`}>Total Estimado</span>
                                                             <p className={`text-xl font-black italic leading-none mt-0.5 ${isLight ? 'text-slate-950 font-black' : 'text-white'}`}>

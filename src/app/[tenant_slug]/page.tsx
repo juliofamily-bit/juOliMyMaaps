@@ -1226,6 +1226,7 @@ export default function TenantApp({ params }: TenantPageProps) {
               onTenantUpdate={(updatedTenant: any) => setTenant(updatedTenant)}
               refetchData={refetch}
               planFeatures={planFeatures}
+              isLight={isLight}
             />
           )}
         </div>

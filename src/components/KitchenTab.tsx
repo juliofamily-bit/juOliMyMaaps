@@ -5,6 +5,7 @@ import { Order, OrderItem } from '@/types/database';
 import { Clock, CheckCircle2, User, ChefHat, Sparkles, Check, Flame, RefreshCw } from 'lucide-react';
 import { supabase, broadcastTenantChange } from '@/lib/supabase';
 import { useNotifications } from '@/lib/store';
+import HelpButton from './HelpButton';
 
 interface KitchenTabProps {
     orders: Order[];
@@ -74,11 +75,15 @@ export default function KitchenTab({ orders, products, tenant, refetchData }: Ki
         return product ? product.name : 'Producto';
     };
 
+    const getItemStatus = (item: any) => {
+        return updatingItems[item.id] !== undefined ? updatingItems[item.id] : item.status;
+    };
+
     // Filtrar órdenes que tienen al menos un plato de cocina PENDIENTE
     const ordersWithKitchen = pendingOrders.filter(order => {
         const items = getKitchenItemsForOrder(order);
-        // Solo mostrar si tiene platos de cocina Y al menos uno NO está entregado
-        return items.length > 0 && items.some(i => i.status !== 'delivered');
+        // Desaparece de inmediato cuando todos los platos fueron tildados
+        return items.length > 0 && items.some(i => getItemStatus(i) !== 'delivered');
     });
 
     const getOrderLabel = (order: Order) => {
@@ -93,12 +98,14 @@ export default function KitchenTab({ orders, products, tenant, refetchData }: Ki
     };
 
     const handleToggleItemStatus = async (item: any) => {
-        const newStatus: 'pending' | 'delivered' = item.status === 'delivered' ? 'pending' : 'delivered';
+        const newStatus: 'pending' | 'delivered' = getItemStatus(item) === 'delivered' ? 'pending' : 'delivered';
         
-        // Agregar al estado optimista
+        // 1. Inyección de Estado Optimista INMEDIATO (0ms)
         setUpdatingItems(prev => ({ ...prev, [item.id]: newStatus }));
 
         try {
+            const targetOrder = orders.find(o => o.id === item.order_id);
+
             const { error } = await supabase
                 .from('order_items')
                 .update({ status: newStatus })
@@ -107,8 +114,6 @@ export default function KitchenTab({ orders, products, tenant, refetchData }: Ki
             if (error) {
                 throw error;
             }
-
-            const targetOrder = orders.find(o => o.id === item.order_id);
 
             if (newStatus === 'delivered' && targetOrder) {
                 const productName = getProductName(item.product_id);
@@ -130,9 +135,10 @@ export default function KitchenTab({ orders, products, tenant, refetchData }: Ki
                 .select('status')
                 .eq('order_id', item.order_id);
 
+            let finalStatus: string | null = null;
             if (allItems && allItems.length > 0 && allItems.every(i => i.status === 'delivered')) {
                 const isDelivery = targetOrder && (targetOrder as any).delivery_type === 'delivery';
-                const finalStatus = isDelivery ? 'ready' : 'delivered';
+                finalStatus = isDelivery ? 'ready' : 'delivered';
 
                 const { error: orderError } = await supabase
                     .from('orders')
@@ -156,37 +162,40 @@ export default function KitchenTab({ orders, products, tenant, refetchData }: Ki
                 }
             }
 
+            // Difusión en tiempo real de latencia ultra-baja (<50ms) a Mozos y Caja
             if (targetOrder) {
-                broadcastTenantChange(targetOrder.tenant_id || null);
+                broadcastTenantChange(targetOrder.tenant_id || null, 'order:item_status', {
+                    itemId: item.id,
+                    orderId: item.order_id,
+                    newStatus,
+                    orderFinalStatus: finalStatus
+                });
             }
             
-            // Llamar al refetch local de inmediato para emular el click en el botón de refrescar
             if (refetchData) {
                 refetchData();
             }
         } catch (err: any) {
-            // Revertir cambio optimista
+            // Revertir cambio optimista sólo en caso de error
             setUpdatingItems(prev => {
                 const copy = { ...prev };
                 delete copy[item.id];
                 return copy;
             });
             alert('Error al actualizar el estado del plato: ' + err.message);
-        } finally {
-            // Limpiar del estado optimista
-            setUpdatingItems(prev => {
-                const copy = { ...prev };
-                delete copy[item.id];
-                return copy;
-            });
         }
     };
 
     const handleToggleAllItems = async (order: Order) => {
         const items = getKitchenItemsForOrder(order);
-        const pendingItems = items.filter(i => i.status !== 'delivered');
+        const pendingItems = items.filter(i => getItemStatus(i) !== 'delivered');
         
         if (pendingItems.length === 0) return;
+
+        // Marcado optimista instantáneo de toda la comanda
+        const batch: Record<string, 'delivered'> = {};
+        pendingItems.forEach(i => { batch[i.id] = 'delivered'; });
+        setUpdatingItems(prev => ({ ...prev, ...batch }));
 
         for (const item of pendingItems) {
             await handleToggleItemStatus(item);
@@ -201,7 +210,10 @@ export default function KitchenTab({ orders, products, tenant, refetchData }: Ki
                         <ChefHat size={20} className="animate-pulse" />
                     </div>
                     <div>
-                        <h2 className="text-xl font-black uppercase italic tracking-widest bg-gradient-to-r from-orange-400 via-rose-400 to-yellow-400 bg-clip-text text-transparent">Cocina & Comandas</h2>
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-xl font-black uppercase italic tracking-widest bg-gradient-to-r from-orange-400 via-rose-400 to-yellow-400 bg-clip-text text-transparent">Cocina & Comandas</h2>
+                            <HelpButton helpKey="kitchen" size="sm" primaryColor="#f97316" />
+                        </div>
                         <p className="text-[8px] font-black uppercase text-slate-500 tracking-wider">Pantalla Operativa del Chef</p>
                     </div>
                 </div>

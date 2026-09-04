@@ -38,6 +38,7 @@ export interface Product {
     external_product_id?: string;
     custom_question?: string | null;
     is_question_required?: boolean;
+    is_featured?: boolean;
 }
 
 export interface ProductIngredient {
@@ -45,6 +46,7 @@ export interface ProductIngredient {
     product_id: string;
     ingredient_id: string;
     quantity_used: number;
+    is_optional?: boolean;
     ingredient?: Ingredient;
 }
 
@@ -106,6 +108,7 @@ export interface LoyaltyAccount {
     total_orders: number;
     last_order_date: string;
     tier: 'bronce' | 'plata' | 'oro';
+    opt_out?: boolean;
     created_at: string;
 }
 

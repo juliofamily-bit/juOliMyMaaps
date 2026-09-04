@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { Category, Product, Ingredient, OrderItem, Order } from '@/types/database';
-import { Minus, Plus, Smartphone, Check, ArrowLeft, ShoppingCart, AlertCircle, X, RefreshCw, ClipboardList, CheckCircle2, Clock, User, Flame, Navigation, AlertTriangle, Printer, Trash2, ShoppingBag, Calendar, Users, Package, Utensils, GlassWater, Coffee, Pizza, Beer, Search, Info, Coins, Mic } from 'lucide-react';
+import { Minus, Plus, Sparkles, Smartphone, Check, ArrowLeft, ShoppingCart, AlertCircle, X, RefreshCw, ClipboardList, CheckCircle2, Clock, User, Flame, Navigation, AlertTriangle, Printer, Trash2, ShoppingBag, Calendar, Users, Package, Utensils, GlassWater, Coffee, Pizza, Beer, Search, Info, Coins, Mic } from 'lucide-react';
 import { supabase, broadcastTenantChange } from '@/lib/supabase';
 import { useNotifications } from '@/lib/store';
 import { useOfflineStore } from '@/lib/offlineStore';
-import { cleanArgPhone } from '@/lib/phoneUtils';
+import { cleanArgPhone, isSamePhone, mergeClientNames } from '@/lib/phoneUtils';
 import { useReactToPrint } from 'react-to-print';
 import { PrintableTicket } from './PrintableTicket';
 
@@ -129,6 +129,13 @@ export default function OrderTab({ products, ingredients, categories: initialCat
     const [isListening, setIsListening] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Delight UX & Animaciones del Carrito en Caja
+    const [flyingProducts, setFlyingProducts] = useState<{ id: string; startX: number; startY: number; targetX: number; targetY: number; imageUrl?: string | null; name: string }[]>([]);
+    const [cartBump, setCartBump] = useState(false);
+    const [priceDeltaBubble, setPriceDeltaBubble] = useState<{ id: string; amount: number } | null>(null);
+    const lastClickPos = useRef<{ x: number; y: number }>({ x: typeof window !== 'undefined' ? window.innerWidth / 2 : 200, y: 300 });
+    const cartButtonRef = useRef<HTMLDivElement | null>(null);
+
     const { addNotification } = useNotifications();
 
     const handleVoiceSearch = () => {
@@ -165,35 +172,87 @@ export default function OrderTab({ products, ingredients, categories: initialCat
     // Estados y Búsqueda del Club de Clientes y Fidelización en Caja (mmmTodoLoQueQuiero 2026)
     const [loyaltyAccount, setLoyaltyAccount] = useState<any>(null);
     const [useLoyaltyDiscount, setUseLoyaltyDiscount] = useState(false);
+    const [loyaltyTodayEarned, setLoyaltyTodayEarned] = useState<number>(0);
 
     React.useEffect(() => {
         if (!tenant?.id || !phone.trim() || phone.trim().length < 6) {
             setLoyaltyAccount(null);
             setUseLoyaltyDiscount(false);
+            setLoyaltyTodayEarned(0);
             return;
         }
 
         const timer = setTimeout(async () => {
             try {
-                const { data, error } = await supabase
+                let account = null;
+                const { data: list } = await supabase
                     .from('loyalty_accounts')
                     .select('*')
-                    .eq('tenant_id', tenant.id)
-                    .eq('phone_number', phone.trim())
-                    .single();
+                    .eq('tenant_id', tenant.id);
 
-                if (!error && data) {
-                    setLoyaltyAccount(data);
+                if (list && list.length > 0) {
+                    account = list.find((a: any) => isSamePhone(a.phone_number, phone.trim())) || null;
+                }
+
+                if (account) {
+                    setLoyaltyAccount(account);
+
+                    // Consultar pedidos de hoy para este teléfono para bloquear saldo generado hoy (Regla: Canje a partir de la próxima visita / día siguiente)
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const rawDigits = phone.trim().replace(/\D/g, '').slice(-8);
+
+                    let todayOrdersList: any[] = [];
+                    if (orders && orders.length > 0) {
+                        todayOrdersList = orders.filter((o: any) => {
+                            if (o.status === 'cancelled') return false;
+                            const orderDate = new Date(o.created_at);
+                            return orderDate >= today;
+                        });
+                    } else {
+                        const { data: dbOrders } = await supabase
+                            .from('orders')
+                            .select('id, total_price, created_at, status, phone_number')
+                            .eq('tenant_id', tenant.id)
+                            .gte('created_at', today.toISOString())
+                            .neq('status', 'cancelled');
+                        todayOrdersList = dbOrders || [];
+                    }
+
+                    if (todayOrdersList.length > 0) {
+                        const clientTodayOrders = todayOrdersList.filter((o: any) => {
+                            const oDigits = (o.phone_number || '').replace(/\D/g, '');
+                            return rawDigits.length >= 6 && (oDigits.includes(rawDigits) || rawDigits.includes(oDigits.slice(-8)));
+                        });
+
+                        if (clientTodayOrders.length > 0) {
+                            const config = tenant?.loyalty_config || {};
+                            const tiers = config.tiers || [];
+                            let currentTier = account.tier || 'bronce';
+                            let cashbackPct = config.cashback_pct || 5;
+                            const foundTier = tiers.find((t: any) => t.name === currentTier);
+                            if (foundTier) cashbackPct = foundTier.cashback_pct || cashbackPct;
+
+                            const todayEarned = Math.round(clientTodayOrders.reduce((sum: number, o: any) => sum + ((Number(o.total_price) || 0) * (cashbackPct / 100)), 0));
+                            setLoyaltyTodayEarned(todayEarned);
+                        } else {
+                            setLoyaltyTodayEarned(0);
+                        }
+                    } else {
+                        setLoyaltyTodayEarned(0);
+                    }
                 } else {
                     setLoyaltyAccount(null);
+                    setLoyaltyTodayEarned(0);
                 }
             } catch (e) {
                 setLoyaltyAccount(null);
+                setLoyaltyTodayEarned(0);
             }
         }, 500);
 
         return () => clearTimeout(timer);
-    }, [phone, tenant?.id]);
+    }, [phone, tenant?.id, orders]);
 
     // Effect para autocompletar AFIP si el cliente lo pidió (movido después de los useState)
     React.useEffect(() => {
@@ -362,6 +421,123 @@ export default function OrderTab({ products, ingredients, categories: initialCat
             ? Math.round(prod.price * (1 - activeOffer.discount_percentage / 100))
             : prod.price;
     };
+
+    // Mapa de popularidad acumulada de ventas por producto (Top Ventas del Mes) idéntico a AdminTab (Balance / Ajustes)
+    const productSalesMap = useMemo(() => {
+        const counts: Record<string, number> = {};
+        const allTimeCounts: Record<string, number> = {};
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+
+        (orders || []).forEach(o => {
+            if (!o?.created_at) return;
+            const oDate = new Date(o.created_at);
+            const isCurrentMonth = oDate.getFullYear() === currentYear && oDate.getMonth() === currentMonth;
+
+            if (Array.isArray(o.items)) {
+                o.items.forEach((item: any) => {
+                    if (item?.product_id) {
+                        const qty = Number(item.quantity) || 1;
+                        allTimeCounts[item.product_id] = (allTimeCounts[item.product_id] || 0) + qty;
+                        if (isCurrentMonth) {
+                            counts[item.product_id] = (counts[item.product_id] || 0) + qty;
+                        }
+                    }
+                });
+            }
+        });
+
+        // Si en el mes actual ya hay ventas, se usa el ranking del mes; si el mes recién empieza o está vacío, fallback a ventas históricas
+        const hasMonthSales = Object.keys(counts).length > 0;
+        return hasMonthSales ? counts : allTimeCounts;
+    }, [orders]);
+
+    // Conteo de ofertas activas en tiempo real
+    const activeOffersCount = useMemo(() => {
+        const offerCat = categories.find(c => c.is_offer === true || /oferta|oportunidad|descuento/i.test(c.name));
+        return products.filter(p => p.is_active !== false && (!!getActiveOfferForProduct(p.id) || (offerCat && p.category_id === offerCat.id))).length;
+    }, [products, productOffers, orders, categories]);
+
+    // Lista unificada de productos para Caja: Búsqueda Global Instantánea y Orden por Top Ventas
+    const displayedProducts = useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+
+        // 1. REGLA CLAVE DE BÚSQUEDA GLOBAL:
+        // Si hay texto en el buscador, busca en TODO el catálogo de la tienda independientemente de la categoría previa
+        if (q) {
+            const matches = products.filter(p => {
+                if (p.is_active === false) return false;
+                const nameLower = p.name.toLowerCase();
+                const descLower = p.description?.toLowerCase() || '';
+                return nameLower.includes(q) || descLower.includes(q);
+            });
+
+            return matches.sort((a, b) => {
+                const aName = a.name.toLowerCase();
+                const bName = b.name.toLowerCase();
+
+                // Prioridad 1: Los que EMPIEZAN exactamente con las letras ingresadas (ej: "ha" -> "Hamburguesa")
+                const aStarts = aName.startsWith(q);
+                const bStarts = bName.startsWith(q);
+                if (aStarts && !bStarts) return -1;
+                if (!aStarts && bStarts) return 1;
+
+                // Prioridad 2: Si alguna palabra interna empieza con las letras (ej: "Súper Hamburguesa")
+                const aWordStarts = aName.split(/\s+/).some(w => w.startsWith(q));
+                const bWordStarts = bName.split(/\s+/).some(w => w.startsWith(q));
+                if (aWordStarts && !bWordStarts) return -1;
+                if (!aWordStarts && bWordStarts) return 1;
+
+                // Prioridad 3: Más vendidos primero (Top Ventas)
+                const salesA = productSalesMap[a.id] || 0;
+                const salesB = productSalesMap[b.id] || 0;
+                if (salesB !== salesA) return salesB - salesA;
+
+                // Prioridad 4: Destacados primero
+                if ((b.is_featured ? 1 : 0) !== (a.is_featured ? 1 : 0)) {
+                    return (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0);
+                }
+
+                // Prioridad 5: Alfabético
+                return a.name.localeCompare(b.name);
+            });
+        }
+
+        // 2. SIN TEXTO ESCRITO:
+        // Si se borra la búsqueda o está vacío, filtra por categoría si está seleccionada, o muestra todo el menú
+        let filtered = products.filter(p => p.is_active !== false);
+
+        if (selectedCategoryId === 'offers') {
+            const offerCat = categories.find(c => c.is_offer === true || /oferta|oportunidad|descuento/i.test(c.name));
+            filtered = filtered.filter(p => !!getActiveOfferForProduct(p.id) || (offerCat && p.category_id === offerCat.id));
+        } else if (selectedCategoryId && selectedCategoryId !== 'all') {
+            const selectedCat = categories.find(c => c.id === selectedCategoryId);
+            const isOfferCat = selectedCat 
+                ? (selectedCat.is_offer === true || /oferta|oportunidad|descuento/i.test(selectedCat.name))
+                : false;
+
+            if (isOfferCat) {
+                filtered = filtered.filter(p => !!getActiveOfferForProduct(p.id) || (selectedCat && p.category_id === selectedCat.id));
+            } else {
+                filtered = filtered.filter(p => p.category_id === selectedCategoryId);
+            }
+        }
+
+        // 3. ORDEN NATURAL: Más vendidos (Top Ventas) primero, luego destacados, luego alfabético
+        return filtered.sort((a, b) => {
+            const salesA = productSalesMap[a.id] || 0;
+            const salesB = productSalesMap[b.id] || 0;
+            if (salesB !== salesA) return salesB - salesA;
+
+            if ((b.is_featured ? 1 : 0) !== (a.is_featured ? 1 : 0)) {
+                return (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0);
+            }
+
+            return a.name.localeCompare(b.name);
+        });
+    }, [products, searchQuery, selectedCategoryId, categories, productSalesMap, productOffers, orders]);
+
 
     // MÓDULO DE SIMULACIÓN DE NOTIFICACIONES SMS / WHATSAPP AUTOMÁTICAS
     const sendOrderSmsNotification = async (order: Order, type: 'ready' | 'shipped') => {
@@ -633,7 +809,92 @@ export default function OrderTab({ products, ingredients, categories: initialCat
         return product ? product.name : 'Producto';
     };
 
-    const addToCart = (productIdOrKey: string, bypassModal: boolean = false) => {
+    // Sonido sutil de campana cristalina mediante Web Audio API nativo
+    const playCartChime = () => {
+        try {
+            const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+            if (!AudioCtx) return;
+            const ctx = new AudioCtx();
+            if (ctx.state === 'suspended') ctx.resume();
+
+            const now = ctx.currentTime;
+            const osc1 = ctx.createOscillator();
+            const gain1 = ctx.createGain();
+            osc1.type = 'sine';
+            osc1.frequency.setValueAtTime(880, now);
+            osc1.frequency.exponentialRampToValueAtTime(1318.5, now + 0.1);
+            gain1.gain.setValueAtTime(0.14, now);
+            gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+            osc1.connect(gain1);
+            gain1.connect(ctx.destination);
+            osc1.start(now);
+            osc1.stop(now + 0.35);
+
+            const osc2 = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc2.type = 'triangle';
+            osc2.frequency.setValueAtTime(1760, now + 0.08);
+            gain2.gain.setValueAtTime(0.08, now + 0.08);
+            gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+            osc2.start(now + 0.08);
+            osc2.stop(now + 0.45);
+        } catch {}
+    };
+
+    const triggerCartBump = (finalPrice: number, product: Product) => {
+        const cartRect = cartButtonRef.current?.getBoundingClientRect();
+        const targetX = cartRect 
+            ? (cartRect.left + cartRect.width / 2) 
+            : (typeof window !== 'undefined' ? window.innerWidth / 2 : 200);
+        const targetY = cartRect 
+            ? (cartRect.top + cartRect.height / 2) 
+            : (typeof window !== 'undefined' ? window.innerHeight - 100 : 600);
+
+        const startX = lastClickPos.current?.x || (typeof window !== 'undefined' ? window.innerWidth / 2 : 200);
+        const startY = lastClickPos.current?.y || (typeof window !== 'undefined' ? window.innerHeight / 2 : 300);
+
+        const flyingId = crypto.randomUUID();
+        setFlyingProducts(prev => [
+            ...prev,
+            {
+                id: flyingId,
+                startX,
+                startY,
+                targetX,
+                targetY,
+                imageUrl: product.image_url,
+                name: product.name,
+            }
+        ]);
+
+        setTimeout(() => {
+            setFlyingProducts(prev => prev.filter(p => p.id !== flyingId));
+        }, 700);
+
+        setTimeout(() => {
+            setCartBump(true);
+            setPriceDeltaBubble({ id: crypto.randomUUID(), amount: finalPrice });
+            setTimeout(() => setCartBump(false), 550);
+            setTimeout(() => setPriceDeltaBubble(null), 1100);
+        }, 420);
+    };
+
+    const addToCart = (productIdOrKey: string, bypassModal: boolean = false, event?: React.MouseEvent) => {
+        if (event) {
+            const targetEl = event.currentTarget as HTMLElement | null;
+            const rect = targetEl?.getBoundingClientRect?.();
+            if (rect) {
+                lastClickPos.current = {
+                    x: rect.left + rect.width / 2,
+                    y: rect.top + rect.height / 2
+                };
+            } else if (event.clientX && event.clientY) {
+                lastClickPos.current = { x: event.clientX, y: event.clientY };
+            }
+        }
+
         const [productId] = productIdOrKey.split("::");
         const prod = products.find(p => p.id === productId);
         const hasOptionals = (productIngredients || []).some(pi => pi.product_id === productId && pi.is_optional);
@@ -647,6 +908,12 @@ export default function OrderTab({ products, ingredients, categories: initialCat
 
         const currentQty = cart[productIdOrKey] || 0;
         setCart(prev => ({ ...prev, [productIdOrKey]: currentQty + 1 }));
+
+        if (prod) {
+            const price = getProductFinalPrice(productId);
+            playCartChime();
+            triggerCartBump(price, prod);
+        }
     };
 
     const performAddToCartWithOption = (productId: string, optionId: string, answer: string = '') => {
@@ -657,6 +924,13 @@ export default function OrderTab({ products, ingredients, categories: initialCat
         setQuestionModalProduct(null);
         setQuestionModalSelectedOption('');
         setQuestionModalAnswer('');
+
+        const prod = products.find(p => p.id === productId);
+        if (prod) {
+            const price = getProductFinalPrice(productId);
+            playCartChime();
+            triggerCartBump(price, prod);
+        }
     };
 
     const removeFromCart = (cartKey: string) => {
@@ -668,6 +942,22 @@ export default function OrderTab({ products, ingredients, categories: initialCat
             }
             return { ...prev, [cartKey]: newVal };
         });
+    };
+
+    const getProductCartQty = (productId: string) => {
+        return Object.entries(cart).reduce((sum, [key, qty]) => {
+            if (key === productId || key.startsWith(`${productId}::`)) {
+                return sum + (qty || 0);
+            }
+            return sum;
+        }, 0);
+    };
+
+    const handleRemoveProductFromCart = (productId: string) => {
+        const matchingKey = Object.keys(cart).reverse().find(k => k === productId || k.startsWith(`${productId}::`));
+        if (matchingKey) {
+            removeFromCart(matchingKey);
+        }
     };
 
     const totalPrice = Object.entries(cart).reduce((sum, [cartKey, qty]) => {
@@ -700,7 +990,9 @@ export default function OrderTab({ products, ingredients, categories: initialCat
             const isSalonAllowed = redeemChannel === 'both' || redeemChannel === 'salon';
 
             if (isSalonAllowed) {
-                loyaltyRedemption = Math.min(parseFloat(loyaltyAccount.balance) || 0, totalPrice);
+                const totalBalance = parseFloat(loyaltyAccount.balance) || 0;
+                const canRedeemAmount = Math.max(0, totalBalance - loyaltyTodayEarned);
+                loyaltyRedemption = Math.min(canRedeemAmount, totalPrice);
             }
         }
 
@@ -881,19 +1173,102 @@ export default function OrderTab({ products, ingredients, categories: initialCat
             
             let successAlertMessage = "¡Pedido creado y notificado correctamente!";
             
-            if (tenant?.loyalty_enabled === true && loyaltyAccount) {
+            if (tenant?.loyalty_enabled === true && (phone.trim() || loyaltyAccount)) {
                 const config = tenant.loyalty_config || {};
                 const tiers = config.tiers || [];
-                let currentTier = loyaltyAccount.tier || 'bronce';
+                let currentTier = loyaltyAccount ? loyaltyAccount.tier : 'bronce';
                 let cashbackPct = config.cashback_pct || 5;
                 const foundTier = tiers.find((t: any) => t.name === currentTier);
                 if (foundTier) {
                     cashbackPct = foundTier.cashback_pct || cashbackPct;
                 }
-                const earnedCashback = Math.round((totalPrice * (cashbackPct / 100)) * 100) / 100;
+                const earnedCashback = Math.round((finalTotal * (cashbackPct / 100)) * 100) / 100;
                 
+                // ACREDITAR EN TIEMPO REAL EN SUPABASE (Caja Club Clientes)
                 if (earnedCashback > 0) {
-                    successAlertMessage += `\n\n🎁 ¡Beneficio Desbloqueado!\nEl cliente ha ganado $${earnedCashback.toLocaleString('es-AR', { minimumFractionDigits: 2 })} de saldo a favor para su próxima compra.\n\nRecuérdale que el sistema lo identifica por su número de teléfono.`;
+                    try {
+                        const cleanPhone = phone.trim() || loyaltyAccount?.phone_number || '';
+                        const clientNameClean = clientName.trim() || loyaltyAccount?.client_name || 'Cliente';
+
+                        if (loyaltyAccount) {
+                            const currentBal = Math.max(0, (parseFloat(loyaltyAccount.balance) || 0) - loyaltyRedemption);
+                            const newBal = currentBal + earnedCashback;
+                            const newSpent = (parseFloat(loyaltyAccount.total_spent) || 0) + finalTotal;
+                            const newOrders = (loyaltyAccount.total_orders || 0) + 1;
+
+                            let nextTier = loyaltyAccount.tier || 'bronce';
+                            for (const t of tiers) {
+                                if (newOrders >= t.min_orders && newOrders <= t.max_orders) {
+                                    nextTier = t.name;
+                                    break;
+                                }
+                            }
+
+                            const mergedName = mergeClientNames(loyaltyAccount.client_name, clientNameClean);
+                            await supabase
+                                .from('loyalty_accounts')
+                                .update({
+                                    balance: newBal,
+                                    total_spent: newSpent,
+                                    total_orders: newOrders,
+                                    last_order_date: new Date().toISOString(),
+                                    tier: nextTier,
+                                    client_name: mergedName
+                                })
+                                .eq('id', loyaltyAccount.id);
+                        } else if (cleanPhone && cleanPhone.length >= 6) {
+                            // Verificar si ya existe una cuenta con este mismo teléfono para evitar duplicados
+                            const { data: existingList } = await supabase
+                                .from('loyalty_accounts')
+                                .select('*')
+                                .eq('tenant_id', tenant.id);
+
+                            const existing = existingList?.find((a: any) => isSamePhone(a.phone_number, cleanPhone));
+                            if (existing) {
+                                const newBal = (existing.balance || 0) + earnedCashback;
+                                const newSpent = (parseFloat(existing.total_spent) || 0) + finalTotal;
+                                const newOrders = (existing.total_orders || 0) + 1;
+                                const mergedName = mergeClientNames(existing.client_name, clientNameClean);
+
+                                let nextTier = existing.tier || 'bronce';
+                                for (const t of tiers) {
+                                    if (newOrders >= t.min_orders && newOrders <= t.max_orders) {
+                                        nextTier = t.name;
+                                        break;
+                                    }
+                                }
+
+                                await supabase
+                                    .from('loyalty_accounts')
+                                    .update({
+                                        balance: newBal,
+                                        total_spent: newSpent,
+                                        total_orders: newOrders,
+                                        last_order_date: new Date().toISOString(),
+                                        tier: nextTier,
+                                        client_name: mergedName
+                                    })
+                                    .eq('id', existing.id);
+                            } else {
+                                await supabase
+                                    .from('loyalty_accounts')
+                                    .insert({
+                                        tenant_id: tenant.id,
+                                        phone_number: cleanPhone,
+                                        client_name: clientNameClean || 'Cliente Frecuente',
+                                        balance: earnedCashback,
+                                        total_spent: finalTotal,
+                                        total_orders: 1,
+                                        last_order_date: new Date().toISOString(),
+                                        tier: 'bronce'
+                                    });
+                            }
+                        }
+                    } catch (accErr) {
+                        console.error("Error al acreditar puntos de fidelización en caja:", accErr);
+                    }
+
+                    successAlertMessage += `\n\n🎁 ¡Beneficio Club Clientes!\nEl cliente acumuló ${formatARS(earnedCashback)} que podrá canjear a partir de su próxima visita (mañana).\n\nIdentificado con su WhatsApp: ${phone.trim()}`;
                 }
             }
 
@@ -991,6 +1366,8 @@ export default function OrderTab({ products, ingredients, categories: initialCat
             setShowSummary(false);
             setIsSubmitting(false);
             setUseLoyaltyDiscount(false);
+            setLoyaltyTodayEarned(0);
+            setLoyaltyAccount(null);
         }
     };
 
@@ -1172,7 +1549,9 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                     <span className="text-slate-400 font-bold uppercase text-xs">Total</span>
                     <div className="text-right">
                         {useLoyaltyDiscount && loyaltyAccount && tenant?.loyalty_enabled === true && (() => {
-                            const loyaltyRedemption = Math.min(parseFloat(loyaltyAccount.balance) || 0, totalPrice);
+                            const totalBalance = parseFloat(loyaltyAccount.balance) || 0;
+                            const canRedeemAmount = Math.max(0, totalBalance - loyaltyTodayEarned);
+                            const loyaltyRedemption = Math.min(canRedeemAmount, totalPrice);
                             return (
                                 <>
                                     <span className="text-xs text-slate-500 line-through font-mono block">
@@ -1207,8 +1586,8 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                             onChange={(e) => setPhone(e.target.value)}
                             className={`w-full border rounded-2xl py-2.5 pl-11 text-xs font-bold outline-none focus:border-orange-500 transition-all ${
                                 isLight 
-                                    ? 'bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-slate-50/20' 
-                                    : 'bg-slate-900/80 border-slate-800 text-white placeholder:text-slate-650 focus:bg-slate-900'
+                                ? 'bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-slate-50/20' 
+                                : 'bg-slate-900/80 border-slate-800 text-white placeholder:text-slate-650 focus:bg-slate-900'
                             }`}
                         />
                     </div>
@@ -1219,6 +1598,12 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                         const isSalonAllowed = redeemChannel === 'both' || redeemChannel === 'salon';
                         if (!isSalonAllowed) return null;
 
+                        const totalBalance = parseFloat(loyaltyAccount.balance) || 0;
+                        const canRedeemAmount = Math.max(0, totalBalance - loyaltyTodayEarned);
+                        const todayLockedAmount = Math.min(totalBalance, loyaltyTodayEarned);
+
+                        if (totalBalance <= 0) return null;
+
                         return (
                             <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-[2rem] text-left space-y-2.5 animate-in slide-in-from-bottom-2 duration-300">
                                 <div className="flex justify-between items-center">
@@ -1226,20 +1611,45 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                                         🎁 Monedero Club Clientes (Nivel {loyaltyAccount.tier.toUpperCase()})
                                     </span>
                                     <span className="text-xs font-black text-orange-400 font-mono">
-                                        {formatARS(parseFloat(loyaltyAccount.balance) || 0)}
+                                        {formatARS(totalBalance)}
                                     </span>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setUseLoyaltyDiscount(!useLoyaltyDiscount)}
-                                    className={`w-full py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-1.5 ${
-                                        useLoyaltyDiscount
-                                            ? 'bg-orange-500 text-slate-950 shadow-lg shadow-orange-500/30 font-black'
-                                            : 'bg-slate-950 border border-slate-850 text-slate-400 hover:text-white'
-                                    }`}
-                                >
-                                    {useLoyaltyDiscount ? '✓ Saldo Descontado en Caja' : 'Descontar Saldo del Cliente'}
-                                </button>
+
+                                {canRedeemAmount > 0 ? (
+                                    <>
+                                        <p className="text-[8.5px] text-slate-300 font-bold uppercase leading-normal">
+                                            Disponible de visitas anteriores: <span className="text-emerald-400 font-black">{formatARS(canRedeemAmount)}</span>
+                                        </p>
+                                        {todayLockedAmount > 0 && (
+                                            <p className="text-[7.5px] text-amber-400/90 font-bold uppercase leading-tight bg-amber-500/10 border border-amber-500/20 p-2 rounded-xl">
+                                                🔒 +{formatARS(todayLockedAmount)} acumulados hoy (activables a partir de mañana / próxima visita).
+                                            </p>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => setUseLoyaltyDiscount(!useLoyaltyDiscount)}
+                                            className={`w-full py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-1.5 ${
+                                                useLoyaltyDiscount
+                                                    ? 'bg-orange-500 text-slate-950 shadow-lg shadow-orange-500/30 font-black'
+                                                    : 'bg-slate-950 border border-slate-850 text-slate-400 hover:text-white'
+                                            }`}
+                                        >
+                                            {useLoyaltyDiscount 
+                                                ? `✓ Descontando ${formatARS(Math.min(canRedeemAmount, totalPrice))}` 
+                                                : `Descontar Saldo Disponible (${formatARS(canRedeemAmount)})`}
+                                        </button>
+                                    </>
+                                ) : (
+                                    <div className="bg-slate-950/60 border border-amber-500/30 p-3 rounded-2xl space-y-1.5">
+                                        <div className="flex items-center gap-1.5 text-amber-400 text-[10px] font-black uppercase">
+                                            <span>⏳</span>
+                                            <span>Disponible para la próxima visita</span>
+                                        </div>
+                                        <p className="text-[8px] text-slate-300 font-bold leading-relaxed">
+                                            Los <span className="text-amber-400 font-black">{formatARS(todayLockedAmount)}</span> acumulados en el día de hoy estarán disponibles para canjear a partir de mañana o en su próxima visita.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         );
                     })()}
@@ -1462,42 +1872,6 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                         )}
                     </div>
 
-                    <div className="relative mb-4 flex items-center gap-2 animate-in slide-in-from-top-2">
-                        <div className="relative flex-1">
-                            <div className="absolute left-4 top-1/2 -translate-y-1/2 opacity-50">
-                                <Search size={16} />
-                            </div>
-                            <input
-                                type="text"
-                                placeholder="Buscar productos (ej. combo hamburguesa)..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className={`w-full rounded-2xl py-3 pl-10 pr-10 text-xs font-bold outline-none transition-all shadow-sm border ${
-                                    isLight 
-                                        ? 'bg-white border-slate-200 text-slate-900 focus:border-orange-500' 
-                                        : 'bg-slate-900 border-slate-800 text-white focus:border-orange-500'
-                                }`}
-                            />
-                            {searchQuery && (
-                                <button onClick={() => setSearchQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100">
-                                    <X size={14} />
-                                </button>
-                            )}
-                        </div>
-                        <button
-                            onClick={handleVoiceSearch}
-                            className={`h-10 w-10 shrink-0 rounded-2xl flex items-center justify-center transition-all shadow-sm border ${
-                                isListening 
-                                    ? 'bg-red-500 text-white border-red-500 animate-pulse' 
-                                    : isLight 
-                                        ? 'bg-white text-slate-700 border-slate-200 hover:border-orange-500 hover:text-orange-500' 
-                                        : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-orange-500 hover:text-orange-500'
-                            }`}
-                        >
-                            <Mic size={18} className={isListening ? 'animate-bounce' : ''} />
-                        </button>
-                    </div>
-
                     {queue.length > 0 && (
                         <div onClick={() => setShowOfflineQueue(true)} className="bg-orange-500/10 border border-orange-500/30 rounded-2xl p-3 flex justify-between items-center cursor-pointer animate-pulse hover:bg-orange-500/20 transition-all">
                             <span className="text-[10px] font-black uppercase text-orange-500">
@@ -1510,208 +1884,427 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                         </div>
                     )}
 
-                    {selectedCategoryId && !searchQuery && (
-                        <div className="flex items-center gap-3 mb-4 animate-in slide-in-from-left-4">
+                    {/* CONTENEDOR STICKY: BUSCADOR Y CATEGORÍAS SIEMPRE VISIBLES EN PANTALLA */}
+                    <div className={`sticky top-0 z-30 pt-3 pb-2 -mx-4 px-4 sm:-mx-6 sm:px-6 backdrop-blur-2xl border-b transition-all duration-200 shadow-sm ${
+                        isLight 
+                            ? 'bg-slate-50/95 border-slate-200/80 shadow-slate-200/50' 
+                            : 'bg-slate-950/95 border-white/5 shadow-black/40'
+                    }`}>
+                        {/* Buscador de productos con voz */}
+                        <div className="relative mb-2.5 flex items-center gap-2">
+                            <div className="relative flex-1">
+                                <div className="absolute left-4 top-1/2 -translate-y-1/2 opacity-50">
+                                    <Search size={16} />
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Buscar productos (ej. combo hamburguesa)..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className={`w-full rounded-2xl py-2.5 pl-10 pr-10 text-xs font-bold outline-none transition-all shadow-sm border ${
+                                        isLight 
+                                            ? 'bg-white border-slate-200 text-slate-900 focus:border-orange-500' 
+                                            : 'bg-slate-900 border-slate-800 text-white focus:border-orange-500'
+                                    }`}
+                                />
+                                {searchQuery && (
+                                    <button onClick={() => setSearchQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100">
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </div>
                             <button
-                                onClick={() => setSelectedCategoryId(null)}
-                                className={`w-10 h-10 shrink-0 rounded-2xl flex items-center justify-center active:scale-95 transition-all shadow-md ${
-                                    isLight ? 'bg-white text-slate-900 border border-slate-200' : 'bg-slate-900 text-white border border-slate-800'
+                                onClick={handleVoiceSearch}
+                                className={`h-9 w-9 shrink-0 rounded-2xl flex items-center justify-center transition-all shadow-sm border ${
+                                    isListening 
+                                        ? 'bg-red-500 text-white border-red-500 animate-pulse' 
+                                        : isLight 
+                                            ? 'bg-white text-slate-700 border-slate-200 hover:border-orange-500 hover:text-orange-500' 
+                                            : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-orange-500 hover:text-orange-500'
+                                }`}
+                                title="Búsqueda por voz"
+                            >
+                                <Mic size={16} className={isListening ? 'animate-bounce' : ''} />
+                            </button>
+                        </div>
+
+                        {/* Barra Superior de Categorías Compactas */}
+                        <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 scrollbar-hide -mx-2 px-2 snap-x">
+                            {/* Botón Todo el Menú */}
+                            <button
+                                onClick={() => {
+                                    setSearchQuery('');
+                                    setSelectedCategoryId(null);
+                                }}
+                                className={`snap-start shrink-0 px-4 py-2 rounded-2xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 border active:scale-95 ${
+                                    !selectedCategoryId && !searchQuery
+                                        ? (isLight ? 'bg-slate-900 text-white border-slate-900 shadow-md shadow-slate-200/50 scale-105' : 'bg-white text-slate-900 border-white shadow-[0_0_18px_rgba(255,255,255,0.25)] scale-105')
+                                        : (isLight ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300' : 'bg-slate-900/80 text-slate-300 border-slate-800 hover:border-slate-700')
                                 }`}
                             >
-                                <ArrowLeft size={18} />
+                                <span>⭐</span>
+                                <span>Todo el Menú</span>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                                    !selectedCategoryId && !searchQuery
+                                        ? (isLight ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-900')
+                                        : (isLight ? 'bg-slate-100 text-slate-600' : 'bg-slate-800 text-slate-400')
+                                }`}>
+                                    {products.filter(p => p.is_active !== false).length}
+                                </span>
                             </button>
-                            <h3 className="text-xs font-black uppercase" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
-                                Volver a Categorías
-                            </h3>
-                        </div>
-                    )}
 
-                    {searchQuery ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-in fade-in">
-                            {(() => {
-                                const q = searchQuery.toLowerCase().trim();
-                                const displayedProducts = products.filter(p => p.is_active !== false && p.name.toLowerCase().includes(q));
-                                
-                                if (displayedProducts.length === 0) {
+                            {/* Botón Especial: 🔥 Ofertas Especiales */}
+                            <button
+                                onClick={() => {
+                                    setSearchQuery('');
+                                    setSelectedCategoryId(prev => prev === 'offers' ? null : 'offers');
+                                }}
+                                className={`snap-start shrink-0 px-4 py-2 rounded-2xl text-xs font-black transition-all duration-300 flex items-center gap-2 border active:scale-95 ${
+                                    selectedCategoryId === 'offers' && !searchQuery
+                                        ? 'bg-gradient-to-r from-orange-500 via-red-500 to-purple-600 text-white border-transparent shadow-[0_0_20px_rgba(249,115,22,0.5)] scale-105 animate-pulse'
+                                        : 'bg-gradient-to-r from-orange-500/15 via-red-500/15 to-purple-600/15 text-orange-400 border-orange-500/30 hover:border-orange-500/50 hover:scale-102'
+                                }`}
+                            >
+                                <span className={selectedCategoryId === 'offers' ? 'animate-bounce' : ''}>🔥</span>
+                                <span>Ofertas Especiales</span>
+                                {activeOffersCount > 0 && (
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded-md uppercase font-black tracking-tighter bg-white text-red-600 shadow-sm animate-pulse">
+                                        {activeOffersCount} ¡Aprovechá!
+                                    </span>
+                                )}
+                            </button>
+
+                            {/* Categorías registradas (excluyendo ofertas especiales ya mostradas en el botón superior) */}
+                            {categories
+                                .filter(cat => !(cat.is_offer === true || /oferta|oportunidad|descuento/i.test(cat.name)))
+                                .map(cat => {
+                                    const isSelected = selectedCategoryId === cat.id && !searchQuery;
                                     return (
-                                        <div className="col-span-full py-10 text-center text-slate-500">
-                                            No se encontraron productos para "{searchQuery}"
-                                        </div>
-                                    );
-                                }
-                                
-                                return displayedProducts.map(p => {
-                                    const qty = cart[p.id] || 0;
-                                    const isSelected = qty > 0;
-                                    const finalPrice = p.price;
-                                    return (
-                                        <div 
-                                            key={p.id}
-                                            onClick={() => addToCart(p.id)}
-                                            className={`p-4 rounded-2xl flex flex-col justify-between cursor-pointer transition-all active:scale-[0.98] border shadow-sm relative overflow-hidden ${
-                                                isSelected 
-                                                    ? 'border-orange-500 bg-orange-500/10' 
-                                                    : isLight 
-                                                        ? 'bg-white border-slate-200/65 hover:border-orange-500/30' 
-                                                        : 'glass border-white/5 hover:border-orange-500/30'
+                                        <button
+                                            key={cat.id}
+                                            onClick={() => {
+                                                setSearchQuery('');
+                                                setSelectedCategoryId(prev => prev === cat.id ? null : cat.id);
+                                            }}
+                                            className={`snap-start shrink-0 px-4 py-2 rounded-2xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 border active:scale-95 ${
+                                                isSelected
+                                                    ? (isLight ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-500/20 scale-105' : 'bg-orange-500 text-white border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)] scale-105')
+                                                    : (isLight ? 'bg-white text-slate-700 border-slate-200 hover:border-orange-500/30 hover:bg-slate-50' : 'bg-slate-900/80 text-slate-300 border-slate-800 hover:border-orange-500/30')
                                             }`}
                                         >
-                                            <div className="flex justify-between items-start mb-2">
-                                                <h4 className={`font-black uppercase tracking-tight text-sm pr-4 leading-tight ${isLight ? 'text-slate-800' : 'text-white'}`}>{p.name}</h4>
-                                                <span className="font-black text-orange-500 whitespace-nowrap bg-orange-500/10 px-2 py-0.5 rounded-lg text-xs">{formatARS(finalPrice)}</span>
-                                            </div>
-                                            {isSelected && (
-                                                <div className="flex items-center justify-between mt-3 bg-slate-900/40 p-1.5 rounded-xl border border-white/10" onClick={(e) => e.stopPropagation()}>
-                                                    <button 
-                                                        onClick={() => removeFromCart(p.id)}
-                                                        className="w-8 h-8 rounded-lg bg-red-500/20 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors"
-                                                    >
-                                                        <Minus size={14} />
-                                                    </button>
-                                                    <span className="font-black text-sm text-white w-8 text-center">{qty}</span>
-                                                    <button 
-                                                        onClick={() => addToCart(p.id)}
-                                                        className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-white flex items-center justify-center transition-colors"
-                                                    >
-                                                        <Plus size={14} />
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
+                                            <span className={isSelected ? 'animate-bounce' : ''}>{cat.icon || '🍽️'}</span>
+                                            <span>{cat.name}</span>
+                                        </button>
                                     );
-                                });
-                            })()}
+                                })}
                         </div>
-                    ) : !selectedCategoryId ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4 animate-in fade-in slide-in-from-bottom-4">
-                            {categories.length === 0 && (
-                                <div className="col-span-2 py-10 text-center text-slate-600">
-                                    <AlertCircle className="mx-auto mb-2 opacity-20" size={40} />
-                                    <p className="text-[10px] font-black uppercase tracking-widest">Carga categorías en Admin</p>
-                                </div>
-                            )}
-                            {categories.map(cat => (
+                    </div>
+
+                    <div className="space-y-3">
+
+                        {/* Encabezado contextual dinámico de la lista de productos */}
+                        <div className="flex items-center justify-between px-1 pt-1 pb-0.5">
+                            <div className="flex items-center gap-2">
+                                {searchQuery ? (
+                                    <span className="text-xs font-black uppercase text-orange-500 flex items-center gap-1.5">
+                                        <Search size={14} />
+                                        Búsqueda global: "{searchQuery}" ({displayedProducts.length})
+                                    </span>
+                                ) : selectedCategoryId === 'offers' ? (
+                                    <span className="text-xs font-black uppercase text-purple-400 flex items-center gap-1.5">
+                                        <Flame size={14} className="text-red-500 fill-red-500" />
+                                        Ofertas Especiales Activas ({displayedProducts.length})
+                                    </span>
+                                ) : selectedCategoryId ? (
+                                    <span className="text-xs font-black uppercase flex items-center gap-1.5" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
+                                        <span>{categories.find(c => c.id === selectedCategoryId)?.icon || '🍽️'}</span>
+                                        Categoría: {categories.find(c => c.id === selectedCategoryId)?.name || 'Seleccionada'} ({displayedProducts.length})
+                                    </span>
+                                ) : (
+                                    <span className={`text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                                        <Flame size={13} className="text-amber-500 fill-amber-500" />
+                                        Todos los productos ({displayedProducts.length}) • Ordenados por Top Ventas
+                                    </span>
+                                )}
+                            </div>
+
+                            {(searchQuery || selectedCategoryId) && (
                                 <button
-                                    key={cat.id}
-                                    onClick={() => setSelectedCategoryId(cat.id)}
-                                    className={`aspect-square rounded-[2rem] flex flex-col items-center justify-center gap-3 active:scale-95 transition-all border ${
+                                    onClick={() => {
+                                        setSearchQuery('');
+                                        setSelectedCategoryId(null);
+                                    }}
+                                    className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 ${
                                         isLight 
-                                            ? 'bg-white border-slate-200/65 shadow-sm text-slate-800 hover:border-orange-500/50 hover:bg-slate-50/50' 
-                                            : 'glass border-white/5 hover:border-orange-500/50 text-white'
+                                            ? 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200' 
+                                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
                                     }`}
                                 >
-                                    <span className="text-4xl neon-icon">{cat.icon}</span>
-                                    <span className="font-black uppercase text-[10px] tracking-widest">{cat.name}</span>
+                                    <X size={12} />
+                                    Ver Todo
                                 </button>
-                            ))}
+                            )}
                         </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-in slide-in-from-right-4">
-                            {(() => {
-                                const selectedCategory = categories.find(c => c.id === selectedCategoryId);
-                                const isOfferCategory = selectedCategory 
-                                    ? (selectedCategory.is_offer === true || /oferta|oportunidad|descuento/i.test(selectedCategory.name))
-                                    : false;
-                                
-                                const displayedProducts = products.filter(p => {
-                                    if (p.is_active === false) return false;
-                                    if (isOfferCategory) {
-                                        return !!getActiveOfferForProduct(p.id);
-                                    }
-                                    return p.category_id === selectedCategoryId;
-                                });
+                    </div>
 
-                                if (displayedProducts.length === 0) {
-                                    return (
-                                        <p className="text-center py-10 text-slate-600 text-[10px] font-black uppercase">Sin productos en esta categoría</p>
-                                    );
-                                }
+                    {/* GRILLA UNIFICADA DE PRODUCTOS (Estilo Menú del Cliente, Orden Top Ventas) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 animate-in fade-in duration-300">
+                        {displayedProducts.map(product => {
+                            const qty = getProductCartQty(product.id);
+                            const activeOffer = getActiveOfferForProduct(product.id);
+                            const originalPrice = product.price;
+                            const finalPrice = activeOffer
+                                ? Math.round(originalPrice * (1 - activeOffer.discount_percentage / 100))
+                                : originalPrice;
+                            const salesCount = productSalesMap[product.id] || 0;
 
-                                return displayedProducts.map(product => {
-                                    const qty = cart[product.id] || 0;
-                                    const activeOffer = getActiveOfferForProduct(product.id);
-                                    const originalPrice = product.price;
-                                    const finalPrice = activeOffer
-                                        ? Math.round(originalPrice * (1 - activeOffer.discount_percentage / 100))
-                                        : originalPrice;
+                            return (
+                                <div
+                                    key={product.id}
+                                    onClick={(e) => addToCart(product.id, false, e)}
+                                    className={`group rounded-2xl overflow-hidden transition-all duration-300 flex cursor-pointer hover:shadow-lg hover:-translate-y-0.5 border select-none ${
+                                        qty > 0
+                                            ? 'border-orange-500/80 bg-orange-500/5 shadow-md shadow-orange-500/10'
+                                            : isLight
+                                                ? 'bg-white border-slate-200/80 shadow-sm hover:shadow-md hover:border-slate-300'
+                                                : 'glass border-white/5 hover:border-white/15'
+                                    }`}
+                                >
+                                    {/* Imagen (1/3 de ancho) */}
+                                    <div className={`w-28 sm:w-32 shrink-0 min-h-[110px] relative overflow-hidden ${isLight ? 'bg-slate-100' : 'bg-neutral-800/80'}`}>
+                                        {product.image_url ? (
+                                            <img
+                                                src={product.image_url}
+                                                alt={product.name}
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-neutral-800 to-neutral-900">
+                                                <Utensils className="w-8 h-8 text-neutral-600" />
+                                            </div>
+                                        )}
+                                        {/* Overlay gradient sutil */}
+                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/20" />
 
-                                    return (
-                                        <div key={product.id} className={`rounded-3xl p-4 flex gap-4 border transition-all ${
-                                            isLight ? 'bg-white border-slate-200/60 shadow-sm text-slate-900' : 'glass border-white/5 text-white'
-                                        }`}>
-                                            {product.image_url && <img src={product.image_url} className="w-20 h-20 rounded-2xl object-cover" />}
-                                            <div className="flex-1 flex flex-col justify-between">
-                                                <div>
-                                                    <h3 className={`font-black text-sm leading-tight flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-white'}`}>
-                                                        {product.name}
-                                                        {activeOffer && <span className="bg-red-500/20 text-red-500 text-[8px] font-black uppercase px-2 py-0.5 rounded-full border border-red-500/30">-{activeOffer.discount_percentage}%</span>}
-                                                    </h3>
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        {activeOffer ? (
-                                                            <>
-                                                                <span className="text-red-400 line-through text-[11px] font-bold">{formatARS(originalPrice)}</span>
-                                                                <span className="text-emerald-400 text-xs font-black uppercase">{formatARS(finalPrice)}</span>
-                                                            </>
-                                                        ) : (
-                                                            <span className="text-orange-500 text-xs font-black uppercase">{formatARS(originalPrice)}</span>
-                                                        )}
+                                        {/* Badges sobre la imagen */}
+                                        {activeOffer ? (
+                                            <div className="absolute top-1.5 left-1.5 bg-gradient-to-r from-red-600 to-purple-600 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-md shadow-md border border-white/20">
+                                                -{activeOffer.discount_percentage}% OFF
+                                            </div>
+                                        ) : salesCount > 0 ? (
+                                            <div className="absolute top-1.5 left-1.5 bg-black/75 backdrop-blur-sm text-amber-400 text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md flex items-center gap-0.5 border border-amber-400/20 shadow-sm">
+                                                <Flame size={10} className="fill-amber-400" />
+                                                <span>Top</span>
+                                            </div>
+                                        ) : null}
+                                    </div>
+
+                                    {/* Contenido de la Tarjeta */}
+                                    <div className="flex-1 p-3 flex flex-col justify-between min-w-0">
+                                        <div>
+                                            <h3 className={`font-black text-xs sm:text-sm line-clamp-2 leading-snug transition-colors ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                                                {product.name}
+                                            </h3>
+                                            {product.description && (
+                                                <p className={`text-[11px] line-clamp-1 mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                                                    {product.description}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        <div className="flex items-end justify-between gap-2 mt-2">
+                                            {/* Precios */}
+                                            <div>
+                                                {activeOffer ? (
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="font-black text-sm sm:text-base text-purple-500 dark:text-purple-400">
+                                                                {formatARS(finalPrice)}
+                                                            </span>
+                                                        </div>
+                                                        <span className="text-[10px] text-slate-400 line-through font-bold">
+                                                            {formatARS(originalPrice)}
+                                                        </span>
                                                     </div>
-                                                </div>
-                                                <div className="flex items-center justify-end">
-                                                    <div className={`flex items-center gap-2 p-1 rounded-xl border ${
-                                                        isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-950/50 border-slate-800'
+                                                ) : (
+                                                    <span className="font-black text-sm sm:text-base text-orange-500">
+                                                        {formatARS(originalPrice)}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {/* Botón + o Stepper si ya está agregado */}
+                                            <div onClick={(e) => e.stopPropagation()}>
+                                                {qty > 0 ? (
+                                                    <div className={`flex items-center gap-1.5 p-1 rounded-xl border ${
+                                                        isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-950/70 border-white/10'
                                                     }`}>
-                                                        <button onClick={() => removeFromCart(product.id)} className={`w-8 h-8 rounded-lg text-white flex items-center justify-center font-black transition-colors ${isLight ? 'bg-slate-300 hover:bg-slate-400 disabled:opacity-30' : 'bg-slate-800'}`} disabled={qty <= 0}>-</button>
-                                                        <span className={`font-black text-xs min-w-[1.5rem] text-center ${isLight ? 'text-slate-900' : 'text-white'}`}>{qty}</span>
-                                                        <button onClick={() => addToCart(product.id)} className={`w-8 h-8 rounded-lg text-white flex items-center justify-center font-black transition-colors ${isLight ? 'bg-orange-500 hover:bg-orange-600' : 'bg-orange-500'}`}>+</button>
+                                                        <button
+                                                            onClick={() => handleRemoveProductFromCart(product.id)}
+                                                            className="w-7 h-7 rounded-lg bg-red-500/20 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition-colors font-black active:scale-95"
+                                                            title="Quitar uno"
+                                                        >
+                                                            <Minus size={13} />
+                                                        </button>
+                                                        <span className={`font-black text-xs min-w-[1.25rem] text-center ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                                                            {qty}
+                                                        </span>
+                                                        <button
+                                                            onClick={(e) => addToCart(product.id, false, e)}
+                                                            className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-white flex items-center justify-center transition-colors font-black active:scale-95"
+                                                            title="Sumar uno"
+                                                        >
+                                                            <Plus size={13} />
+                                                        </button>
                                                     </div>
-                                                </div>
+                                                ) : (
+                                                    <button
+                                                        onClick={(e) => addToCart(product.id, false, e)}
+                                                        className="w-8 h-8 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-90 text-white flex items-center justify-center shadow-md shadow-orange-500/25 transition-all"
+                                                        title="Agregar al pedido"
+                                                    >
+                                                        <Plus size={16} />
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
-                                    );
-                                });
-                            })()}
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                        {/* Estado vacío si no hay coincidencias */}
+                        {displayedProducts.length === 0 && (
+                            <div className={`col-span-full py-12 text-center rounded-3xl border border-dashed p-8 ${
+                                isLight ? 'bg-slate-50 border-slate-300 text-slate-500' : 'bg-slate-900/40 border-slate-800 text-slate-400'
+                            }`}>
+                                <AlertCircle className="mx-auto mb-3 opacity-30" size={40} />
+                                <p className="text-sm font-black uppercase tracking-wider">
+                                    {searchQuery ? `No se encontraron productos para "${searchQuery}"` : 'No hay productos en esta selección'}
+                                </p>
+                                <button
+                                    onClick={() => {
+                                        setSearchQuery('');
+                                        setSelectedCategoryId(null);
+                                    }}
+                                    className="mt-4 px-4 py-2 rounded-xl bg-orange-500 text-white text-xs font-black uppercase tracking-wider hover:bg-orange-600 transition-colors shadow-md shadow-orange-500/20 active:scale-95"
+                                >
+                                    Ver Todo el Menú
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Clones voladores hacia el carrito de caja */}
+                    {flyingProducts.length > 0 && (
+                        <div className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden">
+                            {flyingProducts.map((flying) => {
+                                const dx = flying.targetX - flying.startX;
+                                const dy = flying.targetY - flying.startY;
+
+                                return (
+                                    <div
+                                        key={flying.id}
+                                        className="absolute animate-fly-to-cart flex items-center justify-center pointer-events-none"
+                                        style={{
+                                            left: `${flying.startX - 28}px`,
+                                            top: `${flying.startY - 28}px`,
+                                            width: '56px',
+                                            height: '56px',
+                                            '--target-x': `${dx}px`,
+                                            '--target-y': `${dy}px`,
+                                        } as React.CSSProperties}
+                                    >
+                                        <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-orange-400 shadow-[0_10px_25px_rgba(0,0,0,0.6)] ring-4 ring-orange-400/40 bg-neutral-900 flex items-center justify-center">
+                                            {flying.imageUrl ? (
+                                                <img
+                                                    src={flying.imageUrl}
+                                                    alt={flying.name}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <span className="text-2xl">🍔</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
 
                     {totalPrice > 0 && (
-                        selectedCategoryId !== null ? (
-                            <div className="fixed bottom-28 left-1/2 -translate-x-1/2 w-[90%] z-[60] flex gap-3 animate-in slide-in-from-bottom-8">
+                        <div 
+                            ref={cartButtonRef}
+                            className="fixed bottom-24 md:bottom-28 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-bottom-8 w-full max-w-md px-4 pointer-events-none flex gap-2.5"
+                        >
+                            {selectedCategoryId !== null && (
                                 <button
                                     onClick={() => setSelectedCategoryId(null)}
-                                    className={`flex-1 py-4 rounded-[2rem] font-black uppercase text-[10px] tracking-wider transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-xl border ${
+                                    className={`py-4 px-4 rounded-[1.75rem] font-black uppercase text-[10px] tracking-wider transition-all active:scale-95 flex items-center justify-center gap-1 shadow-xl border pointer-events-auto shrink-0 ${
                                         isLight 
                                             ? 'bg-slate-200 border-slate-350 text-slate-700 hover:bg-slate-300' 
-                                            : 'bg-slate-900 border-white/5 text-slate-300 hover:bg-slate-850'
+                                            : 'bg-slate-900 border-white/10 text-slate-300 hover:bg-slate-800'
                                     }`}
                                 >
-                                    ↩️ Volver a Categorías
+                                    ⭐ Ver Todo
                                 </button>
-                                <button
-                                    onClick={() => setShowSummary(true)}
-                                    className="flex-[1.2] bg-orange-500 text-white rounded-[2rem] p-4 flex justify-between items-center shadow-2xl neon-glow active:scale-95 transition-all border border-orange-400/30"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <ShoppingCart size={16} />
-                                        <span className="text-[9px] font-black uppercase tracking-wider">Ver Desglose</span>
-                                    </div>
-                                    <span className="text-sm font-black">{formatARS(totalPrice)}</span>
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="fixed bottom-28 left-1/2 -translate-x-1/2 w-[85%] z-[60] animate-in slide-in-from-bottom-8">
-                                <button
-                                    onClick={() => setShowSummary(true)}
-                                    className="w-full bg-orange-500 text-white rounded-[2rem] p-5 flex justify-between items-center shadow-2xl neon-glow active:scale-95 transition-all border border-orange-400/30"
-                                >
-                                    <div className="flex items-center gap-3">
+                            )}
+
+                            <button
+                                onClick={() => setShowSummary(true)}
+                                className={`flex-1 flex justify-between items-center px-5 py-4 md:py-4.5 rounded-[1.75rem] shadow-2xl backdrop-blur-md transition-all duration-300 md:hover:scale-[1.03] active:scale-[0.97] pointer-events-auto border border-orange-400/30 relative overflow-hidden group ${
+                                    cartBump ? 'animate-cart-bump ring-4 ring-orange-400/60' : ''
+                                }`}
+                                style={{
+                                    background: 'linear-gradient(135deg, #f97316, #ea580c)',
+                                    boxShadow: '0 14px 40px -8px rgba(249, 115, 22, 0.6), 0 6px 20px rgba(0,0,0,0.3)'
+                                }}
+                            >
+                                {/* Destello shimmer */}
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 pointer-events-none" />
+
+                                {/* Burbuja flotante de incremento de precio */}
+                                {priceDeltaBubble && (
+                                    <span 
+                                        key={priceDeltaBubble.id}
+                                        className="absolute -top-3.5 right-6 bg-amber-400 text-neutral-950 font-black text-xs px-3 py-1 rounded-full shadow-xl border-2 border-white animate-price-float pointer-events-none z-50 flex items-center gap-1"
+                                    >
+                                        <span>+{formatARS(priceDeltaBubble.amount)}</span>
+                                        <Sparkles className="w-3.5 h-3.5 text-neutral-950" />
+                                    </span>
+                                )}
+
+                                <div className="flex items-center gap-3">
+                                    <div className={`relative bg-black/30 w-11 h-11 rounded-2xl flex items-center justify-center font-black text-base shadow-inner border border-white/15 transition-transform duration-300 ${
+                                        cartBump ? 'scale-125 bg-amber-400 text-neutral-950 ring-2 ring-white' : 'text-white'
+                                    }`}>
                                         <ShoppingCart size={20} />
-                                        <span className="text-[10px] font-black uppercase tracking-wider">Ver Desglose</span>
+                                        <span className="absolute -top-1.5 -right-1.5 bg-amber-400 text-neutral-950 text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md border-2 border-neutral-900">
+                                            {Object.values(cart).reduce((a, b) => a + b, 0)}
+                                        </span>
                                     </div>
-                                    <span className="text-xl font-black">{formatARS(totalPrice)}</span>
-                                </button>
-                            </div>
-                        )
+                                    <div className="text-left">
+                                        <span className="block text-xs md:text-sm font-black uppercase tracking-wider text-white">
+                                            Ver Desglose
+                                        </span>
+                                        <span className="text-[10px] text-white/80 font-medium">
+                                            {Object.values(cart).reduce((a, b) => a + b, 0)} items cargados
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="text-right flex flex-col items-end">
+                                    <span className={`block text-lg md:text-2xl font-black text-white tracking-tight drop-shadow transition-transform duration-300 ${
+                                        cartBump ? 'scale-110 text-amber-300' : ''
+                                    }`}>
+                                        {formatARS(totalPrice)}
+                                    </span>
+                                    <span className="text-[10px] uppercase font-bold text-white/80 tracking-wider">
+                                        Cobrar ➔
+                                    </span>
+                                </div>
+                            </button>
+                        </div>
                     )}
                 </div>
             ) : subTab === 'deliveries' ? (

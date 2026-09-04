@@ -178,4 +178,134 @@
   .animate-offer {
     animation: pulse-offer 2s infinite ease-in-out;
   }
+
+  /* ========================================================= */
+  /* ALTO CONTRASTE PARA MODO CLARO (LIGHT MODE COMPLETO)      */
+  /* ========================================================= */
+  .theme-light .glass,
+  .light-mode .glass,
+  .theme-light .bg-slate-950\/40,
+  .light-mode .bg-slate-950\/40,
+  .theme-light .bg-slate-900\/50,
+  .light-mode .bg-slate-900\/50 {
+    background-color: #ffffff !important;
+    border-color: #e2e8f0 !important;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.06), 0 2px 6px -1px rgba(0, 0, 0, 0.04) !important;
+    color: #0f172a !important;
+  }
+
+  .theme-light .text-white,
+  .light-mode .text-white {
+    color: #0f172a !important;
+  }
+
+  .theme-light .text-slate-400,
+  .theme-light .text-slate-500,
+  .light-mode .text-slate-400,
+  .light-mode .text-slate-500 {
+    color: #475569 !important; /* Gris oscuro nítido y legible */
+  }
+
+  .theme-light .border-white\/5,
+  .theme-light .border-white\/10,
+  .light-mode .border-white\/5,
+  .light-mode .border-white\/10 {
+    border-color: #e2e8f0 !important;
+  }
+
+  .theme-light input,
+  .theme-light select,
+  .theme-light textarea,
+  .light-mode input,
+  .light-mode select,
+  .light-mode textarea {
+    background-color: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+  }
+
+  /* Botones de acción con opacidad restaurada al 100% en modo claro */
+  .theme-light .text-blue-500\/40,
+  .light-mode .text-blue-500\/40 {
+    color: #2563eb !important; /* Azul sólido */
+    background-color: #eff6ff !important;
+    border-radius: 0.5rem !important;
+  }
+
+  .theme-light .text-red-500\/30,
+  .theme-light .text-red-500\/40,
+  .light-mode .text-red-500\/30,
+  .light-mode .text-red-500\/40 {
+    color: #dc2626 !important; /* Rojo sólido */
+    background-color: #fef2f2 !important;
+    border-radius: 0.5rem !important;
+  }
+}
+
+/* ANIMACIONES DE AGREGAR AL CARRITO INTERACTIVO (DELIGHT UX) */
+@keyframes flyToCart {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1.15) rotate(0deg);
+    opacity: 1;
+    filter: drop-shadow(0 10px 20px rgba(0,0,0,0.3));
+  }
+  35% {
+    transform: translate3d(calc(var(--target-x) * 0.35), calc(var(--target-y) * 0.15 - 90px), 0) scale(0.95) rotate(-15deg);
+    opacity: 1;
+  }
+  75% {
+    transform: translate3d(calc(var(--target-x) * 0.8), calc(var(--target-y) * 0.7 - 20px), 0) scale(0.6) rotate(10deg);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate3d(var(--target-x), var(--target-y), 0) scale(0.15) rotate(20deg);
+    opacity: 0;
+  }
+}
+
+.animate-fly-to-cart {
+  animation: flyToCart 0.65s cubic-bezier(0.2, 0.9, 0.25, 1) forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes cartBump {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.07) translateY(-5px);
+  }
+  60% {
+    transform: scale(0.97) translateY(1px);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-cart-bump {
+  animation: cartBump 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes priceFloat {
+  0% {
+    transform: translateY(0) scale(0.7);
+    opacity: 0;
+  }
+  25% {
+    transform: translateY(-8px) scale(1.1);
+    opacity: 1;
+  }
+  75% {
+    transform: translateY(-26px) scale(1);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translateY(-40px) scale(0.9);
+    opacity: 0;
+  }
+}
+
+.animate-price-float {
+  animation: priceFloat 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }

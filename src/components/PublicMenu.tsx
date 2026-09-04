@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Category, Product, OrderItem, Ingredient, ProductIngredient, ProductOffer } from '@/types/database';
-import { ShoppingBag, ChevronRight, ChevronLeft, Minus, Plus, X, Search, Utensils, CheckCircle, CheckCircle2, Loader2, Trash2, ChevronDown, ChevronUp, Star, BellRing, Instagram, Facebook, MessageCircle, MapPin, Map, Sun, Moon, Info, Gift, Home, ArrowLeft, Image as ImageIcon, Clock, Truck, Phone, ExternalLink } from 'lucide-react';
+import { ShoppingBag, Sparkles, ChevronRight, ChevronLeft, Minus, Plus, X, Search, Utensils, CheckCircle, CheckCircle2, Loader2, Trash2, ChevronDown, ChevronUp, Star, BellRing, Instagram, Facebook, MessageCircle, MapPin, Map, Sun, Moon, Info, Gift, Home, ArrowLeft, Image as ImageIcon, Clock, Truck, Phone, ExternalLink } from 'lucide-react';
 import { MaxesLogo } from '@/components/MaxesLogo';
 import { useRealtimeData } from '@/hooks/useRealtimeData';
 import { supabase, broadcastTenantChange } from '@/lib/supabase';
 import { SocialWall } from '@/components/SocialWall';
 import { DEFAULT_CAROUSEL_SLIDES } from '@/lib/constants';
+import { cleanArgPhone, isSamePhone, mergeClientNames } from '@/lib/phoneUtils';
 
 const triggerTrialStart = (tenantId: string) => {
   fetch('/api/trial/start', {
@@ -18,6 +19,16 @@ const triggerTrialStart = (tenantId: string) => {
 };
 
 const formatPrice = (p: number) => '$' + Number(p || 0).toLocaleString('es-AR');
+
+interface FlyingProduct {
+  id: string;
+  startX: number;
+  startY: number;
+  targetX: number;
+  targetY: number;
+  imageUrl?: string | null;
+  name: string;
+}
 
 const AutoCarousel = ({ children, gapClass = 'gap-4 md:gap-6' }: { children: React.ReactNode, gapClass?: string }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -263,19 +274,24 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     fetchBookings();
   }, [reservationDate, tenant?.id]);
 
-  // Carga de ranking de ventas para los más vendidos
+  // Carga de ranking de ventas del mes para los más vendidos (idéntico a AdminTab y OrderTab)
   const [productSalesCount, setProductSalesCount] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!tenant?.id) return;
     const fetchSalesRanking = async () => {
       try {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+        // 1. Intentamos consultar los ítems vendidos en el mes calendario actual
         const { data, error } = await supabase
           .from('order_items')
-          .select('product_id, quantity')
-          .eq('tenant_id', tenant.id);
+          .select('product_id, quantity, created_at')
+          .eq('tenant_id', tenant.id)
+          .gte('created_at', startOfMonth);
 
-        if (!error && data) {
+        if (!error && data && data.length > 0) {
           const counts: Record<string, number> = {};
           data.forEach((it: any) => {
             if (it.product_id) {
@@ -283,6 +299,23 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             }
           });
           setProductSalesCount(counts);
+        } else {
+          // Fallback a ventas históricas si el mes actual aún no tiene pedidos
+          const { data: allData, error: allError } = await supabase
+            .from('order_items')
+            .select('product_id, quantity')
+            .eq('tenant_id', tenant.id)
+            .limit(1000);
+
+          if (!allError && allData) {
+            const counts: Record<string, number> = {};
+            allData.forEach((it: any) => {
+              if (it.product_id) {
+                counts[it.product_id] = (counts[it.product_id] || 0) + (Number(it.quantity) || 1);
+              }
+            });
+            setProductSalesCount(counts);
+          }
         }
       } catch (err) {
         console.error("Error al cargar ranking de ventas:", err);
@@ -291,12 +324,16 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     fetchSalesRanking();
   }, [tenant?.id]);
 
-  // Lista ordenada: 1. Destacados por Admin, 2. Más Vendidos, 3. Resto de productos
+  // Lista ordenada para Destacados & Más Vendidos: 1. Destacados por Admin, 2. Más Vendidos del Mes
   const featuredAndTopProducts = useMemo(() => {
     const featuredIds: string[] = tenant?.landing_config?.featured_product_ids || [];
     const activeProds = products.filter(p => p.is_active !== false);
 
-    return [...activeProds].sort((a, b) => {
+    // Filtramos productos que sean destacados manualmente o que tengan ventas registradas este mes
+    const candidates = activeProds.filter(p => featuredIds.includes(p.id) || (productSalesCount[p.id] || 0) > 0);
+    const listToSort = candidates.length > 0 ? candidates : activeProds;
+
+    return [...listToSort].sort((a, b) => {
       const aFeat = featuredIds.includes(a.id) ? 1 : 0;
       const bFeat = featuredIds.includes(b.id) ? 1 : 0;
       if (aFeat !== bFeat) return bFeat - aFeat; // 1. Destacados primero
@@ -305,7 +342,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       const bSales = productSalesCount[b.id] || 0;
       if (aSales !== bSales) return bSales - aSales; // 2. Más vendidos
 
-      return 0;
+      return a.name.localeCompare(b.name);
     });
   }, [products, tenant?.landing_config?.featured_product_ids, productSalesCount]);
 
@@ -414,6 +451,13 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   const [questionModalProduct, setQuestionModalProduct] = useState<Product | null>(null);
   const [questionModalAnswer, setQuestionModalAnswer] = useState('');
   const [questionModalSelectedOption, setQuestionModalSelectedOption] = useState('');
+
+  // Delight UX & Animaciones del Carrito
+  const [flyingProducts, setFlyingProducts] = useState<FlyingProduct[]>([]);
+  const [cartBump, setCartBump] = useState(false);
+  const [priceDeltaBubble, setPriceDeltaBubble] = useState<{ id: string; amount: number } | null>(null);
+  const lastClickPos = useRef<{ x: number; y: number }>({ x: typeof window !== 'undefined' ? window.innerWidth / 2 : 200, y: 300 });
+  const cartButtonRef = useRef<HTMLDivElement | null>(null);
   
   // Checkout states
   const [customerInfo, setCustomerInfo] = useState('');
@@ -545,31 +589,73 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   // Estados del Club de Clientes y Fidelización (Monedero Virtual mmmTodoLoQueQuiero 2026)
   const [loyaltyAccount, setLoyaltyAccount] = useState<any>(null);
   const [useLoyaltyDiscount, setUseLoyaltyDiscount] = useState(false);
+  const [loyaltyTodayEarned, setLoyaltyTodayEarned] = useState<number>(0);
 
   useEffect(() => {
     const cleanPhone = deliveryPhone ? `${phonePrefix} ${deliveryPhone.trim()}`.trim() : '';
     if (!tenant?.id || !deliveryPhone.trim() || deliveryPhone.trim().length < 6) {
       setLoyaltyAccount(null);
       setUseLoyaltyDiscount(false);
+      setLoyaltyTodayEarned(0);
       return;
     }
 
     const timer = setTimeout(async () => {
       try {
-        const { data, error } = await supabase
+        const { data: list, error } = await supabase
           .from('loyalty_accounts')
           .select('*')
-          .eq('tenant_id', tenant.id)
-          .eq('phone_number', cleanPhone)
-          .single();
+          .eq('tenant_id', tenant.id);
 
-        if (!error && data) {
+        let data = null;
+        if (!error && list && list.length > 0) {
+          data = list.find((a: any) => isSamePhone(a.phone_number, cleanPhone)) || null;
+        }
+
+        if (data) {
           setLoyaltyAccount(data);
+
+          // Consultar pedidos de hoy para este teléfono para bloquear saldo generado hoy (Regla: Canje a partir de la próxima visita / día siguiente)
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const rawDigits = deliveryPhone.trim().replace(/\D/g, '').slice(-8);
+
+          const { data: todayOrders } = await supabase
+            .from('orders')
+            .select('id, total_price, created_at, status')
+            .eq('tenant_id', tenant.id)
+            .gte('created_at', today.toISOString())
+            .neq('status', 'cancelled');
+
+          if (todayOrders && todayOrders.length > 0) {
+            const clientTodayOrders = todayOrders.filter((o: any) => {
+              const oDigits = (o.phone_number || '').replace(/\D/g, '');
+              return oDigits.includes(rawDigits);
+            });
+
+            if (clientTodayOrders.length > 0) {
+              const config = tenant.loyalty_config || {};
+              const tiers = config.tiers || [];
+              let currentTier = data.tier || 'bronce';
+              let cashbackPct = config.cashback_pct || 5;
+              const foundTier = tiers.find((t: any) => t.name === currentTier);
+              if (foundTier) cashbackPct = foundTier.cashback_pct || cashbackPct;
+
+              const todayEarned = Math.round(clientTodayOrders.reduce((sum: number, o: any) => sum + ((Number(o.total_price) || 0) * (cashbackPct / 100)), 0));
+              setLoyaltyTodayEarned(todayEarned);
+            } else {
+              setLoyaltyTodayEarned(0);
+            }
+          } else {
+            setLoyaltyTodayEarned(0);
+          }
         } else {
           setLoyaltyAccount(null);
+          setLoyaltyTodayEarned(0);
         }
       } catch (e) {
         setLoyaltyAccount(null);
+        setLoyaltyTodayEarned(0);
       }
     }, 600); // 600ms de debounce para no saturar la API al escribir
 
@@ -1427,6 +1513,89 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     return Math.max(0, maxPossible);
   };
 
+  // Sonido atractivo y sutil de campana cristalina mediante Web Audio API (0 latencia, 100% offline)
+  const playCartChime = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+
+      const now = ctx.currentTime;
+
+      // Tono 1 dulce y alegre (A5 -> E6)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(880, now);
+      osc1.frequency.exponentialRampToValueAtTime(1318.5, now + 0.1);
+      gain1.gain.setValueAtTime(0.14, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.35);
+
+      // Tono 2 cristalino tipo "sparkle / chime"
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(1760, now + 0.08);
+      gain2.gain.setValueAtTime(0.08, now + 0.08);
+      gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.08);
+      osc2.stop(now + 0.45);
+    } catch {
+      // Si el navegador no permite audio o está mudo, continuar sin error
+    }
+  };
+
+  const triggerCartBump = (finalPrice: number, product: Product) => {
+    const cartRect = cartButtonRef.current?.getBoundingClientRect();
+    const targetX = cartRect 
+      ? (cartRect.left + cartRect.width / 2) 
+      : (typeof window !== 'undefined' ? window.innerWidth / 2 : 200);
+    const targetY = cartRect 
+      ? (cartRect.top + cartRect.height / 2) 
+      : (typeof window !== 'undefined' ? window.innerHeight - 60 : 600);
+
+    const startX = lastClickPos.current?.x || (typeof window !== 'undefined' ? window.innerWidth / 2 : 200);
+    const startY = lastClickPos.current?.y || (typeof window !== 'undefined' ? window.innerHeight / 2 : 300);
+
+    const flyingId = crypto.randomUUID();
+    setFlyingProducts(prev => [
+      ...prev,
+      {
+        id: flyingId,
+        startX,
+        startY,
+        targetX,
+        targetY,
+        imageUrl: product.image_url,
+        name: product.name,
+      }
+    ]);
+
+    // Limpieza de animación voladora
+    setTimeout(() => {
+      setFlyingProducts(prev => prev.filter(p => p.id !== flyingId));
+    }, 700);
+
+    // Bote y animación del precio al impactar el botón
+    setTimeout(() => {
+      setCartBump(true);
+      setPriceDeltaBubble({ id: crypto.randomUUID(), amount: finalPrice });
+      setTimeout(() => setCartBump(false), 550);
+      setTimeout(() => setPriceDeltaBubble(null), 1100);
+    }, 420);
+  };
+
   const performAddToCart = (product: Product, answerNote: string = '', optionalIds: string[] = []) => {
     const availableNow = getAvailableStockForProduct(product.id);
     
@@ -1449,9 +1618,25 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       }
       return [...prev, { ...productWithPrice, cartItemId: crypto.randomUUID(), quantity: 1, notes: answerNote, selected_optional_ingredients: optionalIds }];
     });
+
+    // Feedback sonoro inmediato y animación hacia el pedido
+    playCartChime();
+    triggerCartBump(finalPrice, product);
   };
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product, event?: React.MouseEvent) => {
+    if (event) {
+      const targetEl = event.currentTarget as HTMLElement | null;
+      const rect = targetEl?.getBoundingClientRect?.();
+      if (rect) {
+        lastClickPos.current = {
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2
+        };
+      } else if (event.clientX && event.clientY) {
+        lastClickPos.current = { x: event.clientX, y: event.clientY };
+      }
+    }
     const hasOptionals = productIngredients.some(pi => pi.product_id === product.id && pi.is_optional);
     if (product.custom_question || hasOptionals) {
       setQuestionModalProduct(product);
@@ -1475,6 +1660,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             // Así que si availableNow > 0, podemos sumar uno más.
             const availableNow = getAvailableStockForProduct(item.id);
             if (availableNow <= 0) return prev;
+            playCartChime();
         }
 
         return prev.map(i => {
@@ -1526,16 +1712,60 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       ? (activeCatObj.is_offer === true || /oferta|oportunidad|descuento/i.test(activeCatObj.name))
       : false;
 
-    return products.filter(p => {
+    const featuredIds: string[] = tenant?.landing_config?.featured_product_ids || [];
+    const q = searchQuery.trim().toLowerCase();
+
+    // 1. SI HAY TEXTO EN EL BUSCADOR: Búsqueda Global Instantánea y Prioritaria
+    if (q) {
+      const matches = products.filter(p => {
+        if (p.is_active === false) return false;
+        const categoryExists = categories.some(c => c.id === p.category_id);
+        if (!categoryExists) return false;
+
+        const nameLower = p.name.toLowerCase();
+        const descLower = p.description?.toLowerCase() || '';
+        return nameLower.includes(q) || descLower.includes(q);
+      });
+
+      return matches.sort((a, b) => {
+        const aName = a.name.toLowerCase();
+        const bName = b.name.toLowerCase();
+
+        // Prioridad 1: Los que EMPIEZAN exactamente con las letras ingresadas (ej: "ha" -> "Hamburguesa")
+        const aStarts = aName.startsWith(q);
+        const bStarts = bName.startsWith(q);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+
+        // Prioridad 2: Si alguna palabra interna empieza con las letras (ej: "Súper Hamburguesa")
+        const aWordStarts = aName.split(/\s+/).some(w => w.startsWith(q));
+        const bWordStarts = bName.split(/\s+/).some(w => w.startsWith(q));
+        if (aWordStarts && !bWordStarts) return -1;
+        if (!aWordStarts && bWordStarts) return 1;
+
+        // Prioridad 3: Más vendidos del mes primero (Top Ventas)
+        const salesA = productSalesCount[a.id] || 0;
+        const salesB = productSalesCount[b.id] || 0;
+        if (salesB !== salesA) return salesB - salesA;
+
+        // Prioridad 4: Destacados primero
+        const aFeat = featuredIds.includes(a.id) || a.is_featured ? 1 : 0;
+        const bFeat = featuredIds.includes(b.id) || b.is_featured ? 1 : 0;
+        if (bFeat !== aFeat) return bFeat - aFeat;
+
+        // Prioridad 5: Alfabético
+        return a.name.localeCompare(b.name);
+      });
+    }
+
+    // 2. SIN TEXTO ESCRITO: Filtro por categoría u ofertas
+    const filtered = products.filter(p => {
       // Desactivación lógica (Soft Delete): Ocultar productos inactivos del menú digital
       if (p.is_active === false) return false;
 
       // Filtro de Huérfanos: Solo mostrar productos cuya categoría EXISTA actualmente en la lista
       const categoryExists = categories.some(c => c.id === p.category_id);
       if (!categoryExists) return false;
-
-      const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
-      if (!matchesSearch) return false;
 
       if (isOfferCategory) {
         return !!getActiveOfferForProduct(p.id);
@@ -1546,7 +1776,20 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
       return true;
     });
-  }, [products, categories, activeCategory, searchQuery, productOffers, orders]);
+
+    // 3. ORDEN NATURAL: Más vendidos del mes (Top Ventas) primero, luego destacados, luego alfabético
+    return filtered.sort((a, b) => {
+      const salesA = productSalesCount[a.id] || 0;
+      const salesB = productSalesCount[b.id] || 0;
+      if (salesB !== salesA) return salesB - salesA;
+
+      const aFeat = featuredIds.includes(a.id) || a.is_featured ? 1 : 0;
+      const bFeat = featuredIds.includes(b.id) || b.is_featured ? 1 : 0;
+      if (bFeat !== aFeat) return bFeat - aFeat;
+
+      return a.name.localeCompare(b.name);
+    });
+  }, [products, categories, activeCategory, searchQuery, productOffers, productSalesCount, tenant?.landing_config?.featured_product_ids]);
 
   const submitOrderToSupabase = async (paymentStatus: 'pendiente' | 'pagado', isApproved: boolean, method: string, skipSuccessUI: boolean = false, externalOrderId?: string): Promise<string | undefined> => {
     setIsSubmitting(true);
@@ -1699,7 +1942,8 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         const isOnlineAllowed = redeemChannel === 'both' || redeemChannel === 'online';
 
         if (isOnlineAllowed) {
-          loyaltyRedemption = Math.min(parseFloat(loyaltyAccount.balance) || 0, cartTotal - appliedDiscount);
+          const canRedeemAmount = Math.max(0, (parseFloat(loyaltyAccount.balance) || 0) - loyaltyTodayEarned);
+          loyaltyRedemption = Math.min(canRedeemAmount, cartTotal - appliedDiscount);
         }
       }
 
@@ -2009,7 +2253,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       }
 
       if (!skipSuccessUI) {
-        // Calcular cashback ganado para mostrarlo en el éxito
+        // Calcular cashback ganado para mostrarlo en el éxito y acreditarlo en tiempo real
         let calculatedEarnedCashback = 0;
         if (tenant.loyalty_enabled === true && (deliveryPhone || loyaltyAccount)) {
           const config = tenant.loyalty_config || {};
@@ -2021,6 +2265,91 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               cashbackPct = foundTier.cashback_pct || cashbackPct;
           }
           calculatedEarnedCashback = Math.round((finalTotal * (cashbackPct / 100)) * 100) / 100;
+
+          // ACREDITAR EN TIEMPO REAL EN SUPABASE (Club Clientes mmmTodoLoQueQuiero)
+          if (calculatedEarnedCashback > 0) {
+            try {
+              const cleanPhone = deliveryPhone ? `${phonePrefix} ${deliveryPhone.trim()}`.trim() : (loyaltyAccount?.phone_number || '');
+              const clientNameClean = customerInfo.trim() || loyaltyAccount?.client_name || 'Cliente';
+
+              if (loyaltyAccount) {
+                const currentBal = Math.max(0, (parseFloat(loyaltyAccount.balance) || 0) - loyaltyRedemption);
+                const newBal = currentBal + calculatedEarnedCashback;
+                const newSpent = (parseFloat(loyaltyAccount.total_spent) || 0) + finalTotal;
+                const newOrders = (loyaltyAccount.total_orders || 0) + 1;
+
+                let nextTier = loyaltyAccount.tier || 'bronce';
+                for (const t of tiers) {
+                  if (newOrders >= t.min_orders && newOrders <= t.max_orders) {
+                    nextTier = t.name;
+                    break;
+                  }
+                }
+
+                const mergedName = mergeClientNames(loyaltyAccount.client_name, clientNameClean);
+                await supabase
+                  .from('loyalty_accounts')
+                  .update({
+                    balance: newBal,
+                    total_spent: newSpent,
+                    total_orders: newOrders,
+                    last_order_date: new Date().toISOString(),
+                    tier: nextTier,
+                    client_name: mergedName
+                  })
+                  .eq('id', loyaltyAccount.id);
+              } else if (cleanPhone && cleanPhone.length >= 6) {
+                // Verificar si ya existe una cuenta con este mismo teléfono para evitar duplicados
+                const { data: existingList } = await supabase
+                  .from('loyalty_accounts')
+                  .select('*')
+                  .eq('tenant_id', tenant.id);
+
+                const existing = existingList?.find((a: any) => isSamePhone(a.phone_number, cleanPhone));
+                if (existing) {
+                  const newBal = (existing.balance || 0) + calculatedEarnedCashback;
+                  const newSpent = (parseFloat(existing.total_spent) || 0) + finalTotal;
+                  const newOrders = (existing.total_orders || 0) + 1;
+                  const mergedName = mergeClientNames(existing.client_name, clientNameClean);
+
+                  let nextTier = existing.tier || 'bronce';
+                  for (const t of tiers) {
+                    if (newOrders >= t.min_orders && newOrders <= t.max_orders) {
+                      nextTier = t.name;
+                      break;
+                    }
+                  }
+
+                  await supabase
+                    .from('loyalty_accounts')
+                    .update({
+                      balance: newBal,
+                      total_spent: newSpent,
+                      total_orders: newOrders,
+                      last_order_date: new Date().toISOString(),
+                      tier: nextTier,
+                      client_name: mergedName
+                    })
+                    .eq('id', existing.id);
+                } else {
+                  await supabase
+                    .from('loyalty_accounts')
+                    .insert({
+                      tenant_id: tenant.id,
+                      phone_number: cleanPhone,
+                      client_name: clientNameClean || 'Cliente Frecuente',
+                      balance: calculatedEarnedCashback,
+                      total_spent: finalTotal,
+                      total_orders: 1,
+                      last_order_date: new Date().toISOString(),
+                      tier: 'bronce'
+                    });
+                }
+              }
+            } catch (accErr) {
+              console.error("Error al acreditar puntos de fidelización:", accErr);
+            }
+          }
         }
         setEarnedCashback(calculatedEarnedCashback);
 
@@ -2585,137 +2914,140 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         </div>
       )}
 
-      {/* BUSCADOR COMPACTO STICKY (Oculto en Landing) */}
+      {/* BUSCADOR Y CATEGORÍAS STICKY (Siempre visibles al deslizar en Menú de Casa y Menú de Mesas) */}
       {!showLanding && (
         <>
         <div 
-          className={`sticky top-0 z-40 backdrop-blur-xl border-b p-4 transition-all duration-300 ${
-            isLight ? 'bg-slate-50/80 border-slate-200/60 shadow-sm' : 'bg-neutral-950/80 border-neutral-900/60'
+          className={`sticky top-0 z-40 backdrop-blur-2xl border-b transition-all duration-300 shadow-sm ${
+            isLight ? 'bg-slate-50/95 border-slate-200/80 shadow-slate-200/40' : 'bg-neutral-950/95 border-neutral-900/80 shadow-black/50'
           }`}
-          style={{ borderBottomColor: isLight ? undefined : `${primaryColor}15` }}
+          style={{ borderBottomColor: isLight ? undefined : `${primaryColor}20` }}
         >
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center gap-3">
-            {tenant?.landing_config?.enabled && (
+          <div className="max-w-4xl mx-auto px-4 pt-3 pb-2 space-y-2.5">
+            <div className="flex items-center gap-3">
+              {tenant?.landing_config?.enabled && (
+                <button
+                  onClick={goToLanding}
+                  className={`px-3.5 py-2 rounded-2xl border transition-all flex items-center justify-center shrink-0 gap-2 font-bold text-xs ${
+                    isLight 
+                      ? 'bg-white border-slate-200 text-slate-700 hover:text-slate-900 shadow-sm hover:shadow-md' 
+                      : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white hover:border-neutral-700'
+                  }`}
+                  title="Atrás"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span className="hidden sm:inline">Atrás</span>
+                </button>
+              )}
+              <div className="relative flex-1">
+                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4   ${isLight ? "text-slate-600" : "text-neutral-400"}`} />
+                <input 
+                  type="text" 
+                  placeholder="¿Qué se te antoja?"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className={`w-full border rounded-2xl pl-10 pr-10 py-2.5 text-xs font-bold outline-none transition-all placeholder:text-neutral-500 focus:ring-1 ${
+                    isLight 
+                      ? 'bg-white border-slate-200 text-slate-900 focus:border-black focus:ring-black' 
+                      : 'bg-neutral-900/80 border-neutral-800/80 text-white focus:border-white focus:ring-white focus:bg-neutral-900'
+                  }`}
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100">
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Píldoras de Categorías en Barra Sticky */}
+            <div className="flex gap-2 overflow-x-auto pb-1.5 pt-0.5 scrollbar-hide -mx-4 px-4 snap-x items-center">
               <button
-                onClick={goToLanding}
-                className={`px-4 py-2.5 rounded-2xl border transition-all flex items-center justify-center shrink-0 gap-2 font-bold text-sm ${
-                  isLight 
-                    ? 'bg-white border-slate-200 text-slate-700 hover:text-slate-900 shadow-sm hover:shadow-md' 
-                    : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white hover:border-neutral-700'
+                onClick={() => setActiveCategory('all')}
+                className={`snap-start whitespace-nowrap px-4 py-2 rounded-2xl text-xs font-bold transition-all border ${
+                  activeCategory === 'all' 
+                    ? (isLight ? 'bg-slate-900 text-white border-slate-900 shadow-md shadow-slate-200/50' : 'bg-white text-black border-white shadow-lg shadow-white/10')
+                    : (isLight ? 'bg-white border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-50' : 'bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white')
                 }`}
-                title="Atrás"
               >
-                <ArrowLeft className="w-5 h-5" />
-                <span className="hidden sm:inline">Atrás</span>
+                Todo
               </button>
-            )}
-            <div className="relative flex-1">
-              <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4   ${isLight ? "text-slate-600" : "text-neutral-400"}`} />
-              <input 
-                type="text" 
-                placeholder="¿Qué se te antoja?"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full border rounded-2xl pl-10 pr-4 py-2.5 text-sm outline-none transition-all placeholder:text-neutral-500 focus:ring-1 ${
-                  isLight 
-                    ? 'bg-slate-100 border-slate-200 text-slate-900 focus:border-black focus:ring-black focus:bg-white' 
-                    : 'bg-neutral-900/50 border-neutral-800/80 text-white focus:border-white focus:ring-white focus:bg-neutral-900'
-                }`}
-              />
+              {sortedCategories.map(cat => {
+                const isOfferCat = cat.is_offer === true || /oferta|oportunidad|descuento/i.test(cat.name);
+
+                if (isOfferCat) {
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setActiveCategory(cat.id)}
+                      className={`flex-shrink-0 px-4 py-2 rounded-2xl text-xs font-black transition-all duration-300 flex items-center gap-1.5 border bg-gradient-to-r from-orange-500 via-red-500 to-purple-600 text-white border-transparent shadow-[0_0_20px_rgba(249,115,22,0.4)] ${
+                        activeCategory === cat.id 
+                          ? 'scale-105 animate-pulse' 
+                          : 'hover:scale-102 opacity-90 hover:opacity-100'
+                      }`}
+                    >
+                      <span className={activeCategory === cat.id ? 'animate-bounce' : ''}>🔥</span>
+                      <span>{cat.name}</span>
+                      <span className="text-[8.5px] px-1 py-0.5 rounded-md uppercase font-black tracking-tighter bg-white text-red-600 shadow-md animate-pulse">
+                        ¡Aprovechá!
+                      </span>
+                    </button>
+                  );
+                }
+
+                const imageUrl = (cat as any).image_url;
+                if (imageUrl) {
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setActiveCategory(cat.id)}
+                      className={`flex-shrink-0 px-4 py-2 rounded-2xl text-xs font-bold transition-all duration-300 flex items-center gap-1.5 border relative overflow-hidden group min-w-[90px] justify-center ${
+                        activeCategory === cat.id 
+                          ? (isLight ? 'border-slate-900 text-white shadow-md scale-105' : 'border-white shadow-[0_0_20px_rgba(255,255,255,0.25)] scale-105 text-white')
+                          : (isLight ? 'border-slate-200 text-slate-700 hover:border-slate-400' : 'border-neutral-800 text-neutral-200 hover:border-neutral-600')
+                      }`}
+                    >
+                      {/* Imagen de fondo */}
+                      <img 
+                        src={imageUrl} 
+                        alt={cat.name} 
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                      />
+                      {/* Filtro Oscuro encima de la imagen */}
+                      <div className={`absolute inset-0 transition-colors ${
+                        activeCategory === cat.id 
+                          ? 'bg-neutral-950/70' 
+                          : 'bg-neutral-950/80 group-hover:bg-neutral-950/70'
+                      }`} />
+                      
+                      {/* Contenido (Icono y Nombre) */}
+                      <span className="relative z-10 flex items-center gap-1.5 drop-shadow-md">
+                        <span className={activeCategory === cat.id ? 'animate-bounce' : ''}>{cat.icon}</span>
+                        <span>{cat.name}</span>
+                      </span>
+                    </button>
+                  );
+                }
+
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setActiveCategory(cat.id)}
+                    className={`flex-shrink-0 px-4 py-2 rounded-2xl text-xs font-bold transition-all duration-300 flex items-center gap-1.5 border ${
+                      activeCategory === cat.id 
+                        ? (isLight ? 'bg-slate-900 text-white border-slate-900 shadow-md scale-105' : 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.25)] scale-105')
+                        : (isLight ? 'bg-white text-slate-650 border-slate-200 hover:border-slate-350 hover:bg-slate-50' : 'bg-neutral-900/80 text-neutral-400 border-neutral-800 hover:border-neutral-600')
+                    }`}
+                  >
+                    <span className={activeCategory === cat.id ? 'animate-bounce' : ''}>{cat.icon}</span> {cat.name}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
-      </div>
 
-      <main className="max-w-4xl mx-auto p-4 pt-6 space-y-8">
-        
-        {/* Píldoras de Categorías */}
-        <section>
-          <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 snap-x">
-            <button
-              onClick={() => setActiveCategory('all')}
-              className={`snap-start whitespace-nowrap px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
-                activeCategory === 'all' 
-                  ? (isLight ? 'bg-slate-900 text-white shadow-lg shadow-slate-200/50' : 'bg-white text-black shadow-lg shadow-white/10')
-                  : (isLight ? 'bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-200/50' : 'bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white')
-              }`}
-            >
-              Todo
-            </button>
-            {sortedCategories.map(cat => {
-              const isOfferCat = cat.is_offer === true || /oferta|oportunidad|descuento/i.test(cat.name);
-
-              if (isOfferCat) {
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => setActiveCategory(cat.id)}
-                    className={`flex-shrink-0 px-6 py-3 rounded-2xl text-sm font-bold transition-all duration-300 flex items-center gap-2 border bg-gradient-to-r from-orange-500 via-red-500 to-purple-600 text-white border-transparent shadow-[0_0_25px_rgba(249,115,22,0.5)] ${
-                      activeCategory === cat.id 
-                        ? 'scale-110 animate-pulse' 
-                        : 'hover:scale-105 opacity-90 hover:opacity-100'
-                    }`}
-                  >
-                    <span className={activeCategory === cat.id ? 'animate-bounce' : ''}>🔥</span>
-                    <span>{cat.name}</span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-md uppercase font-black tracking-tighter bg-white text-red-600 shadow-md animate-pulse">
-                      ¡Aprovechá!
-                    </span>
-                  </button>
-                );
-              }
-
-              const imageUrl = (cat as any).image_url;
-              if (imageUrl) {
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => setActiveCategory(cat.id)}
-                    className={`flex-shrink-0 px-6 py-3 rounded-2xl text-sm font-bold transition-all duration-300 flex items-center gap-2 border relative overflow-hidden group min-w-[120px] justify-center ${
-                      activeCategory === cat.id 
-                        ? (isLight ? 'border-slate-900 text-white shadow-md scale-105' : 'border-white shadow-[0_0_25px_rgba(255,255,255,0.25)] scale-105 text-white')
-                        : (isLight ? 'border-slate-200 text-slate-700 hover:border-slate-400' : 'border-neutral-800 text-neutral-200 hover:border-neutral-600')
-                    }`}
-                  >
-                    {/* Imagen de fondo */}
-                    <img 
-                      src={imageUrl} 
-                      alt={cat.name} 
-                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                    />
-                    {/* Filtro Oscuro encima de la imagen */}
-                    <div className={`absolute inset-0 transition-colors ${
-                      activeCategory === cat.id 
-                        ? 'bg-neutral-950/70' 
-                        : 'bg-neutral-950/80 group-hover:bg-neutral-950/70'
-                    }`} />
-                    
-                    {/* Contenido (Icono y Nombre) */}
-                    <span className="relative z-10 flex items-center gap-2 drop-shadow-md">
-                      <span className={activeCategory === cat.id ? 'animate-bounce' : ''}>{cat.icon}</span>
-                      <span>{cat.name}</span>
-                    </span>
-                  </button>
-                );
-              }
-
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => setActiveCategory(cat.id)}
-                  className={`flex-shrink-0 px-5 py-2.5 rounded-2xl text-sm font-bold transition-all duration-300 flex items-center gap-2 border ${
-                    activeCategory === cat.id 
-                      ? (isLight ? 'bg-slate-900 text-white border-slate-900 shadow-md scale-105' : 'bg-white text-black border-white shadow-[0_0_20px_rgba(255,255,255,0.25)] scale-105')
-                      : (isLight ? 'bg-slate-100 text-slate-650 border-slate-200 hover:border-slate-350 hover:bg-slate-200/50' : 'bg-neutral-900/50 text-neutral-400 border-neutral-800 hover:border-neutral-600')
-                  }`}
-                >
-                  <span className={activeCategory === cat.id ? 'animate-bounce' : ''}>{cat.icon}</span> {cat.name}
-                </button>
-              );
-            })}
-          </div>
-        </section>
+      <main className="max-w-4xl mx-auto p-4 pt-4 space-y-8">
 
         {/* CARRUSEL DE DESTACADOS Y MÁS VENDIDOS EN EL MENÚ */}
         {activeCategory === 'all' && !searchQuery.trim() && featuredAndTopProducts.length > 0 && (
@@ -2742,9 +3074,9 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                 return (
                   <div
                     key={`menu-feat-${product.id}`}
-                    onClick={() => {
+                    onClick={(e) => {
                       if (!isSoldOut) {
-                        addToCart(product);
+                        addToCart(product, e);
                       }
                     }}
                     className={`min-w-[200px] max-w-[220px] md:min-w-[240px] snap-center rounded-2xl border overflow-hidden shadow-lg transition-all duration-300 flex flex-col justify-between cursor-pointer group ${
@@ -2819,8 +3151,13 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             return (
             <div 
               key={product.id} 
+              onClick={(e) => {
+                if (!isSoldOut) {
+                  addToCart(product, e);
+                }
+              }}
               className={`group rounded-2xl overflow-hidden transition-all duration-300 flex ${
-                isSoldOut ? 'opacity-70 grayscale-[0.5]' : ''
+                isSoldOut ? 'opacity-70 grayscale-[0.5]' : 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5'
               } ${
                 isLight 
                   ? 'bg-white border border-slate-200/60 shadow-sm md:hover:shadow-md md:hover:bg-slate-50/50' 
@@ -2838,6 +3175,35 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                 )}
                 {/* Overlay gradient */}
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent to-neutral-900/40 md:to-neutral-900/20" />
+
+                {/* Badges sobre la imagen */}
+                {(() => {
+                  const activeOffer = getActiveOfferForProduct(product.id);
+                  if (activeOffer && !isSoldOut) {
+                    return (
+                      <div className="absolute top-1.5 left-1.5 bg-gradient-to-r from-red-600 to-purple-600 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md shadow-md border border-white/20 z-10">
+                        -{activeOffer.discount_percentage}% OFF
+                      </div>
+                    );
+                  }
+                  const isFeat = (tenant?.landing_config?.featured_product_ids || []).includes(product.id) || product.is_featured;
+                  const salesQty = productSalesCount[product.id] || 0;
+                  if (isFeat) {
+                    return (
+                      <div className="absolute top-1.5 left-1.5 px-2 py-0.5 bg-amber-500 text-slate-950 font-black text-[8px] uppercase tracking-wider rounded-md shadow-md flex items-center gap-1 z-10">
+                        <Star size={8} className="fill-slate-950" /> Destacado
+                      </div>
+                    );
+                  }
+                  if (salesQty > 0) {
+                    return (
+                      <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-gradient-to-r from-orange-500 to-red-500 text-white font-black text-[8px] uppercase tracking-wider rounded-md shadow-md flex items-center gap-0.5 z-10">
+                        🔥 Top
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
               
               {/* Contenido de la Tarjeta */}
@@ -2847,7 +3213,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   {product.description ? (
                     <div className="mt-1">
                       <button 
-                        onClick={() => toggleProductDesc(product.id)}
+                        onClick={(e) => { e.stopPropagation(); toggleProductDesc(product.id); }}
                         className={`flex items-center gap-1 text-[10px] uppercase font-bold transition-colors ${
                           isLight ? 'text-slate-400 hover:text-slate-700' : 'text-neutral-500 hover:text-white'
                         }`}
@@ -2908,7 +3274,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     </div>
                   ) : (
                     <button
-                      onClick={() => addToCart(product)}
+                      onClick={(e) => { e.stopPropagation(); addToCart(product, e); }}
                       className={`w-8 h-8 rounded-full flex items-center justify-center md:hover:scale-110 active:scale-95 transition-all shadow-md ${
                         isLight ? 'bg-slate-900 text-white shadow-slate-200/50 md:hover:bg-slate-800' : 'bg-white text-black md:hover:bg-slate-100'
                       }`}
@@ -3083,10 +3449,10 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                       return (
                       <div 
                         key={slide.id} 
-                        onClick={() => {
+                        onClick={(e) => {
                           if (linkedProduct) {
                             goToMenu();
-                            addToCart(linkedProduct);
+                            addToCart(linkedProduct, e);
                           }
                         }}
                         className={`min-w-[300px] md:min-w-[400px] snap-center border rounded-[2rem] overflow-hidden shadow-2xl relative group transition-all duration-300 ${linkedProduct ? 'cursor-pointer active:scale-[0.98]' : ''} ${isLight ? "bg-slate-50 border-slate-200 text-slate-900" : "bg-neutral-900/60 border-white/5 text-white"}`}
@@ -3137,7 +3503,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     goToMenu();
-                                    addToCart(linkedProduct);
+                                    addToCart(linkedProduct, e);
                                   }}
                                   className="bg-orange-500 hover:bg-orange-600 text-white font-black text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-lg active:scale-95 transition-all"
                                 >
@@ -3192,9 +3558,9 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                             ? "bg-white border-slate-200 hover:border-amber-400 text-slate-900" 
                             : "bg-neutral-900/80 border-white/10 hover:border-amber-500/40 text-white"
                         }`} 
-                        onClick={() => {
+                        onClick={(e) => {
                           goToMenu();
-                          addToCart(product);
+                          addToCart(product, e);
                         }}
                       >
                         <div className={`h-48 w-full relative overflow-hidden ${isLight ? "bg-slate-100" : "bg-neutral-950"}`}>
@@ -3589,24 +3955,108 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       )}
 
 
+      {/* Elementos voladores hacia el carrito (Fly to Cart Animation) */}
+      {flyingProducts.length > 0 && (
+        <div className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden">
+          {flyingProducts.map((flying) => {
+            const dx = flying.targetX - flying.startX;
+            const dy = flying.targetY - flying.startY;
+
+            return (
+              <div
+                key={flying.id}
+                className="absolute animate-fly-to-cart flex items-center justify-center pointer-events-none"
+                style={{
+                  left: `${flying.startX - 28}px`,
+                  top: `${flying.startY - 28}px`,
+                  width: '56px',
+                  height: '56px',
+                  '--target-x': `${dx}px`,
+                  '--target-y': `${dy}px`,
+                } as React.CSSProperties}
+              >
+                <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-amber-400 shadow-[0_10px_25px_rgba(0,0,0,0.6)] ring-4 ring-amber-400/40 bg-neutral-900 flex items-center justify-center">
+                  {flying.imageUrl ? (
+                    <img
+                      src={flying.imageUrl}
+                      alt={flying.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-2xl">🍔</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* FAB - Botón de Carrito Flotante */}
       {cartCount > 0 && (
-        <div className="fixed bottom-6 inset-x-0 flex justify-center z-40 px-4 animate-in slide-in-from-bottom-10 fade-in duration-300 pointer-events-none">
+        <div 
+          ref={cartButtonRef}
+          className="fixed bottom-6 inset-x-0 flex justify-center z-40 px-4 animate-in slide-in-from-bottom-10 fade-in duration-300 pointer-events-none"
+        >
           <button
             onClick={() => setIsCartOpen(true)}
-            className="w-full max-w-sm flex items-center justify-between px-5 py-4 rounded-2xl shadow-2xl backdrop-blur-md transition-transform md:hover:scale-[1.02] active:scale-[0.98] pointer-events-auto"
+            className={`w-full max-w-md flex items-center justify-between px-6 py-4 md:py-4.5 rounded-[1.75rem] shadow-2xl backdrop-blur-md transition-all duration-300 md:hover:scale-[1.03] active:scale-[0.97] pointer-events-auto border border-white/20 relative overflow-hidden group ${
+              cartBump ? 'animate-cart-bump ring-4 ring-amber-400/60' : ''
+            }`}
             style={{ 
-              background: `linear-gradient(135deg, ${primaryColor}, ${primaryColor}dd)`,
-              boxShadow: `0 10px 40px -10px ${primaryColor}` 
+              background: `linear-gradient(135deg, ${primaryColor}, ${primaryColor}ee)`,
+              boxShadow: `0 14px 40px -8px ${primaryColor}99, 0 6px 20px rgba(0,0,0,0.3)` 
             }}
           >
-            <div className="flex items-center gap-3">
-              <div key={`count-${cartCount}`} className="bg-black/20 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">
-                {cartCount}
+            {/* Destello de brillo tipo shimmer */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 pointer-events-none" />
+
+            {/* Burbuja flotante de incremento de precio (+$$$) */}
+            {priceDeltaBubble && (
+              <span 
+                key={priceDeltaBubble.id}
+                className="absolute -top-3.5 right-8 bg-amber-400 text-neutral-950 font-black text-xs px-3 py-1 rounded-full shadow-xl border-2 border-white animate-price-float pointer-events-none z-50 flex items-center gap-1"
+              >
+                <span>+{formatPrice(priceDeltaBubble.amount)}</span>
+                <Sparkles className="w-3.5 h-3.5 text-neutral-950" />
+              </span>
+            )}
+
+            <div className="flex items-center gap-3.5">
+              <div 
+                key={`count-${cartCount}`} 
+                className={`relative bg-black/30 w-12 h-12 rounded-2xl flex items-center justify-center font-black text-base shadow-inner border border-white/15 transition-transform duration-300 ${
+                  cartBump ? 'scale-125 bg-amber-400 text-neutral-950 ring-2 ring-white' : 'text-white'
+                }`}
+              >
+                <ShoppingBag className="w-6 h-6" />
+                <span className="absolute -top-1.5 -right-1.5 bg-amber-400 text-neutral-950 text-[11px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md border-2 border-neutral-900">
+                  {cartCount}
+                </span>
               </div>
-              <span className="font-medium">Ver Pedido</span>
+              <div className="text-left">
+                <span className="block font-black text-base leading-tight tracking-wide text-white uppercase drop-shadow">
+                  Ver Mi Pedido
+                </span>
+                <span className="text-xs text-white/80 font-medium">
+                  {cartCount} {cartCount === 1 ? 'producto añadido' : 'productos añadidos'}
+                </span>
+              </div>
             </div>
-            <span key={`total-${cartTotal}`} className="font-bold">${cartTotal.toLocaleString()}</span>
+
+            <div className="text-right flex flex-col items-end">
+              <span 
+                key={`total-${cartTotal}`} 
+                className={`block font-black text-xl md:text-2xl text-white tracking-tight drop-shadow transition-transform duration-300 ${
+                  cartBump ? 'scale-110 text-amber-300' : ''
+                }`}
+              >
+                {formatPrice(cartTotal)}
+              </span>
+              <span className="text-[11px] uppercase font-bold text-white/80 tracking-wider flex items-center gap-1">
+                Completar ➔
+              </span>
+            </div>
           </button>
         </div>
       )}
@@ -4061,6 +4511,10 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                             className="flex-1 bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-white focus:ring-1 focus:ring-white text-white"
                           />
                         </div>
+                        <p className="text-[8px] text-neutral-400 font-medium flex items-center gap-1.5 mt-1 px-1">
+                          <span>🔒</span>
+                          <span>Al ingresar tu WhatsApp, acumulás saldo para tus compras y aceptás recibir alertas de beneficios y descuentos del local.</span>
+                        </p>
                       </div>
 
                       {/* Geolocalizador / Mapa de Simulación Premium */}
@@ -4193,6 +4647,10 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                             className="flex-1 bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm outline-none transition-all focus:border-white focus:ring-1 focus:ring-white text-white"
                           />
                         </div>
+                        <p className="text-[8px] text-neutral-400 font-medium flex items-center gap-1.5 mt-1 px-1">
+                          <span>🔒</span>
+                          <span>Al ingresar tu WhatsApp, acumulás saldo para tus compras y aceptás recibir alertas de beneficios y descuentos del local.</span>
+                        </p>
                       </div>
                     </div>
                   )}
@@ -4375,30 +4833,56 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
                   if (!isOnlineAllowed) return null;
 
+                  const totalBalance = parseFloat(loyaltyAccount.balance) || 0;
+                  const canRedeemAmount = Math.max(0, totalBalance - loyaltyTodayEarned);
+                  const todayLockedAmount = Math.min(totalBalance, loyaltyTodayEarned);
+
+                  if (totalBalance <= 0) return null;
+
                   return (
-                    <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-[2rem] text-left space-y-2 animate-in slide-in-from-bottom-2 duration-300">
+                    <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-[2rem] text-left space-y-2.5 animate-in slide-in-from-bottom-2 duration-300">
                       <div className="flex justify-between items-center">
                         <span className="text-[9px] font-black uppercase text-orange-400 flex items-center gap-1.5">
                           <Gift size={11} /> ¡Monedero Club Clientes! (Nivel {loyaltyAccount.tier.toUpperCase()})
                         </span>
                         <span className="text-xs font-black text-orange-400 font-mono">
-                          ${parseFloat(loyaltyAccount.balance).toLocaleString('es-AR')}
+                          ${totalBalance.toLocaleString('es-AR')}
                         </span>
                       </div>
-                      <p className="text-[7.5px] text-slate-400 font-bold uppercase leading-normal">
-                        Tenés saldo acumulado en pesos de tus compras anteriores. ¿Querés descontarlo de este pedido?
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setUseLoyaltyDiscount(!useLoyaltyDiscount)}
-                        className={`w-full py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-1.5 ${
-                          useLoyaltyDiscount
-                            ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30'
-                            : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        {useLoyaltyDiscount ? '✓ Saldo Descontado' : 'Usar mi saldo acumulado'}
-                      </button>
+
+                      {canRedeemAmount > 0 ? (
+                        <>
+                          <p className="text-[8px] text-slate-300 font-bold uppercase leading-normal">
+                            Tenés <span className="text-emerald-400 font-black">${canRedeemAmount.toLocaleString('es-AR')}</span> disponibles de tus visitas anteriores para descontar hoy.
+                          </p>
+                          {todayLockedAmount > 0 && (
+                            <p className="text-[7.5px] text-amber-400/90 font-bold uppercase leading-tight bg-amber-500/10 border border-amber-500/20 p-2 rounded-xl">
+                              🔒 +${todayLockedAmount.toLocaleString('es-AR')} acumulados hoy se activarán en tu próxima visita (a partir de mañana).
+                            </p>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setUseLoyaltyDiscount(!useLoyaltyDiscount)}
+                            className={`w-full py-2.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-1.5 ${
+                              useLoyaltyDiscount
+                                ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30 font-black'
+                                : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            {useLoyaltyDiscount ? `✓ Descontando $${Math.min(canRedeemAmount, cartTotal - appliedDiscount).toLocaleString('es-AR')}` : `Usar mi saldo disponible ($${canRedeemAmount.toLocaleString('es-AR')})`}
+                          </button>
+                        </>
+                      ) : (
+                        <div className="bg-slate-950/60 border border-amber-500/30 p-3 rounded-2xl space-y-1.5">
+                          <div className="flex items-center gap-1.5 text-amber-400 text-[10px] font-black uppercase">
+                            <span>⏳</span>
+                            <span>Disponible para tu próxima visita</span>
+                          </div>
+                          <p className="text-[8px] text-slate-300 font-bold leading-relaxed">
+                            Los <span className="text-amber-400 font-black">${todayLockedAmount.toLocaleString('es-AR')}</span> acumulados en el día de hoy estarán disponibles para canjear en tu próxima visita al local (a partir de mañana). ¡Cada pedido suma para que ahorres más al volver!
+                          </p>
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -4544,8 +5028,10 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     </div>
                   )}
                   {(() => {
+                    const totalBalance = parseFloat(loyaltyAccount?.balance) || 0;
+                    const canRedeemAmount = Math.max(0, totalBalance - loyaltyTodayEarned);
                     const loyaltyRedemption = useLoyaltyDiscount && loyaltyAccount && tenant.loyalty_enabled === true
-                      ? Math.min(parseFloat(loyaltyAccount.balance) || 0, cartTotal - appliedDiscount)
+                      ? Math.min(canRedeemAmount, cartTotal - appliedDiscount)
                       : 0;
                     if (loyaltyRedemption <= 0) return null;
                     return (
@@ -4561,8 +5047,10 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   <span className={`transition-colors duration-500 ${isLight ? 'text-slate-600' : 'text-neutral-400'}`}>Total a pagar</span>
                   <div className="flex flex-col items-end">
                     {(() => {
+                      const totalBalance = parseFloat(loyaltyAccount?.balance) || 0;
+                      const canRedeemAmount = Math.max(0, totalBalance - loyaltyTodayEarned);
                       const loyaltyRedemption = useLoyaltyDiscount && loyaltyAccount && tenant.loyalty_enabled === true
-                        ? Math.min(parseFloat(loyaltyAccount.balance) || 0, cartTotal - appliedDiscount)
+                        ? Math.min(canRedeemAmount, cartTotal - appliedDiscount)
                         : 0;
                       const hasAnyDiscount = appliedDiscount > 0 || loyaltyRedemption > 0;
                       const displayTotal = Math.max(0, cartTotal - appliedDiscount - loyaltyRedemption);

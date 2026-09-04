@@ -72,3 +72,80 @@ export const cleanArgPhone = (phone: string): string => {
   // Prefijo fallback para Argentina
   return '549' + digits;
 };
+
+/**
+ * Extrae los dígitos significativos finales para comparar si dos números
+ * pertenecen a la misma persona en Argentina (área + abonado).
+ */
+export const getPhoneMatchKey = (phone?: string | null): string => {
+  if (!phone) return '';
+  const digits = phone.replace(/\D/g, '');
+  if (!digits) return '';
+  // En Argentina los números celulares tienen 10 dígitos (ej: 11 2345-6789 o 299 412-3456).
+  // Tomar los últimos 8 dígitos garantiza coincidencia exacta ignorando prefijos 0, 15, 54, 549, etc.
+  if (digits.length >= 8) {
+    return digits.slice(-8);
+  }
+  return digits;
+};
+
+/**
+ * Comprueba si dos teléfonos corresponden a la misma persona física.
+ */
+export const isSamePhone = (phoneA?: string | null, phoneB?: string | null): boolean => {
+  if (!phoneA || !phoneB) return false;
+  const cleanA = cleanArgPhone(phoneA);
+  const cleanB = cleanArgPhone(phoneB);
+  if (cleanA && cleanB && cleanA === cleanB) return true;
+
+  const keyA = getPhoneMatchKey(phoneA);
+  const keyB = getPhoneMatchKey(phoneB);
+  if (keyA && keyB && keyA.length >= 7 && keyA === keyB) return true;
+
+  const digitsA = phoneA.replace(/\D/g, '');
+  const digitsB = phoneB.replace(/\D/g, '');
+  if (digitsA.length >= 8 && digitsB.length >= 8) {
+    return digitsA.slice(-8) === digitsB.slice(-8);
+  }
+
+  return false;
+};
+
+/**
+ * Combina nombres de un mismo cliente asociados al mismo número telefónico.
+ * Si el cliente se identificó como "Maxes" y en otro pedido como "Max",
+ * el resultado será "Maxes / Max".
+ * Evita duplicados insensibles a mayúsculas y filtra nombres genéricos.
+ */
+export const mergeClientNames = (...names: (string | null | undefined)[]): string => {
+  const generic = new Set([
+    'cliente frecuente',
+    'sin nombre',
+    'cliente',
+    'consumidor final',
+    'anónimo',
+    'anonimo',
+    'n/a',
+    'desconocido',
+    ''
+  ]);
+
+  const uniqueParts: string[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of names) {
+    if (!raw) continue;
+    // Dividir si ya viene con barras ("Maxes / Max" o "Maxes/Max")
+    const segments = raw.split('/').map(s => s.trim()).filter(Boolean);
+    for (const seg of segments) {
+      const norm = seg.toLowerCase();
+      if (!generic.has(norm) && !seen.has(norm)) {
+        seen.add(norm);
+        uniqueParts.push(seg);
+      }
+    }
+  }
+
+  return uniqueParts.length > 0 ? uniqueParts.join(' / ') : 'Cliente Frecuente';
+};
+
