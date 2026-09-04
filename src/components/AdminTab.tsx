@@ -11,6 +11,7 @@ import { AdminSaasTab } from './AdminSaasTab';
 import { AdminSupportFloatingButton } from './AdminSupportFloatingButton';
 import AdminDeliverySettlement from './AdminDeliverySettlement';
 import AdminWaiterSettlement from './AdminWaiterSettlement';
+import HelpButton from './HelpButton';
 interface AdminTabProps {
     products: Product[];
     categories: Category[];
@@ -24,6 +25,7 @@ interface AdminTabProps {
     onTenantUpdate?: (updatedTenant: any) => void;
     refetchData?: () => void;
     planFeatures?: string[];
+    isLight?: boolean;
 }
 
 const formatARS = (amount: number) => {
@@ -202,6 +204,8 @@ const ScheduleEditor = ({ cfg, setCfg, primaryColor }: { cfg: any, setCfg: any, 
 };
 
 const AdminTab: React.FC<AdminTabProps> = ({
+    isLight,
+
     products, categories, ingredients, orders, expenses, productIngredients, ingredientBatches = [], productOffers = [], tenant, onTenantUpdate, refetchData, planFeatures = []
 }) => {
     // Helper para actualizar tenant saltando RLS (evita errores 406 de single())
@@ -266,6 +270,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
         });
     }, [tenant, refetchData]);
 
+    const isLightMode = isLight !== undefined ? isLight : (tenant?.theme_colors?.mode === 'light');
     const [view, setView] = useState<'dashboard' | 'stock' | 'products' | 'balance' | 'sales' | 'config' | 'tables' | 'fiscal' | 'reports' | 'loyalty' | 'employees' | 'subscription'>('dashboard');
     const [lockedFeatureModal, setLockedFeatureModal] = useState<string | null>(null);
     const [expandedConfigSection, setExpandedConfigSection] = useState<string | null>(null);
@@ -606,6 +611,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
         const totalFormatted = formatARS(dailyStats.total);
         const efectivoFormatted = formatARS(dailyStats.efectivo);
         const tarjetaFormatted = formatARS(dailyStats.debito + dailyStats.credito);
+        const loyaltyFormatted = dailyStats.loyaltyRedeemed > 0 ? formatARS(dailyStats.loyaltyRedeemed) : null;
         const dateStr = new Date().toLocaleDateString('es-AR', {
             day: '2-digit',
             month: '2-digit',
@@ -692,7 +698,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
     const [editingProductId, setEditingProductId] = useState<string | null>(null);
     const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
     const [selectedMonthFilter, setSelectedMonthFilter] = useState<string | null>(null);
-    const [expandedSection, setExpandedSection] = useState<{ month: string; type: 'income' | 'expense' | 'waste' } | null>(null);
+    const [expandedSection, setExpandedSection] = useState<{ month: string; type: 'income' | 'expense' | 'waste' | 'loyalty' } | null>(null);
 
     // New Category Form State
     const [catName, setCatName] = useState('');
@@ -788,6 +794,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
     const [cfgWhatsapp, setCfgWhatsapp] = useState('');
     const [cfgAddress, setCfgAddress] = useState('');
     const [cfgGoogleMapsUrl, setCfgGoogleMapsUrl] = useState('');
+    const [cfgGoogleReviewUrl, setCfgGoogleReviewUrl] = useState('');
     const [cfgMapsIframe, setCfgMapsIframe] = useState('');
     const [cfgReviewsEnabled, setCfgReviewsEnabled] = useState(true);
     const [cfgReservationsEnabled, setCfgReservationsEnabled] = useState(false);
@@ -1079,6 +1086,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
             setCfgWhatsapp(links.whatsapp || '');
             setCfgAddress(links.address || '');
             setCfgGoogleMapsUrl(links.google_maps_url || '');
+            setCfgGoogleReviewUrl(links.google_review_url || '');
             setCfgMapsIframe(links.maps_iframe || '');
             setCfgReviewsEnabled((tenant as any).reviews_enabled !== false);
             setCfgReservationsEnabled((tenant as any).reservations_enabled === true);
@@ -1671,6 +1679,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                     whatsapp: cfgWhatsapp,
                     address: cfgAddress,
                     google_maps_url: cfgGoogleMapsUrl,
+                    google_review_url: cfgGoogleReviewUrl,
                     maps_iframe: cfgMapsIframe
                 };
                 const dataApi = await updateTenantSafe(tenant.id, {
@@ -1920,12 +1929,16 @@ const AdminTab: React.FC<AdminTabProps> = ({
         let credito = 0;
         let rappi = 0;
         let pedidosya = 0;
+        let loyaltyRedeemed = 0;
 
         filteredOrders.forEach(o => {
             const rev = getOrderRevenue(o);
             const seña = (o as any).coupon_code && (o as any).coupon_code.startsWith('RES-') ? ((o as any).discount_amount || 0) : 0;
+            const loyaltyDisc = Number((o as any).loyalty_discount_applied) || 0;
             
             total += rev;
+            loyaltyRedeemed += loyaltyDisc;
+
             if (o.payment_method === 'rappi' || o.origin === 'rappi') {
                 rappi += rev;
             } else if (o.payment_method === 'pedidosya' || o.origin === 'pedidosya') {
@@ -1960,7 +1973,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
             }
         });
 
-        return { total, efectivo, debito, credito, rappi, pedidosya };
+        return { total, efectivo, debito, credito, rappi, pedidosya, loyaltyRedeemed };
     }, [filteredOrders, expenses]);
 
     const yearlyOrders = useMemo(() => {
@@ -2070,12 +2083,15 @@ const AdminTab: React.FC<AdminTabProps> = ({
         let credito = 0;
         let rappi = 0;
         let pedidosya = 0;
+        let loyaltyRedeemed = 0;
 
         currentWeekOrdersList.forEach(o => {
             const rev = getOrderRevenue(o);
             const seña = (o as any).coupon_code && (o as any).coupon_code.startsWith('RES-') ? ((o as any).discount_amount || 0) : 0;
+            const loyaltyDisc = Number((o as any).loyalty_discount_applied) || 0;
             
             total += rev;
+            loyaltyRedeemed += loyaltyDisc;
             if (o.payment_method === 'rappi' || o.origin === 'rappi') {
                 rappi += rev;
             } else if (o.payment_method === 'pedidosya' || o.origin === 'pedidosya') {
@@ -2094,23 +2110,26 @@ const AdminTab: React.FC<AdminTabProps> = ({
             }
         });
 
-        return { total, efectivo, debito, credito, rappi, pedidosya, ordersCount: currentWeekOrdersList.length };
+        return { total, efectivo, debito, credito, rappi, pedidosya, loyaltyRedeemed, ordersCount: currentWeekOrdersList.length };
     }, [weeklyOrdersGrouped]);
 
     const selectedDayStats = useMemo(() => {
-        if (!selectedDaySales) return { total: 0, efectivo: 0, debito: 0, credito: 0 };
+        if (!selectedDaySales) return { total: 0, efectivo: 0, debito: 0, credito: 0, loyaltyRedeemed: 0 };
         let total = 0;
         let efectivo = 0;
         let debito = 0;
         let credito = 0;
         let rappi = 0;
         let pedidosya = 0;
+        let loyaltyRedeemed = 0;
 
         selectedDaySales.orders.forEach(o => {
             const rev = getOrderRevenue(o);
             const seña = (o as any).coupon_code && (o as any).coupon_code.startsWith('RES-') ? ((o as any).discount_amount || 0) : 0;
+            const loyaltyDisc = Number((o as any).loyalty_discount_applied) || 0;
             
             total += rev;
+            loyaltyRedeemed += loyaltyDisc;
             if (o.payment_method === 'rappi' || o.origin === 'rappi') {
                 rappi += rev;
             } else if (o.payment_method === 'pedidosya' || o.origin === 'pedidosya') {
@@ -2129,7 +2148,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
             }
         });
 
-        return { total, efectivo, debito, credito, rappi, pedidosya };
+        return { total, efectivo, debito, credito, rappi, pedidosya, loyaltyRedeemed };
     }, [selectedDaySales]);
 
     const bestSellers = useMemo(() => {
@@ -2173,6 +2192,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
         const months: Record<string, {
             income: number,
             expense: number,
+            loyaltyDiscount: number,
+            promoDiscount: number,
             transactions: any[],
             productStats: Record<string, number>,
             ingredientStats: Record<string, number>
@@ -2186,6 +2207,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
             months[key] = {
                 income: 0,
                 expense: 0,
+                loyaltyDiscount: 0,
+                promoDiscount: 0,
                 transactions: [],
                 productStats: {},
                 ingredientStats: {}
@@ -2195,11 +2218,30 @@ const AdminTab: React.FC<AdminTabProps> = ({
         orders.forEach(o => {
             const key = getLocalDateKey(o.created_at);
             if (!key) return;
-            if (!months[key]) months[key] = { income: 0, expense: 0, transactions: [], productStats: {}, ingredientStats: {} };
+            if (!months[key]) months[key] = { 
+                income: 0, 
+                expense: 0, 
+                loyaltyDiscount: 0, 
+                promoDiscount: 0, 
+                transactions: [], 
+                productStats: {}, 
+                ingredientStats: {} 
+            };
 
             const rev = getOrderRevenue(o);
+            const loyaltyDisc = Number((o as any).loyalty_discount_applied) || 0;
+            const promoDisc = ((o as any).discount_amount && !((o as any).coupon_code?.startsWith('RES-'))) ? Number((o as any).discount_amount) : 0;
+
             months[key].income += rev;
-            months[key].transactions.push({ ...o, type: 'income', total_price: rev });
+            months[key].loyaltyDiscount += loyaltyDisc;
+            months[key].promoDiscount += promoDisc;
+            months[key].transactions.push({ 
+                ...o, 
+                type: 'income', 
+                total_price: rev, 
+                loyalty_discount_applied: loyaltyDisc,
+                discount_amount: promoDisc 
+            });
 
             // Calculate product and ingredient stats for this month
             o.items?.forEach(item => {
@@ -2219,7 +2261,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
         expenses.forEach(e => {
             const key = getLocalDateKey(e.date);
             if (!key) return;
-            if (!months[key]) months[key] = { income: 0, expense: 0, transactions: [], productStats: {}, ingredientStats: {} };
+            if (!months[key]) months[key] = { income: 0, expense: 0, loyaltyDiscount: 0, promoDiscount: 0, transactions: [], productStats: {}, ingredientStats: {} };
             months[key].expense += e.amount;
             months[key].transactions.push({ ...e, type: e.type || 'expense' });
         });
@@ -2327,6 +2369,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                 product_id: prodId,
                 ingredient_id: pi.ingredient_id,
                 quantity_used: pi.quantity_used,
+                is_optional: pi.is_optional || false,
                 tenant_id: tenant?.id
             }));
             const { error: piError } = await supabase.from('product_ingredients').insert(piInserts);
@@ -2658,6 +2701,20 @@ const AdminTab: React.FC<AdminTabProps> = ({
         });
     };
 
+    
+    const toggleIngredientOptional = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setProdIngredients(prev => {
+            const next = prev.map(i => i.ingredient_id === id ? { ...i, is_optional: !i.is_optional } : i);
+            const hasOptional = next.some(i => i.is_optional);
+            if (hasOptional && !prodCustomQuestion.trim()) {
+                setProdCustomQuestion("¿Qué opción prefieres?");
+                setProdIsQuestionRequired(true);
+            }
+            return next;
+        });
+    };
+
     const updateIngredientQty = (id: string, qty: number) => {
         setProdIngredients(prev => prev.map(i => i.ingredient_id === id ? { ...i, quantity_used: qty } : i));
     };
@@ -2677,7 +2734,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
     };
 
                                 return (
-        <div className="space-y-6 pb-4 max-w-5xl mx-auto px-2">
+        <div className={`space-y-6 pb-4 max-w-5xl mx-auto px-2 ${isLightMode ? "theme-light light-mode text-slate-900" : "theme-dark text-white"}`}>
+
             {/* SaaS Funnel Banners */}
             {subscription && (
                 <div className="animate-in fade-in slide-in-from-top-2">
@@ -2786,7 +2844,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
                 </div>
             )}
 
-            <div className="flex gap-2 bg-slate-900/50 p-1 rounded-2xl border border-slate-800 overflow-x-auto scrollbar-hide">
+            <div className={`flex gap-2 p-1 rounded-2xl border overflow-x-auto scrollbar-hide ${isLightMode ? "bg-slate-200 border-slate-300 shadow-sm" : "bg-slate-900/50 border-slate-800"}`}>
+
                 {(['dashboard', 'products', 'stock', 'sales', 'balance', 'config'] as const).map(v => {
                     const locked = isViewLocked(v);
                     return (
@@ -2801,7 +2860,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 }
                             }}
                             className={`flex-1 py-3 px-4 rounded-xl text-[9px] font-black uppercase transition-all whitespace-nowrap ${
-                                view === v ? 'text-white shadow-lg' : 'text-slate-500'
+                                view === v ? 'text-white shadow-lg' : (isLightMode ? 'text-slate-700 font-bold hover:text-black' : 'text-slate-500')
                             } ${locked ? 'opacity-80' : ''}`}
                             style={view === v ? { backgroundColor: tenant?.theme_colors?.primary || '#f97316' } : {}}
                         >
@@ -2941,7 +3000,10 @@ const AdminTab: React.FC<AdminTabProps> = ({
             {view === 'stock' && (
                 <div className="space-y-4 animate-in slide-in-from-bottom-4">
                     <div className="flex justify-between items-center px-2">
-                        <h3 className="font-black uppercase italic text-sm">Insumos y Almacén</h3>
+                        <div className="flex items-center gap-2">
+                            <h3 className={`font-black uppercase italic text-sm ${isLightMode ? "text-slate-950 font-black" : "text-white"}`}>Insumos y Almacén</h3>
+                            <HelpButton helpKey="admin-stock" size="sm" primaryColor={tenant?.theme_colors?.primary} />
+                        </div>
                         <button
                             onClick={() => { setEditingStockId(null); setStkName(''); setStkPrice(''); setStkLevel(''); setIsStockModalOpen(true); }}
                             className="bg-orange-500 p-2 rounded-xl text-white shadow-lg"><Plus size={18} /></button>
@@ -2956,7 +3018,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 value={stockSearchTerm}
                                 onChange={(e) => setStockSearchTerm(e.target.value)}
                                 placeholder="Buscar insumo..."
-                                className="w-full bg-slate-900 border border-slate-800 rounded-xl py-3 pl-10 pr-4 text-sm text-white font-bold outline-none focus:border-orange-500/50 transition-colors"
+                                className={`w-full rounded-xl py-3 pl-10 pr-4 text-sm font-bold outline-none border transition-colors ${isLightMode ? "bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 shadow-sm" : "bg-slate-900 border-slate-800 text-white"}`}
                             />
                             {stockSearchTerm && (
                                 <button onClick={() => setStockSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
@@ -2986,42 +3048,61 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             const lotesDeEsteIngrediente = (ingredientBatches || []).filter(b => b.ingredient_id === item.id);
                             
                             return (
-                                <div key={item.id} className="glass rounded-3xl border border-white/5 overflow-hidden">
-                                    {/* Cabecera del ingrediente (Clickable para editar) */}
+                                <div key={item.id} className={`rounded-3xl overflow-hidden transition-all border ${isLightMode ? "bg-white border-2 border-slate-200 shadow-md hover:border-slate-300" : "glass border border-white/5"}`}>
                                     <div 
                                         onClick={() => openEditStock(item)}
-                                        className="p-4 flex justify-between items-center active:bg-white/5 transition-all cursor-pointer"
+                                        className={`p-4 flex justify-between items-center transition-all cursor-pointer ${isLightMode ? "hover:bg-slate-50" : "active:bg-white/5"}`}
                                     >
                                         <div>
-                                            <span className="font-black text-white flex items-center gap-2 text-sm">
+                                            <span className={`font-black flex items-center gap-2 text-base ${isLightMode ? "text-slate-950 font-black" : "text-white"}`}>
                                                 {item.name}
                                                 {item.target_departments?.includes('kitchen') && <span title="Cocina">🍳</span>}
                                                 {item.target_departments?.includes('bartender') && <span title="Barra">🍹</span>}
                                             </span>
-                                            <span className="text-[10px] font-bold text-slate-500 uppercase">Costo: {formatARS(item.unit_price)} / {item.unit}</span>
+                                            <div className="mt-1.5 flex items-center gap-2">
+                                                <span className={`text-xs font-black uppercase px-2.5 py-1 rounded-lg border ${isLightMode ? "bg-slate-100 text-slate-900 border-slate-300" : "bg-slate-900 text-slate-300 border-slate-700"}`}>
+                                                    Costo: {formatARS(item.unit_price)} / {item.unit}
+                                                </span>
+                                            </div>
                                         </div>
                                         <div className="flex items-center gap-3">
                                             <div className="text-right flex flex-col items-end">
-                                                <p className={`font-black text-base ${item.stock_level <= item.min_stock_alert ? 'text-red-500' : 'text-green-500'}`}>
-                                                    {formatStock(item.stock_level)} <span className="text-[10px] text-slate-500">{item.unit}</span>
+                                                <p className={`font-black text-lg ${item.stock_level <= item.min_stock_alert ? 'text-red-600 font-black' : (isLightMode ? 'text-emerald-700' : 'text-green-500')}`}>
+                                                    {formatStock(item.stock_level)} <span className={`text-xs font-bold ${isLightMode ? 'text-slate-700' : 'text-slate-400'}`}>{item.unit}</span>
                                                 </p>
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         openWasteModal(item);
                                                     }}
-                                                    className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase flex items-center gap-1 active:scale-95 transition-all mt-1"
+                                                    className="bg-red-500/15 hover:bg-red-500/25 text-red-600 border border-red-500/30 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1 active:scale-95 transition-all mt-1"
                                                 >
-                                                    <AlertTriangle size={8} />
+                                                    <AlertTriangle size={10} />
                                                     Descarte
                                                 </button>
                                             </div>
-                                            <div className="flex flex-col gap-1 items-end">
-                                                <button onClick={async (e) => {
-                                                    e.stopPropagation();
-                                                    if (window.confirm('¿Borrar insumo?')) await supabase.from('ingredients').delete().eq('id', item.id);
-                                                }} className="text-red-500/30 hover:text-red-500 p-1">
-                                                    <Trash2 size={12} />
+                                            {/* BOTONES DE ACCIÓN: EDITAR Y ELIMINAR CLAROS Y VISIBLES */}
+                                            <div className="flex items-center gap-2 pl-2">
+                                                <button 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openEditStock(item);
+                                                    }} 
+                                                    className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black shadow-md shadow-blue-500/20 active:scale-95 transition-all cursor-pointer"
+                                                    title="Editar insumo"
+                                                >
+                                                    <Edit size={14} />
+                                                    <span className="hidden sm:inline">Editar</span>
+                                                </button>
+                                                <button 
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        if (window.confirm('¿Borrar insumo?')) await supabase.from('ingredients').delete().eq('id', item.id);
+                                                    }} 
+                                                    className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl border border-red-200 transition-all cursor-pointer"
+                                                    title="Eliminar insumo"
+                                                >
+                                                    <Trash2 size={16} />
                                                 </button>
                                             </div>
                                         </div>
@@ -3101,7 +3182,10 @@ const AdminTab: React.FC<AdminTabProps> = ({
             {view === 'products' && (
                 <div className="space-y-6 animate-in slide-in-from-right-4">
                     <div className="flex justify-between items-center px-2 flex-wrap gap-2">
-                        <h3 className="font-black uppercase italic text-sm">Categorías y Menú</h3>
+                        <div className="flex items-center gap-2">
+                            <h3 className="font-black uppercase italic text-sm">Categorías y Menú</h3>
+                            <HelpButton helpKey="admin-menu" size="sm" primaryColor={tenant?.theme_colors?.primary} />
+                        </div>
                         <div className="flex gap-2">
                             <button
                                 onClick={() => {
@@ -3262,10 +3346,10 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                         <button
                                             onClick={() => { setActiveCategoryId(cat.id); setEditingProductId(null); setProdName(''); setProdPrice(''); setProdImage(PRESET_IMAGES[0].url); setProdIngredients([]); setProdIngredientSearchTerm(''); setIsProductModalOpen(true); }}
                                             className="text-green-500 bg-green-500/10 p-2 rounded-lg"><Plus size={14} /></button>
-                                        <button onClick={(e) => { e.stopPropagation(); openEditCategory(cat); }} className="text-blue-500/40 hover:text-blue-500 p-2"><Edit size={14} /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); openEditCategory(cat); }} className="text-blue-600 bg-blue-500/10 hover:bg-blue-600 hover:text-white p-2 rounded-xl border border-blue-500/20 transition-all shadow-sm" title="Editar Categoría"><Edit size={14} /></button>
                                         <button onClick={async () => {
                                             if (window.confirm('¿Borrar categoría?')) await supabase.from('categories').delete().eq('id', cat.id);
-                                        }} className="text-red-500/40 p-2"><Trash2 size={14} /></button>
+                                        }} className="text-red-500 bg-red-500/10 hover:bg-red-500 hover:text-white p-2 rounded-xl border border-red-500/20 transition-all shadow-sm" title="Eliminar Categoría"><Trash2 size={14} /></button>
                                     </div>
                                 </div>
                                 {products.filter(p => p.category_id === cat.id && (!menuSearchTerm || p.name.toLowerCase().includes(menuSearchTerm.toLowerCase()))).map(prod => {
@@ -3389,7 +3473,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                             <StarOff size={12} />
                                                         </button>
                                                     )}
-                                                    <button onClick={(e) => { e.stopPropagation(); openEditProduct(prod, cat.id); }} className="text-blue-500 bg-blue-500/10 p-2 rounded-lg hover:bg-blue-500 hover:text-white transition-all"><Edit size={12} /></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); openEditProduct(prod, cat.id); }} className="text-blue-600 bg-blue-500/10 hover:bg-blue-600 hover:text-white p-2 rounded-lg border border-blue-500/20 transition-all shadow-sm" title="Editar Producto"><Edit size={13} /></button>
                                                     {prod.is_active === false ? (
                                                         <button 
                                                             onClick={(e) => { e.stopPropagation(); handleActivateProduct(prod); }} 
@@ -3436,7 +3520,10 @@ const AdminTab: React.FC<AdminTabProps> = ({
             {view === 'balance' && (
                 <div className="space-y-6 animate-in fade-in">
                     <div className="flex justify-between items-center px-2">
-                        <h3 className="font-black uppercase italic text-sm">Rentabilidad Mensual</h3>
+                        <div className="flex items-center gap-2">
+                            <h3 className="font-black uppercase italic text-sm">Rentabilidad Mensual</h3>
+                            <HelpButton helpKey="admin-balance" size="sm" primaryColor={tenant?.theme_colors?.primary} />
+                        </div>
                         <button
                             onClick={() => { setEditingExpenseId(null); setExpDesc(''); setExpAmount(''); setExpType('purchase'); setIsExpenseModalOpen(true); }}
                             className="bg-red-500 p-2 rounded-xl text-white shadow-lg flex items-center gap-2 px-4">
@@ -3524,7 +3611,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                             </div>
                                         </div>
                                         <div className="p-5 space-y-4">
-                                            <div className="grid grid-cols-3 gap-2">
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                                 <div 
                                                     onClick={() => {
                                                         if (expandedSection?.month === month && expandedSection?.type === 'income') {
@@ -3584,6 +3671,28 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                         <span className="text-[7.5px] font-black uppercase text-slate-500">Mermas</span>
                                                     </div>
                                                     <p className="font-black text-white text-xs leading-none mt-1">{formatARS(totalWaste)}</p>
+                                                </div>
+                                                <div 
+                                                    onClick={() => {
+                                                        if (expandedSection?.month === month && expandedSection?.type === 'loyalty') {
+                                                            setExpandedSection(null);
+                                                        } else {
+                                                            setExpandedSection({ month, type: 'loyalty' });
+                                                        }
+                                                    }}
+                                                    className={`p-2.5 rounded-2xl border flex flex-col justify-between cursor-pointer active:scale-[0.98] transition-all hover:bg-amber-500/5 ${
+                                                        expandedSection?.month === month && expandedSection?.type === 'loyalty'
+                                                            ? 'border-amber-400 bg-amber-500/10 ring-1 ring-amber-400'
+                                                            : 'bg-slate-950/40 border-amber-500/20'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-1.5 mb-1">
+                                                        <Coins size={12} className="text-amber-400 animate-bounce" />
+                                                        <span className="text-[7.5px] font-black uppercase text-amber-400">Club / Promos</span>
+                                                    </div>
+                                                    <p className="font-black text-amber-400 text-xs leading-none mt-1">
+                                                        -{formatARS((data.loyaltyDiscount || 0) + (data.promoDiscount || 0))}
+                                                    </p>
                                                 </div>
                                             </div>
 
@@ -3737,14 +3846,15 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                             <div className="space-y-3 pt-2 border-t border-white/5 animate-in slide-in-from-top-2 duration-300">
                                                 <div className="flex justify-between items-center bg-slate-900/40 p-2.5 rounded-xl border border-white/5">
                                                     <span className={`text-[9px] font-black uppercase tracking-wider ${
-                                                        expandedSection.type === 'income' ? 'text-green-500' : expandedSection.type === 'expense' ? 'text-red-500' : 'text-orange-500'
+                                                        expandedSection.type === 'income' ? 'text-green-500' : expandedSection.type === 'expense' ? 'text-red-500' : expandedSection.type === 'loyalty' ? 'text-amber-400' : 'text-orange-500'
                                                     }`}>
-                                                        {expandedSection.type === 'income' ? '📋 Desglose de Ingresos' : expandedSection.type === 'expense' ? '💸 Desglose de Gastos' : '📉 Desglose de Mermas'}
+                                                        {expandedSection.type === 'income' ? '📋 Desglose de Ingresos' : expandedSection.type === 'expense' ? '💸 Desglose de Gastos' : expandedSection.type === 'loyalty' ? '🪙 Desglose de Canjes del Club de Fidelización' : '📉 Desglose de Mermas'}
                                                     </span>
                                                     <span className="text-[8px] font-black text-slate-500 uppercase">
                                                         {(() => {
                                                             const filtered = data.transactions.filter(t => {
                                                                 if (expandedSection.type === 'income') return t.type === 'income';
+                                                                if (expandedSection.type === 'loyalty') return t.type === 'income' && ((t.loyalty_discount_applied || 0) > 0 || (t.discount_amount || 0) > 0);
                                                                 if (expandedSection.type === 'waste') return t.type === 'waste' || t.description?.includes('Merma:');
                                                                 return t.type !== 'income' && t.type !== 'waste' && !t.description?.includes('Merma:');
                                                             });
@@ -3757,6 +3867,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                         const filtered = data.transactions
                                                             .filter(t => {
                                                                 if (expandedSection.type === 'income') return t.type === 'income';
+                                                                if (expandedSection.type === 'loyalty') return t.type === 'income' && ((t.loyalty_discount_applied || 0) > 0 || (t.discount_amount || 0) > 0);
                                                                 if (expandedSection.type === 'waste') return t.type === 'waste' || t.description?.includes('Merma:');
                                                                 return t.type !== 'income' && t.type !== 'waste' && !t.description?.includes('Merma:');
                                                             })
@@ -3766,49 +3877,75 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                             return <p className="text-center text-slate-600 text-[10px] font-bold py-4">No hay registros para esta categoría este mes.</p>;
                                                         }
 
-                                                        return filtered.map((t: any) => (
-                                                            <div key={t.id} className="group/item flex justify-between items-center text-[10px] p-2.5 bg-slate-950/20 border border-white/5 rounded-xl hover:bg-white/5 transition-all">
-                                                                <div className="flex items-center gap-3">
-                                                                    <span className={t.type === 'income' ? 'text-green-500' : 'text-red-500'}>
-                                                                        ●
-                                                                    </span>
-                                                                    <div className="flex flex-col">
-                                                                        <span className="font-bold text-white leading-tight">
-                                                                            {t.type === 'income' && <span className="text-orange-500 mr-1.5">#{t.order_number || '?'}</span>}
-                                                                            {t.client_name || t.description}
+                                                        return filtered.map((t: any) => {
+                                                            const isLoyaltyView = expandedSection.type === 'loyalty';
+                                                            const loyaltyDiscount = Number(t.loyalty_discount_applied || t.discount_amount) || 0;
+
+                                                            return (
+                                                                <div key={t.id} className="group/item flex justify-between items-center text-[10px] p-2.5 bg-slate-950/20 border border-white/5 rounded-xl hover:bg-white/5 transition-all">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <span className={isLoyaltyView ? 'text-amber-400 font-bold' : t.type === 'income' ? 'text-green-500' : 'text-red-500'}>
+                                                                            {isLoyaltyView ? '🪙' : '●'}
                                                                         </span>
-                                                                        <span className="text-slate-500 text-[7px] font-black uppercase mt-0.5">
-                                                                            {new Date(t.created_at || t.date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                                                        </span>
+                                                                        <div className="flex flex-col">
+                                                                            <span className="font-bold text-white leading-tight">
+                                                                                {(t.type === 'income' || isLoyaltyView) && <span className="text-orange-500 mr-1.5">#{t.order_number || '?'}</span>}
+                                                                                {t.client_name || t.description}
+                                                                            </span>
+                                                                            <span className="text-slate-500 text-[7px] font-black uppercase mt-0.5">
+                                                                                {new Date(t.created_at || t.date).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                                                                {isLoyaltyView && ` • Total Original: ${formatARS((t.total_price || 0) + loyaltyDiscount)}`}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2.5">
+                                                                        {isLoyaltyView ? (
+                                                                            <div className="text-right">
+                                                                                <span className="font-black text-amber-400 block font-mono">
+                                                                                    -{formatARS(loyaltyDiscount)}
+                                                                                </span>
+                                                                                <span className="text-[7px] text-slate-500 uppercase font-bold">
+                                                                                    Canje Club
+                                                                                </span>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <>
+                                                                                <div className="text-right">
+                                                                                    <span className={`font-black ${t.type === 'income' ? 'text-green-500' : 'text-white'}`}>
+                                                                                        {t.type === 'income' ? '+' : '-'}{formatARS(t.total_price || t.amount)}
+                                                                                    </span>
+                                                                                    {t.type === 'income' && (t.loyalty_discount_applied || 0) > 0 && (
+                                                                                        <span className="text-[7.5px] text-amber-400 block font-bold">
+                                                                                            🪙 -{formatARS(t.loyalty_discount_applied)} canjeado
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                                {t.type !== 'income' && (
+                                                                                    <div className="flex gap-2">
+                                                                                        <button onClick={(e) => { e.stopPropagation(); openEditExpense(t); }} className="text-blue-400 hover:text-blue-300 p-1.5 bg-slate-900/50 hover:bg-slate-900 rounded-lg border border-white/5 transition-all" title="Editar Gasto"><Edit size={11} /></button>
+                                                                                        <button onClick={async (e) => {
+                                                                                            e.stopPropagation();
+                                                                                            if (window.confirm('¿Borrar registro?')) {
+                                                                                                 const { error } = await supabase.from('expenses').delete().eq('id', t.id);
+                                                                                                 if (error) alert('Error al borrar: ' + error.message);
+                                                                                                 notifyChanges();
+                                                                                             }
+                                                                                        }} className="text-red-400 hover:text-red-300 p-1.5 bg-slate-900/50 hover:bg-slate-900 rounded-lg border border-white/5 transition-all" title="Eliminar"><Trash2 size={11} /></button>
+                                                                                    </div>
+                                                                                )}
+                                                                            </>
+                                                                        )}
                                                                     </div>
                                                                 </div>
-                                                                <div className="flex items-center gap-2.5">
-                                                                    <span className={`font-black ${t.type === 'income' ? 'text-green-500' : 'text-white'}`}>
-                                                                        {t.type === 'income' ? '+' : '-'}{formatARS(t.total_price || t.amount)}
-                                                                    </span>
-                                                                    {t.type !== 'income' && (
-                                                                        <div className="flex gap-2">
-                                                                            <button onClick={(e) => { e.stopPropagation(); openEditExpense(t); }} className="text-blue-400 hover:text-blue-300 p-1.5 bg-slate-900/50 hover:bg-slate-900 rounded-lg border border-white/5 transition-all" title="Editar Gasto"><Edit size={11} /></button>
-                                                                            <button onClick={async (e) => {
-                                                                                e.stopPropagation();
-                                                                                if (window.confirm('¿Borrar registro?')) {
-                                                                                     const { error } = await supabase.from('expenses').delete().eq('id', t.id);
-                                                                                     if (error) alert('Error al borrar: ' + error.message);
-                                                                                     notifyChanges();
-                                                                                 }
-                                                                            }} className="text-red-400 hover:text-red-300 p-1.5 bg-slate-900/50 hover:bg-slate-900 rounded-lg border border-white/5 transition-all" title="Eliminar"><Trash2 size={11} /></button>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        ));
+                                                            );
+                                                        });
                                                     })()}
                                                 </div>
                                             </div>
                                         ) : (
                                             <div className="py-3 text-center border border-dashed border-white/5 rounded-2xl bg-slate-950/10">
                                                 <p className="text-slate-500 text-[8.5px] font-black uppercase tracking-wider flex items-center justify-center gap-2">
-                                                    💡 Toca Ingresos, Gastos o Mermas arriba para ver el desglose
+                                                    💡 Toca Ingresos, Gastos, Mermas o Club / Promos arriba para ver el desglose
                                                 </p>
                                             </div>
                                         )}
@@ -3972,6 +4109,17 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 </div>
                             </div>
 
+                            {/* Banner de Descuentos Canjeados Club Fidelización Hoy */}
+                            {dailyStats.loyaltyRedeemed > 0 && (
+                                <div className="bg-amber-500/10 border border-amber-400/30 p-3 rounded-2xl flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Coins size={14} className="text-amber-400 animate-bounce" />
+                                        <span className="text-[9px] font-black uppercase text-amber-300">Descuentos Canjeados Club Fidelización Hoy</span>
+                                    </div>
+                                    <span className="text-xs font-mono font-black text-amber-400">-{formatARS(dailyStats.loyaltyRedeemed)}</span>
+                                </div>
+                            )}
+
                             {/* Listado Detallado de Comandas de Hoy */}
                             <div className="space-y-3 pt-2">
                                 <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 pl-1.5">Comandas de Hoy</h4>
@@ -4036,6 +4184,23 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                             );
                                                         })}
                                                     </div>
+
+                                                    {((order as any).loyalty_discount_applied > 0 || (order as any).discount_amount > 0) && (
+                                                        <div className="pt-2 border-t border-dashed border-white/10 space-y-1 text-[9px] font-bold uppercase">
+                                                            {(order as any).discount_amount > 0 && (
+                                                                <div className="flex justify-between text-green-400">
+                                                                    <span>Descuento / Reserva:</span>
+                                                                    <span>-{formatARS((order as any).discount_amount)}</span>
+                                                                </div>
+                                                            )}
+                                                            {(order as any).loyalty_discount_applied > 0 && (
+                                                                <div className="flex justify-between text-amber-400">
+                                                                    <span className="flex items-center gap-1">🪙 Descuento Club Fidelización:</span>
+                                                                    <span>-{formatARS((order as any).loyalty_discount_applied)}</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -4198,6 +4363,17 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                     </div>
                                 </div>
 
+                                {/* Banner de Descuentos Canjeados Club Fidelización en la Semana */}
+                                {currentWeekStats.loyaltyRedeemed > 0 && (
+                                    <div className="bg-amber-500/10 border border-amber-400/30 p-3 rounded-2xl flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Coins size={14} className="text-amber-400 animate-bounce" />
+                                            <span className="text-[9px] font-black uppercase text-amber-300">Descuentos Canjeados Club Fidelización en la Semana</span>
+                                        </div>
+                                        <span className="text-xs font-mono font-black text-amber-400">-{formatARS(currentWeekStats.loyaltyRedeemed)}</span>
+                                    </div>
+                                )}
+
                                 {/* Calendario de Semanas del Mes */}
                                 <div className="space-y-4 pt-2">
                                     <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 pl-2">Semanas del Mes</h3>
@@ -4358,9 +4534,12 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
             {view === 'config' && (
                 <div className="space-y-6 animate-in slide-in-from-bottom-4">
-                    <div className="px-2 mb-6">
-                        <h3 className="font-black uppercase italic text-lg" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>Ajustes y Configuración</h3>
-                        <p className="text-slate-500 text-[10px] uppercase font-bold mt-1">Configura todos los aspectos de tu restaurante de forma centralizada</p>
+                    <div className="px-2 mb-6 flex justify-between items-center flex-wrap gap-2">
+                        <div>
+                            <h3 className="font-black uppercase italic text-lg" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>Ajustes y Configuración</h3>
+                            <p className="text-slate-500 text-[10px] uppercase font-bold mt-1">Configura todos los aspectos de tu restaurante de forma centralizada</p>
+                        </div>
+                        <HelpButton helpKey="admin-settings-general" label="¿Cómo funciona Ajustes?" primaryColor={tenant?.theme_colors?.primary} />
                     </div>
 
                     <div className="space-y-4">
@@ -4381,6 +4560,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 <div className="flex items-center gap-3">
                                     <Paintbrush className="w-5 h-5" />
                                     <span className="font-bold uppercase text-sm tracking-wider">✅ Personalización del Local</span>
+                                    <HelpButton helpKey="admin-settings-personalizacion" size="sm" primaryColor={tenant?.theme_colors?.primary} />
                                 </div>
                                 {expandedConfigSection === 'personalizacion' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                             </button>
@@ -4717,6 +4897,24 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                         className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white text-xs outline-none focus:border-orange-500/50"
                                         placeholder="Ej: https://maps.app.goo.gl/..."
                                     />
+                                </div>
+
+                                {/* Enlace directo de Reseñas de Google (Reputation Booster) */}
+                                <div className="space-y-1">
+                                    <div className="flex justify-between items-center ml-1">
+                                        <label className="text-[8px] font-bold uppercase text-amber-400 block flex items-center gap-1">⭐ Enlace para Reseñas de Google (Google Reviews)</label>
+                                        <span className="text-[7.5px] bg-amber-500/10 border border-amber-500/30 text-amber-300 px-2 py-0.5 rounded font-black">Posicionamiento SEO</span>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={cfgGoogleReviewUrl}
+                                        onChange={(e) => setCfgGoogleReviewUrl(e.target.value)}
+                                        className="w-full bg-slate-950 border border-amber-500/30 rounded-xl p-3 text-white text-xs outline-none focus:border-amber-400"
+                                        placeholder="Ej: https://g.page/r/CUxxx/review o link de opiniones de tu Google Business"
+                                    />
+                                    <p className="text-[7.5px] text-slate-400 leading-normal ml-1">
+                                        Cuando los clientes dejen 4 o 5 estrellas en tu menú, el sistema les copiará su reseña y los redirigirá a este link para que la publiquen en tu Google Maps en 2 clics.
+                                    </p>
                                 </div>
 
                                 {/* Iframe o Enlace para incrustar Mapa */}
@@ -5377,6 +5575,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 <div className="flex items-center gap-3">
                                     <Users className="w-5 h-5" />
                                     <span className="font-bold uppercase text-sm tracking-wider">✅ Personal y Roles</span>
+                                    <HelpButton helpKey="admin-settings-personal" size="sm" primaryColor={tenant?.theme_colors?.primary} />
                                 </div>
                                 {expandedConfigSection === 'personal' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                             </button>
@@ -5460,6 +5659,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 <div className="flex items-center gap-3">
                                     <Truck className="w-5 h-5" />
                                     <span className="font-bold uppercase text-sm tracking-wider">{cfgHasDelivery ? '✅ ' : ''}Módulo y zonas de envío</span>
+                                    <HelpButton helpKey="admin-settings-envios" size="sm" primaryColor={tenant?.theme_colors?.primary} />
                                 </div>
                                 {expandedConfigSection === 'envios' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                             </button>
@@ -5720,6 +5920,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 <div className="flex items-center gap-3">
                                     <Wallet className="w-5 h-5" />
                                     <span className="font-bold uppercase text-sm tracking-wider">{!!cfgMercadopagoAccessToken ? '✅ ' : ''}Cobros por Mercado Pago</span>
+                                    <HelpButton helpKey="admin-settings-mp" size="sm" primaryColor={tenant?.theme_colors?.primary} />
                                 </div>
                                 {expandedConfigSection === 'mp' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                             </button>
@@ -5948,6 +6149,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 <div className="flex items-center gap-3">
                                     <QrCode className="w-5 h-5" />
                                     <span className="font-bold uppercase text-sm tracking-wider">Gestión de Mesas y Códigos QR</span>
+                                    <HelpButton helpKey="admin-settings-tables" size="sm" primaryColor={tenant?.theme_colors?.primary} />
                                 </div>
                                 {expandedConfigSection === 'tables' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                             </button>
@@ -6281,6 +6483,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 <div className="flex items-center gap-3">
                                     <FileText className="w-5 h-5" />
                                     <span className="font-bold uppercase text-sm tracking-wider">Facturación Fiscal (AFIP)</span>
+                                    <HelpButton helpKey="admin-settings-fiscal" size="sm" primaryColor={tenant?.theme_colors?.primary} />
                                 </div>
                                 {expandedConfigSection === 'fiscal' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                             </button>
@@ -6486,6 +6689,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 <div className="flex items-center gap-3">
                                     <Users className="w-5 h-5" />
                                     <span className="font-bold uppercase text-sm tracking-wider">Club de Clientes / Fidelización</span>
+                                    <HelpButton helpKey="admin-settings-loyalty" size="sm" primaryColor={tenant?.theme_colors?.primary} />
                                 </div>
                                 {expandedConfigSection === 'loyalty' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                             </button>
@@ -7536,7 +7740,12 @@ const AdminTab: React.FC<AdminTabProps> = ({
                 <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm animate-in fade-in overflow-y-auto pt-10 pb-10">
                     <div className="glass w-full max-w-sm rounded-[3rem] p-8 space-y-6 shadow-2xl border border-white/10 my-auto">
                         <div className="flex justify-between items-center">
-                            <h3 className="text-xl font-black uppercase italic text-orange-500">Nuevo Producto</h3>
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-xl font-black uppercase italic text-orange-500">
+                                    {editingProductId ? 'Editar Producto' : 'Nuevo Producto'}
+                                </h3>
+                                <HelpButton helpKey="admin-menu-product-modal" size="sm" primaryColor={tenant?.theme_colors?.primary} />
+                            </div>
                             <button onClick={() => setIsProductModalOpen(false)} className="text-slate-500"><X /></button>
                         </div>
 
@@ -7653,7 +7862,12 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 })()}
 
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-2 block">Insumos Necesarios</label>
+                                    
+                                    <div className="flex items-center gap-2 mb-2 ml-2">
+                                        <label className="text-[10px] font-black uppercase text-slate-500 block">Insumos Necesarios (Receta y Opciones)</label>
+                                        <HelpButton helpKey="PRODUCT_OPTIONAL_INGREDIENTS" size="sm" primaryColor={tenant?.theme_colors?.primary} />
+                                    </div>
+
                                     
                                     {/* Buscador de Insumos para Receta */}
                                     <div className="flex gap-2">
@@ -7702,7 +7916,14 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                     </div>
                                                     {selected && (
                                                         <div className="flex items-center gap-2">
-                                                            <input type="number" step={inv.is_fractionable ? "any" : "1"} value={selected.quantity_used} onChange={(e) => updateIngredientQty(inv.id, parseFloat(e.target.value) || 0)} className="w-12 bg-slate-800 border border-slate-700 rounded-lg p-1 text-[10px] text-center text-white" />
+                                                            <button 
+                                                                onClick={(e) => toggleIngredientOptional(inv.id, e)}
+                                                                className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase transition-all ${selected.is_optional ? 'bg-amber-500 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                                                title="Marcar como opción para que el cliente elija"
+                                                            >
+                                                                {selected.is_optional ? '⭐ Opcional' : 'Fijo'}
+                                                            </button>
+                                                            <input type="number" step={inv.is_fractionable ? "any" : "1"} value={selected.quantity_used} onChange={(e) => updateIngredientQty(inv.id, parseFloat(e.target.value) || 0)} className="w-12 bg-slate-800 border border-slate-700 rounded-lg p-1 text-[10px] text-center text-white" onClick={(e) => e.stopPropagation()} />
                                                             <span className="text-[9px] text-slate-500 uppercase">{inv.unit}</span>
                                                         </div>
                                                     )}
@@ -7839,6 +8060,23 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                         );
                                                     })}
                                                 </div>
+
+                                                {((order as any).loyalty_discount_applied > 0 || (order as any).discount_amount > 0) && (
+                                                    <div className="pt-2 border-t border-dashed border-white/10 space-y-1 text-[8px] font-bold uppercase">
+                                                        {(order as any).discount_amount > 0 && (
+                                                            <div className="flex justify-between text-green-400">
+                                                                <span>Descuento / Reserva:</span>
+                                                                <span>-{formatARS((order as any).discount_amount)}</span>
+                                                            </div>
+                                                        )}
+                                                        {(order as any).loyalty_discount_applied > 0 && (
+                                                            <div className="flex justify-between text-amber-400">
+                                                                <span className="flex items-center gap-1">🪙 Descuento Club Fidelización:</span>
+                                                                <span>-{formatARS((order as any).loyalty_discount_applied)}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
