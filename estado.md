@@ -6,6 +6,23 @@ Implementación del Embudo de Ventas (Funnel SaaS) con pruebas gratuitas y promo
 ## ¿Por qué lo hacemos?
 Para reducir la fricción de entrada de nuevos restaurantes y maximizar la conversión a planes de pago, incentivando a los dueños de locales con un sistema de cuenta regresiva que les otorga 14 días gratis desde su *primera venta* y luego una promoción de 30 días de Pro al precio de Básico. Además, aseguramos una experiencia fluida (UX) para los usuarios al autogestionar y evitar bloqueos molestos.
 
+## Arquitectura Canónica: Los 3 Menús del Sistema (Regla de Negocio Inquebrantable)
+El sistema opera sobre tres (3) menús claramente diferenciados por su rol, canal y propósito operativo:
+
+1. **Menú de Mesas (QR en Mesa - Auto-pedido y Atención de Salón):**
+   - **Qué es y cómo funciona:** Cada mesa física del local cuenta con su código QR único e irrepetible. El cliente se sienta, escanea el QR desde la cámara de su smartphone y realiza el pedido de forma 100% autónoma. El sistema identifica automáticamente desde qué mesa se emite la orden (ej: "Mesa 5"), divide los platos entre Cocina y Barra (Smart Splitter) y alerta al personal. Desde este mismo menú, el cliente puede pulsar el botón para llamar al mozo o solicitar la cuenta.
+   - **Rol del Mozo (ACLARACIÓN CRÍTICA):** El mozo **NO toma el pedido** en este menú (no va a la mesa con libreta ni tablet a ingresar platos). La toma de pedidos es enteramente del cliente. La única función del mozo es despachar y **llevar los pedidos terminados a la mesa** que el sistema le indica, y acudir cuando la mesa pulsa el botón de llamada.
+
+2. **Menú del Cliente (Delivery / Take Away desde Casa):**
+   - **Qué es y cómo funciona:** Es el menú público accesible desde internet, redes sociales o enlace web del local para comensales que se encuentran en su domicilio o trabajo.
+   - **Funcionalidad:** Permite encargar comida a domicilio (Delivery con selección de zonas de envío y cálculo automático de costos de flete) o pedir para pasar a retirar por el local (Take Away).
+
+3. **Menú de Caja / Mostrador:**
+   - **Qué es y cómo funciona:** Es el menú operado directamente por el cajero o personal de atención al frente del local (`OrderTab.tsx`).
+   - **Casos de uso principales:**
+     a) **Locales sin mesas:** Negocios de comida rápida, al paso, rotiserías o ventanilla donde el pedido se toma y se cobra directamente en el mostrador.
+     b) **Respaldo y Contingencia en locales con mesas:** Si un comensal no tiene celular con cámara, se quedó sin batería, o en situaciones donde se corte la conexión a internet en el local, el personal utiliza este menú para ingresar y cobrar la orden presencialmente.
+
 ## Estado Actual (Última actualización: 04 de Julio de 2026 - Noche)
 - **Fase:** Optimización Crítica de Rendimiento en Pedidos y Comandas (Ultra-Fast Realtime) & Validación UX.
 - **Hito Reciente:** 
