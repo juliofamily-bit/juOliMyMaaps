@@ -119,7 +119,11 @@ export default function OrderTab({ products, ingredients, categories: initialCat
     const [afipClientType, setAfipClientType] = useState<'consumidor_final' | 'monotributista' | 'responsable_inscripto'>('consumidor_final');
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
     const [cart, setCart] = useState<Record<string, number>>({});
+    const [cartNotes, setCartNotes] = useState<Record<string, string>>({});
     const [showSummary, setShowSummary] = useState(false);
+    const [questionModalProduct, setQuestionModalProduct] = useState<any>(null);
+    const [questionModalSelectedOption, setQuestionModalSelectedOption] = useState<string>('');
+    const [questionModalAnswer, setQuestionModalAnswer] = useState<string>('');
     const [showOfflineQueue, setShowOfflineQueue] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [isListening, setIsListening] = useState(false);
@@ -645,7 +649,8 @@ export default function OrderTab({ products, ingredients, categories: initialCat
         });
     };
 
-    const totalPrice = Object.entries(cart).reduce((sum, [id, qty]) => {
+    const totalPrice = Object.entries(cart).reduce((sum, [cartKey, qty]) => {
+        const [id] = cartKey.split("::");
         return sum + getProductFinalPrice(id) * qty;
     }, 0);
 
@@ -684,10 +689,11 @@ export default function OrderTab({ products, ingredients, categories: initialCat
             client_name: clientName,
             phone_number: phone,
             total_price: finalTotal,
-            items: Object.entries(cart).map(([productId, quantity]) => ({
-                product_id: productId,
+            items: Object.entries(cart).map(([cartKey, quantity]) => ({
+                product_id: cartKey.split("::")[0],
+                cart_key: cartKey,
                 quantity,
-                unit_price: getProductFinalPrice(productId)
+                unit_price: getProductFinalPrice(cartKey.split("::")[0])
             }))
         };
 
@@ -770,6 +776,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
             
             orderData.items.forEach(i => {
                 const pid = i.product_id;
+                const cartKey = (i as any).cart_key || pid;
                 const qty = i.quantity;
                 const price = i.unit_price;
 
@@ -789,7 +796,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                         tenant_id: tenant?.id,
                         target_departments: catDepts, // fallback a la categoria
                         is_served: false,
-                        notes: ''
+                        notes: cartNotes[cartKey] || ''
                     });
                     return;
                 }
@@ -830,7 +837,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                             tenant_id: tenant?.id,
                             target_departments: [d],
                             is_served: false,
-                            notes: deptsMap[d].join(' + ') // Nombre específico del componente
+                            notes: [cartNotes[cartKey], deptsMap[d].join(' + ')].filter(Boolean).join(' - ') // Nombre específico del componente
                         });
                     });
                 }

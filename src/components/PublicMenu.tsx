@@ -66,6 +66,7 @@ interface CartItem extends Product {
   cartItemId: string;
   quantity: number;
   notes?: string;
+  selected_optional_ingredients?: string[];
 }
 
 const getProductIdsArray = (pIds: any): string[] => {
@@ -412,6 +413,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   
   const [questionModalProduct, setQuestionModalProduct] = useState<Product | null>(null);
   const [questionModalAnswer, setQuestionModalAnswer] = useState('');
+  const [questionModalSelectedOption, setQuestionModalSelectedOption] = useState('');
   
   // Checkout states
   const [customerInfo, setCustomerInfo] = useState('');
@@ -1425,7 +1427,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     return Math.max(0, maxPossible);
   };
 
-  const performAddToCart = (product: Product, answerNote?: string) => {
+  const performAddToCart = (product: Product, answerNote: string = '', optionalIds: string[] = []) => {
     const availableNow = getAvailableStockForProduct(product.id);
     
     if (availableNow <= 0) {
@@ -1441,18 +1443,20 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     const productWithPrice = { ...product, price: finalPrice };
 
     setCart((prev) => {
-      const existingIndex = prev.findIndex(item => item.id === product.id && item.notes === answerNote);
+      const existingIndex = prev.findIndex(item => item.id === product.id && item.notes === answerNote && JSON.stringify(item.selected_optional_ingredients || []) === JSON.stringify(optionalIds));
       if (existingIndex >= 0) {
         return prev.map((item, index) => index === existingIndex ? { ...item, quantity: item.quantity + 1 } : item);
       }
-      return [...prev, { ...productWithPrice, cartItemId: crypto.randomUUID(), quantity: 1, notes: answerNote }];
+      return [...prev, { ...productWithPrice, cartItemId: crypto.randomUUID(), quantity: 1, notes: answerNote, selected_optional_ingredients: optionalIds }];
     });
   };
 
   const addToCart = (product: Product) => {
-    if (product.custom_question) {
+    const hasOptionals = productIngredients.some(pi => pi.product_id === product.id && pi.is_optional);
+    if (product.custom_question || hasOptionals) {
       setQuestionModalProduct(product);
       setQuestionModalAnswer('');
+      setQuestionModalSelectedOption('');
       return;
     }
     performAddToCart(product);
@@ -1858,6 +1862,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             status: initialOrderStatus,
             tenant_id: tenant.id,
             target_departments: catDepts,
+            selected_optional_ingredients: item.selected_optional_ingredients || [],
             notes: finalNotes
           });
           return;
@@ -1887,6 +1892,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             status: initialOrderStatus,
             tenant_id: tenant.id,
             target_departments: deptsFound.length === 1 ? [deptsFound[0]] : catDepts,
+            selected_optional_ingredients: item.selected_optional_ingredients || [],
             notes: finalNotes
           });
         } else {
@@ -1901,6 +1907,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               status: initialOrderStatus,
               tenant_id: tenant.id,
               target_departments: [d],
+              selected_optional_ingredients: item.selected_optional_ingredients || [],
               notes: finalNotes ? `${finalNotes} - ${splitNote}` : splitNote
             });
           });

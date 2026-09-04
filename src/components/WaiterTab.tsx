@@ -484,7 +484,8 @@ export default function WaiterTab({
         setOrderLoading(true);
         try {
             let total = 0;
-            cartItems.forEach(([pid, qty]) => {
+            cartItems.forEach(([cartKey, qty]) => {
+                const [pid, optId] = cartKey.split("::");
                 const prod = products.find(p => p.id === pid);
                 if (prod) {
                     const price = prod.price || 0;
@@ -515,15 +516,17 @@ export default function WaiterTab({
             // 2. Insertar los items
             const orderItemsInsert: any[] = [];
             
-            cartItems.forEach(([pid, qty]) => {
+            cartItems.forEach(([cartKey, qty]) => {
+                const [pid, optId] = cartKey.split("::");
                 const prod = products.find(p => p.id === pid);
                 const category = categories.find(c => c.id === prod?.category_id);
                 const catDepts = category?.target_departments || ['kitchen'];
-                const itemNotes = cartNotes[pid] || '';
+                const itemNotes = cartNotes[cartKey] || '';
                 const price = prod?.price || 0;
                 
                 if (catDepts.length === 1) {
                     orderItemsInsert.push({
+                        selected_optional_ingredients: typeof optId !== "undefined" && optId ? [optId] : [],
                         order_id: order.id,
                         product_id: pid,
                         quantity: qty,
@@ -540,6 +543,7 @@ export default function WaiterTab({
                 const recipe = productIngredients.filter(pi => pi.product_id === pid);
                 if (recipe.length === 0) {
                     orderItemsInsert.push({
+                        selected_optional_ingredients: typeof optId !== "undefined" && optId ? [optId] : [],
                         order_id: order.id,
                         product_id: pid,
                         quantity: qty,
@@ -566,6 +570,7 @@ export default function WaiterTab({
                 const deptsFound = Object.keys(deptsMap);
                 if (deptsFound.length <= 1) {
                     orderItemsInsert.push({
+                        selected_optional_ingredients: typeof optId !== "undefined" && optId ? [optId] : [],
                         order_id: order.id,
                         product_id: pid,
                         quantity: qty,
@@ -579,6 +584,7 @@ export default function WaiterTab({
                 } else {
                     deptsFound.forEach((d, idx) => {
                         orderItemsInsert.push({
+                        selected_optional_ingredients: typeof optId !== "undefined" && optId ? [optId] : [],
                             order_id: order.id,
                             product_id: pid,
                             quantity: qty,
@@ -2904,7 +2910,8 @@ export default function WaiterTab({
                                                         <div>
                                                             <span className={`text-[8px] font-black uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-500'}`}>Total Estimado</span>
                                                             <p className={`text-xl font-black italic leading-none mt-0.5 ${isLight ? 'text-slate-950 font-black' : 'text-white'}`}>
-                                                                ${Object.entries(cart).reduce((total, [pid, qty]) => {
+                                                                ${Object.entries(cart).reduce((total, [cartKey, qty]) => {
+                                                                    const [pid] = cartKey.split("::");
                                                                     const prod = products.find(p => p.id === pid);
                                                                     return total + (prod?.price || 0) * qty;
                                                                 }, 0).toLocaleString('es-AR')}
