@@ -633,19 +633,40 @@ export default function OrderTab({ products, ingredients, categories: initialCat
         return product ? product.name : 'Producto';
     };
 
-    const addToCart = (productId: string) => {
-        const currentQty = cart[productId] || 0;
-        setCart(prev => ({ ...prev, [productId]: currentQty + 1 }));
+    const addToCart = (productIdOrKey: string, bypassModal: boolean = false) => {
+        const [productId] = productIdOrKey.split("::");
+        const prod = products.find(p => p.id === productId);
+        const hasOptionals = (productIngredients || []).some(pi => pi.product_id === productId && pi.is_optional);
+        
+        if (!bypassModal && prod && (hasOptionals || prod.custom_question)) {
+            setQuestionModalProduct(prod);
+            setQuestionModalSelectedOption('');
+            setQuestionModalAnswer('');
+            return;
+        }
+
+        const currentQty = cart[productIdOrKey] || 0;
+        setCart(prev => ({ ...prev, [productIdOrKey]: currentQty + 1 }));
     };
 
-    const removeFromCart = (productId: string) => {
+    const performAddToCartWithOption = (productId: string, optionId: string, answer: string = '') => {
+        const cartKey = optionId ? `${productId}::${optionId}` : productId;
+        const currentQty = cart[cartKey] || 0;
+        setCart(prev => ({ ...prev, [cartKey]: currentQty + 1 }));
+        if (answer) setCartNotes(prev => ({ ...prev, [cartKey]: answer }));
+        setQuestionModalProduct(null);
+        setQuestionModalSelectedOption('');
+        setQuestionModalAnswer('');
+    };
+
+    const removeFromCart = (cartKey: string) => {
         setCart(prev => {
-            const newVal = (prev[productId] || 0) - 1;
+            const newVal = (prev[cartKey] || 0) - 1;
             if (newVal <= 0) {
-                const { [productId]: _, ...rest } = prev;
+                const { [cartKey]: _, ...rest } = prev;
                 return rest;
             }
-            return { ...prev, [productId]: newVal };
+            return { ...prev, [cartKey]: newVal };
         });
     };
 
@@ -1107,21 +1128,36 @@ export default function OrderTab({ products, ingredients, categories: initialCat
             <div className="glass rounded-[2.5rem] p-8 space-y-6 animate-in zoom-in-95">
                 <h2 className="text-2xl font-black text-orange-500 uppercase italic">Revisar Pedido</h2>
                 <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
-                    {Object.entries(cart).map(([id, qty]) => {
+                    {Object.entries(cart).map(([cartKey, qty]) => {
+                        const [id, optId] = cartKey.split("::");
                         const p = products.find(item => item.id === id);
+                        const optIng = optId ? ingredients.find(ing => ing.id === optId) : null;
+                        const note = cartNotes[cartKey];
                         return (
-                            <div key={id} className={`flex flex-col gap-2 p-3 rounded-2xl ${isLight ? 'bg-slate-50 border border-slate-100' : 'bg-slate-900/50'}`}>
-                                <div className="flex justify-between items-center">
-                                    <span className="font-bold text-sm"><span className="text-orange-500">{qty}x</span> {p?.name}</span>
+                            <div key={cartKey} className={`flex flex-col gap-2 p-3 rounded-2xl ${isLight ? 'bg-slate-50 border border-slate-100' : 'bg-slate-900/50'}`}>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <span className="font-bold text-sm"><span className="text-orange-500">{qty}x</span> {p?.name}</span>
+                                        {optIng && (
+                                            <p className="text-xs font-bold text-orange-400 mt-0.5">
+                                                ⭐ Opción: {optIng.name}
+                                            </p>
+                                        )}
+                                        {note && (
+                                            <p className="text-[11px] text-slate-400 italic mt-0.5">
+                                                💬 {note}
+                                            </p>
+                                        )}
+                                    </div>
                                     <span className="font-black text-sm">{formatARS(getProductFinalPrice(id) * qty)}</span>
                                 </div>
                                 <div className="flex items-center justify-end gap-2 mt-1">
-                                    <button onClick={() => removeFromCart(id)} className={`w-7 h-7 rounded-lg flex items-center justify-center font-black transition-all ${isLight ? 'bg-slate-200 text-slate-700 hover:bg-slate-300' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>-</button>
+                                    <button onClick={() => removeFromCart(cartKey)} className={`w-7 h-7 rounded-lg flex items-center justify-center font-black transition-all ${isLight ? 'bg-slate-200 text-slate-700 hover:bg-slate-300' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>-</button>
                                     <span className="text-xs font-bold w-4 text-center">{qty}</span>
-                                    <button onClick={() => addToCart(id)} className={`w-7 h-7 rounded-lg flex items-center justify-center font-black transition-all ${isLight ? 'bg-slate-200 text-slate-700 hover:bg-slate-300' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>+</button>
+                                    <button onClick={() => addToCart(cartKey, true)} className={`w-7 h-7 rounded-lg flex items-center justify-center font-black transition-all ${isLight ? 'bg-slate-200 text-slate-700 hover:bg-slate-300' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>+</button>
                                     <button onClick={() => {
                                         setCart(prev => {
-                                            const { [id]: _, ...rest } = prev;
+                                            const { [cartKey]: _, ...rest } = prev;
                                             return rest;
                                         });
                                     }} className="w-7 h-7 ml-2 rounded-lg flex items-center justify-center transition-all bg-red-500/10 text-red-500 hover:bg-red-500/20">
@@ -2861,6 +2897,104 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                     </div>
                 </div>
             )}
+            
+            {/* Modal de Opciones y Pregunta Personalizada */}
+            {questionModalProduct && (
+                <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="glass w-full max-w-sm rounded-[2rem] p-6 shadow-2xl border border-white/10 text-center max-h-[90vh] overflow-y-auto custom-scrollbar">
+                        <h2 className="text-lg font-black text-white mb-1">{questionModalProduct.name}</h2>
+                        <p className="text-xs text-slate-400 mb-4 font-semibold">Personalizar pedido</p>
+                        
+                        {(() => {
+                            const optionalIngs = (productIngredients || []).filter((pi: any) => pi.product_id === questionModalProduct.id && pi.is_optional);
+                            return (
+                                <div className="space-y-4 text-left">
+                                    {optionalIngs.length > 0 && (
+                                        <div className="space-y-2">
+                                            <label className="block text-xs font-black uppercase tracking-wider text-orange-400">
+                                                Elegí una opción (Obligatorio) *
+                                            </label>
+                                            <div className="grid grid-cols-1 gap-2">
+                                                {optionalIngs.map((opt: any) => {
+                                                    const ing = ingredients.find(i => i.id === opt.ingredient_id);
+                                                    if (!ing) return null;
+                                                    const isSelected = questionModalSelectedOption === ing.id;
+                                                    return (
+                                                        <button
+                                                            key={ing.id}
+                                                            type="button"
+                                                            onClick={() => setQuestionModalSelectedOption(ing.id)}
+                                                            className={`w-full text-left p-3.5 rounded-2xl border-2 transition-all flex items-center justify-between ${
+                                                                isSelected 
+                                                                    ? 'border-orange-500 bg-orange-500/10 text-orange-500 shadow-sm' 
+                                                                    : 'border-slate-800 bg-slate-900/50 hover:border-slate-700 text-white'
+                                                            }`}
+                                                        >
+                                                            <span className="font-bold text-sm">{ing.name}</span>
+                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                                                isSelected ? 'border-orange-500 bg-orange-500' : 'border-slate-600'
+                                                            }`}>
+                                                                {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">
+                                            {questionModalProduct.custom_question || 'Aclaraciones / Aderezos (Opcional)'}
+                                            {optionalIngs.length === 0 && questionModalProduct.is_question_required && <span className="text-red-500 ml-1">*</span>}
+                                        </label>
+                                        <textarea
+                                            value={questionModalAnswer || ''}
+                                            onChange={(e) => setQuestionModalAnswer(e.target.value)}
+                                            placeholder="Ej: Ketchup, sin cebolla, etc."
+                                            className="w-full rounded-2xl p-3.5 min-h-[80px] bg-slate-900/50 border border-slate-700 text-white outline-none focus:border-orange-500 transition-all text-xs"
+                                        />
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        <div className="flex gap-3 mt-6">
+                            <button 
+                                type="button" 
+                                onClick={() => { 
+                                    setQuestionModalProduct(null); 
+                                    setQuestionModalSelectedOption(''); 
+                                    setQuestionModalAnswer(''); 
+                                }} 
+                                className="flex-1 py-3 bg-slate-800 text-white rounded-xl font-bold text-sm hover:bg-slate-700 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                type="button" 
+                                onClick={() => {
+                                    const optionalIngs = (productIngredients || []).filter((pi: any) => pi.product_id === questionModalProduct.id && pi.is_optional);
+                                    if (optionalIngs.length > 0 && !questionModalSelectedOption) { 
+                                        alert("Por favor elegí una de las opciones obligatorias"); 
+                                        return; 
+                                    }
+                                    if (optionalIngs.length === 0 && questionModalProduct.is_question_required && (!questionModalAnswer || !questionModalAnswer.trim())) { 
+                                        alert("Por favor respondé la pregunta"); 
+                                        return; 
+                                    }
+                                    
+                                    performAddToCartWithOption(questionModalProduct.id, questionModalSelectedOption, questionModalAnswer || '');
+                                }} 
+                                className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold text-sm hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20"
+                            >
+                                Agregar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <PrintableTicket ref={printComponentRef} order={orderToPrint} tenant={tenant} products={products} />
         </div>
     );

@@ -3653,39 +3653,89 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         </div>
       )}
 
-      {/* MODAL DE PREGUNTA PERSONALIZADA */}
+      {/* MODAL DE PREGUNTA PERSONALIZADA Y OPCIONES DE INSUMOS */}
       {questionModalProduct && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setQuestionModalProduct(null)} />
-          <div className={`relative w-full max-w-sm rounded-3xl p-6 shadow-2xl ${isLight ? 'bg-white text-slate-900' : 'bg-neutral-900 border border-neutral-800 text-white'}`}>
-            <h3 className="text-xl font-black mb-2 text-center">
+          <div className={`relative w-full max-w-sm rounded-3xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar ${isLight ? 'bg-white text-slate-900' : 'bg-neutral-900 border border-neutral-800 text-white'}`}>
+            <h3 className="text-xl font-black mb-1 text-center">
               Personalizá tu pedido
             </h3>
-            <p className="text-center text-sm mb-6 opacity-80">
+            <p className="text-center text-xs mb-4 opacity-70 font-semibold">
               {questionModalProduct.name}
             </p>
             
             <div className="space-y-4">
+              {(() => {
+                const optionalIngs = (productIngredients || []).filter(pi => pi.product_id === questionModalProduct.id && pi.is_optional);
+                if (optionalIngs.length === 0) return null;
+                return (
+                  <div className="space-y-2">
+                    <label className="block text-xs font-black uppercase tracking-wider text-orange-500">
+                      Elegí tu opción (Obligatorio) *
+                    </label>
+                    <div className="grid grid-cols-1 gap-2">
+                      {optionalIngs.map(opt => {
+                        const ing = (ingredients || []).find(i => i.id === opt.ingredient_id);
+                        if (!ing) return null;
+                        const isSelected = questionModalSelectedOption === ing.id;
+                        return (
+                          <button
+                            key={ing.id}
+                            type="button"
+                            onClick={() => setQuestionModalSelectedOption(ing.id)}
+                            className={`w-full p-3.5 rounded-2xl border-2 transition-all flex items-center justify-between text-left font-bold text-sm ${
+                              isSelected
+                                ? 'border-orange-500 bg-orange-500/10 text-orange-500 shadow-sm'
+                                : isLight
+                                  ? 'border-slate-200 bg-slate-50 text-slate-800 hover:border-slate-300'
+                                  : 'border-neutral-800 bg-neutral-900/60 text-neutral-200 hover:border-neutral-700'
+                            }`}
+                          >
+                            <span>{ing.name}</span>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                              isSelected ? 'border-orange-500 bg-orange-500' : 'border-slate-500'
+                            }`}>
+                              {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div>
-                <label className="block text-sm font-bold mb-2">
-                  {questionModalProduct.custom_question}
-                  {questionModalProduct.is_question_required && <span className="text-red-500 ml-1">*</span>}
+                <label className="block text-xs font-black uppercase tracking-wider mb-2 opacity-80">
+                  {questionModalProduct.custom_question || 'Aclaraciones / Aderezos (Opcional)'}
+                  {(() => {
+                    const optionalIngs = (productIngredients || []).filter(pi => pi.product_id === questionModalProduct.id && pi.is_optional);
+                    return optionalIngs.length === 0 && questionModalProduct.is_question_required ? (
+                      <span className="text-red-500 ml-1">*</span>
+                    ) : null;
+                  })()}
                 </label>
                 <textarea
                   value={questionModalAnswer}
                   onChange={(e) => setQuestionModalAnswer(e.target.value)}
-                  placeholder="Escribí tu respuesta acá..."
-                  className={`w-full rounded-2xl p-4 min-h-[100px] outline-none transition-all ${
+                  placeholder="Ej: Ketchup, mayonesa, sin cebolla, etc."
+                  className={`w-full rounded-2xl p-3.5 min-h-[80px] outline-none transition-all text-xs ${
                     isLight 
-                      ? 'bg-slate-50 border-2 border-slate-200 focus:border-slate-800 focus:bg-white' 
-                      : 'bg-black/50 border-2 border-neutral-800 focus:border-neutral-600 focus:bg-neutral-800'
+                      ? 'bg-slate-50 border-2 border-slate-200 focus:border-slate-800 focus:bg-white text-slate-900' 
+                      : 'bg-black/50 border-2 border-neutral-800 focus:border-neutral-600 focus:bg-neutral-800 text-white'
                   }`}
                 />
               </div>
 
               <div className="flex gap-3 pt-2">
                 <button
-                  onClick={() => setQuestionModalProduct(null)}
+                  type="button"
+                  onClick={() => {
+                    setQuestionModalProduct(null);
+                    setQuestionModalSelectedOption('');
+                    setQuestionModalAnswer('');
+                  }}
                   className={`flex-1 py-3.5 rounded-2xl font-bold transition-all ${
                     isLight ? 'bg-slate-100 text-slate-600 hover:bg-slate-200' : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
                   }`}
@@ -3693,14 +3743,25 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   Cancelar
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
-                    if (questionModalProduct.is_question_required && !questionModalAnswer.trim()) {
+                    const optionalIngs = (productIngredients || []).filter(pi => pi.product_id === questionModalProduct.id && pi.is_optional);
+                    if (optionalIngs.length > 0 && !questionModalSelectedOption) {
+                      alert("Por favor elegí una de las opciones disponibles.");
+                      return;
+                    }
+                    if (optionalIngs.length === 0 && questionModalProduct.is_question_required && !questionModalAnswer.trim()) {
                       alert("Por favor, respondé la pregunta para continuar.");
                       return;
                     }
-                    performAddToCart(questionModalProduct, questionModalAnswer.trim());
+                    performAddToCart(
+                      questionModalProduct, 
+                      questionModalAnswer.trim(), 
+                      questionModalSelectedOption ? [questionModalSelectedOption] : []
+                    );
                     setQuestionModalProduct(null);
                     setQuestionModalAnswer('');
+                    setQuestionModalSelectedOption('');
                   }}
                   className="flex-1 py-3.5 bg-green-500 hover:bg-green-400 text-white rounded-2xl font-black shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all"
                 >
@@ -3763,6 +3824,12 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     <div className="flex-1 min-w-0">
                       <h4 className={`font-medium text-sm truncate transition-colors duration-500 ${isLight ? 'text-slate-900' : 'text-white'}`}>{item.name}</h4>
                       <p className={`font-medium text-sm mt-0.5 transition-colors duration-500 ${isLight ? 'text-slate-700' : 'text-neutral-400'}`}>${item.price.toLocaleString()}</p>
+                      {item.selected_optional_ingredients && item.selected_optional_ingredients.length > 0 && (
+                        <p className="text-xs font-bold text-orange-500 mt-0.5 flex items-center gap-1">
+                          <span>⭐ Opción:</span>
+                          <span>{item.selected_optional_ingredients.map(optId => ingredients.find(i => i.id === optId)?.name).filter(Boolean).join(', ')}</span>
+                        </p>
+                      )}
                       {item.notes && (
                         <p className={`text-xs mt-1 italic truncate ${isLight ? 'text-slate-600' : 'text-neutral-500'}`}>
                           💬 {item.notes}

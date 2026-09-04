@@ -3,7 +3,7 @@ import { supabase as rawSupabase, broadcastTenantChange } from '@/lib/supabase';
 import { Product, Ingredient, Order, Expense, OrderStatus, Category, ProductIngredient, IngredientBatch, ProductOffer } from '@/types/database';
 import { PRESET_IMAGES, NEON_ICONS, DEFAULT_CAROUSEL_SLIDES, DEFAULT_LANDING_CONFIG } from '@/lib/constants';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, ReferenceLine } from 'recharts';
-import { CreditCard, BarChart2, QrCode, FileText, Plus, Trash2, Edit, TrendingUp, DollarSign, Package, Layers, History, ChevronRight, X, Save, Check, Upload, Image as ImageIcon, Wallet, Receipt, ArrowUpCircle, ArrowDownCircle, Calendar, FilterX, Star, StarOff, PieChart, Paintbrush, LayoutGrid, Sun, Moon, CheckCircle, AlertCircle, Loader2, Share2, AlertTriangle, CalendarRange, Trophy, Smartphone, Instagram, Facebook, Phone, Printer, Download, Award, Coins, Search, MessageCircle, Gift, RefreshCw, Settings, ChevronUp, ChevronDown, Users, Truck, Map as MapIcon, Utensils, Lock, Mic, MicOff, Video, Film, Link as LinkIcon } from 'lucide-react';
+import { CreditCard, BarChart2, QrCode, FileText, Plus, Trash2, Edit, TrendingUp, DollarSign, Package, Layers, History, ChevronRight, X, Save, Check, Upload, Image as ImageIcon, Wallet, Receipt, ArrowUpCircle, ArrowDownCircle, Calendar, FilterX, Star, StarOff, PieChart, Paintbrush, LayoutGrid, Sun, Moon, CheckCircle, AlertCircle, Loader2, Share2, AlertTriangle, CalendarRange, Trophy, Smartphone, Instagram, Facebook, Phone, Printer, Download, Award, Coins, Search, MessageCircle, Gift, RefreshCw, Settings, ChevronUp, ChevronDown, Users, Truck, Map as MapIcon, Utensils, Lock, Mic, MicOff, Video, Film, Link as LinkIcon, Info } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { PrintableQRPoster } from './PrintableQRPoster';
 import { AdminEmployeeTab } from './AdminEmployeeTab';
@@ -2706,10 +2706,18 @@ const AdminTab: React.FC<AdminTabProps> = ({
         e.stopPropagation();
         setProdIngredients(prev => {
             const next = prev.map(i => i.ingredient_id === id ? { ...i, is_optional: !i.is_optional } : i);
-            const hasOptional = next.some(i => i.is_optional);
-            if (hasOptional && !prodCustomQuestion.trim()) {
-                setProdCustomQuestion("¿Qué opción prefieres?");
+            const optionalItems = next.filter(i => i.is_optional);
+            if (optionalItems.length > 0) {
+                const names = optionalItems
+                    .map(oi => ingredients.find(ing => ing.id === oi.ingredient_id)?.name?.trim())
+                    .filter(Boolean);
+                setProdCustomQuestion(`¿Qué producto prefieres? (${names.join(' / ')})`);
                 setProdIsQuestionRequired(true);
+            } else {
+                if (prodCustomQuestion.startsWith('¿Qué producto prefieres?')) {
+                    setProdCustomQuestion('');
+                    setProdIsQuestionRequired(false);
+                }
             }
             return next;
         });
@@ -7868,6 +7876,15 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                         <HelpButton helpKey="PRODUCT_OPTIONAL_INGREDIENTS" size="sm" primaryColor={tenant?.theme_colors?.primary} />
                                     </div>
 
+                                    {/* Explicación amigable de Fijo vs Opcional */}
+                                    <div className="text-[10px] text-slate-400 bg-slate-900/80 border border-slate-800 p-3 rounded-2xl mb-2 flex items-start gap-2.5">
+                                        <Info size={15} className="text-amber-400 shrink-0 mt-0.5" />
+                                        <div className="space-y-0.5 leading-relaxed">
+                                            <p><strong className="text-white">Fijo:</strong> Insumo base del producto (se descuenta siempre del stock al preparar).</p>
+                                            <p><strong className="text-amber-400">⭐ Opcional:</strong> Opciones para que el cliente elija 1 al comprar (ej: bebidas). Al marcarlo, el cliente elegirá una de ellas y solo se descontará la que elija.</p>
+                                        </div>
+                                    </div>
+
                                     
                                     {/* Buscador de Insumos para Receta */}
                                     <div className="flex gap-2">
@@ -7917,9 +7934,10 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                                     {selected && (
                                                         <div className="flex items-center gap-2">
                                                             <button 
+                                                                type="button"
                                                                 onClick={(e) => toggleIngredientOptional(inv.id, e)}
-                                                                className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase transition-all ${selected.is_optional ? 'bg-amber-500 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
-                                                                title="Marcar como opción para que el cliente elija"
+                                                                className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase transition-all shadow-sm ${selected.is_optional ? 'bg-amber-500 text-white hover:bg-amber-400 ring-2 ring-amber-400/30' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'}`}
+                                                                title="Cambiar entre Insumo Fijo u Opción para el cliente"
                                                             >
                                                                 {selected.is_optional ? '⭐ Opcional' : 'Fijo'}
                                                             </button>

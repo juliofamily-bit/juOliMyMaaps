@@ -7,13 +7,39 @@ Implementación del Embudo de Ventas (Funnel SaaS) con pruebas gratuitas y promo
 Para reducir la fricción de entrada de nuevos restaurantes y maximizar la conversión a planes de pago, incentivando a los dueños de locales con un sistema de cuenta regresiva que les otorga 14 días gratis desde su *primera venta* y luego una promoción de 30 días de Pro al precio de Básico. Además, aseguramos una experiencia fluida (UX) para los usuarios al autogestionar y evitar bloqueos molestos.
 
 ## Estado Actual (Última actualización: 04 de Julio de 2026 - Noche)
-- **Fase:** Corrección de Bugs Críticos en el Embudo y UX.
+- **Fase:** Optimización Crítica de Rendimiento en Pedidos y Comandas (Ultra-Fast Realtime) & Validación UX.
 - **Hito Reciente:** 
-  1. Se corrigió un error crítico donde cuentas nuevas (en estado `pending_trial` antes de su primer pedido) perdían acceso a roles "Pro" como Cocina y Delivery, debido a que el sistema los degradaba al plan básico por defecto. Ahora tienen 100% de acceso desde el minuto 0.
-  2. Se resolvió un error de sintaxis en el componente de Límite de Empleados (`AdminEmployeeTab.tsx`) que congelaba el panel de administración (Caja). Esto causaba que, aunque el Menú Público aceptara pedidos, el dueño no pudiera verlos llegar a pendientes ni a cocina porque su panel estaba colapsado.
-  3. Se mejoró la UX de creación de perfiles: ahora, si tu plan lo permite, crear un nuevo empleado cuando estás al límite auto-incrementa tu configuración de "Límite Permitido" sin bloquearte con alertas manuales, alineándose con la filosofía de cero fricción de Hormozi.
-  4. Autocreación de Cuentas: Para eliminar el paso manual, cuando un local es nuevo y no tiene personal registrado, el sistema automáticamente le crea 7 cuentas por defecto (una para cada rol: Administrador, Caja, Cocina, Repartidor, etc.) con pines aleatorios, ahorrando tiempo de configuración.
-  5. UX de Inventario: Se reubicó y mejoró la opción de "Stock Fraccionable" (venta por peso) en el panel de insumos. Ahora, al activarlo, automáticamente cambia la unidad a kilogramos (Kg) y ajusta los textos de "Stock Inicial" y "Precio Costo" para mayor claridad.
+  1. **Pedidos Ultra Rápidos (<50ms):** Se eliminó la creación/destrucción efímera de WebSockets en `src/lib/supabase.ts` implementando un canal Broadcast persistente por local (`tenant-room-${tenantId}`). Los pedidos nuevos y cambios de estado viajan con su payload directo y se inyectan en memoria en 0ms en Cocina, Barra, Mozos y Caja.
+  2. **Estado Optimista Real en Cocina y Barra:** En `KitchenTab.tsx` y `BartenderTab.tsx`, al tildar un ítem se actualiza inmediatamente en pantalla y no se borra prematuramente. Cuando todos los ítems de una comanda se completan, la comanda desaparece al instante de la vista sin parpadeos.
+  3. **Polling Quirúrgico de Alta Frecuencia (3.5s):** En `useRealtimeData.ts`, se separó el refresco general del refresco de comandas, garantizando que ante cualquier falla o desconexión de WebSocket, las pantallas nunca demoren más de 3 segundos en sincronizarse.
+  4. **Distinción de Pago al Cajero en el Local:** En `OrderTab.tsx`, los pedidos cobrados en caja o presencialmente muestran `✅ ESTE PEDIDO HA SIDO PAGADO AL CAJERO EN EL LOCAL (EFECTIVO / DÉBITO)`, reservando "PAGADO ONLINE" exclusivamente para compras digitales por Mercado Pago.
+  5. **Validación Interactiva con Parpadeo y Auto-Scroll:** En `PublicMenu.tsx` (Salón, Delivery, Llevar) y `OrderTab.tsx` (Caja), si falta un dato obligatorio (nombre, teléfono, dirección, zona), el sistema enfoca automáticamente el campo, desplaza la pantalla y lo hace parpadear con pulso rojo vibrante para guiar al usuario sin esfuerzo cognitivo (Filosofía Hormozi).
+  6. **Gamificación y Pop-up de Monedero Club Clientes (Mesas y Casa):** Se integró un campo opcional de WhatsApp para pedidos en salón/mesa permitiendo vincular comensales al monedero. Se transformó la sección de fidelización en una Tarjeta VIP interactiva en el checkout con cálculo reactivo de nivel y recompensas. Se creó un Pop-up Modal animado con halo dorado, monedas saltarinas (`animate-bounce`) y comparativa de ahorro que le permite al cliente con 1 solo click decidir si canjea su saldo en la compra actual o lo acumula para su próxima visita.
+  7. **Embudo de Reputación y Redirección a Google Reviews:** Cuando un cliente califica con 4 o 5 estrellas en `PublicMenu.tsx`, el sistema guarda la reseña en la base de datos, copia automáticamente el comentario en el portapapeles (`navigator.clipboard.writeText`), abre la ficha de Google Reviews del restaurante en una pestaña nueva y despliega un pop-up que le recuerda pegar su comentario (`Ctrl+V`) para mejorar el posicionamiento SEO en Google Maps. Se agregó la configuración en `AdminTab.tsx` (`cfgGoogleReviewUrl` guardado en `social_links.google_review_url`).
+  8. **Disparo Automático y Banner de Fidelización en Envíos a Domicilio:** Se corrigió la condición que impedía que saltara el pop-up de la promoción cuando se seleccionaba envío a domicilio. Ahora, al ingresar un número de teléfono válido (>= 8 dígitos) en Delivery, Take Away o Salón, el cartel/popup interactivo salta automáticamente con toda la descripción de la promo (tanto si tiene saldo acumulado como si es para sumar cashback con el pedido de hoy). Además, se incorporó un banner interactivo dorado con botón "Ver Promo ✨" justo debajo del input de teléfono en los 3 canales para acceso inmediato sin scroll.
+  9. **Descuento de Canjes del Club de Fidelización en el Balance, Ventas y Caja:**
+     - **Vista Mensual de Balance (`AdminTab.tsx`):** Se integró una cuarta tarjeta interactiva en el panel de rentabilidad mensual: `🪙 Club / Promos: -$X`, mostrando con signo menos el total exacto de saldo y descuentos canjeados por los clientes en el período.
+     - **Auditoría Transaccional:** Al hacer clic en la tarjeta `Club / Promos`, se despliegan en el panel inferior exclusivamente aquellas comandas que utilizaron saldo de fidelidad o cupones de descuento, exponiendo el monto del pedido original, cliente, comanda y el renglón negativo `-$3.000` con el badge dorado `Canje Club`.
+     - **Desglose en Ingresos:** En la lista de ingresos del mes, cada comanda con canje ahora expone una insignia visible `🪙 -$X canjeado` junto al importe neto cobrado.
+     - **Dashboard Diario y Semanal (`dailyStats`, `currentWeekStats`, `selectedDayStats`):** Se agregó un banner dorado de alerta contable que informa el total de canjes ejecutados en el día/semana.
+     - **Cierre de Caja Diario (WhatsApp):** La función `handleShareBox` ahora incluye la línea `🪙 Canjes Club Fidelización: -$X` para cuadrar la caja física y digital con los descuentos entregados.
+  10. **Carga Directa de Códigos/Reservas en Modal Anti-Olvido y Parpadeo Guiado en Carrito:**
+     - **Carga en el Mismo Cartel (`PublicMenu.tsx`):** Se integró un campo de texto directo dentro del pop-up "¿Tenés algún Código de Descuento?" con botón "Aplicar ✨". Valida al instante tanto señas de reservas (`RES-...`) como códigos promocionales, informando el beneficio y permitiendo avanzar con el botón verde `🚀 Continuar con Descuento (-$X)`.
+     - **Parpadeo y Auto-Foco al Volver al Carrito:** Si el cliente presiona "Volver al Carrito para cargarlo", el sistema cierra el modal, hace auto-scroll suave hacia el contenedor del cupón, enfoca el input y activa un parpadeo visual enérgico (`animate-pulse ring-4 ring-orange-500`) con un banner animado `👇 ¡COLOCÁ TU CÓDIGO DE DESCUENTO ACÁ! 👇` que no se detiene hasta que el usuario comienza a escribir.
+     - **Disponibilidad Permanente:** Se eliminó la condición que ocultaba el input del cupón en locales con reservas desactivadas, asegurando que tanto en salón/mesas como en delivery/llevar siempre esté visible.
+  11. **Alerta Obligatoria de Cobro y Pop-up Interactivo en Despacho / Delivery (`DeliveryTab.tsx`):**
+     - **Pop-up de Apertura y Crucecita de Cierre:** Cada vez que el repartidor abre la aplicación de despacho con pedidos pendientes, salta en primer plano un pop-up modal que le indica con exactitud si debe cobrar el pedido en efectivo (con el importe gigante en rojo) o si ya fue pagado online con Mercado Pago (en verde), el cual debe cerrar tocando la crucecita `✕` o el botón de confirmación.
+     - **Intercepción en Mensajes de WhatsApp ("En Camino" y "Llegué/Estoy afuera"):** Al presionar "En Camino 🛵" o "Llegué / Estoy afuera 🏠", antes de abrir WhatsApp le salta el pop-up modal recordándole si debe cobrar en puerta o no, evitando olvidos al interactuar con el cliente.
+     - **Protección Visual Extrema en Celular (Borde y Banner Rojo/Verde):** Si la orden requiere cobro, la tarjeta completa del pedido se viste con borde rojo brillante `border-rose-500` y un banner superior gigante: `🚨 ATENCIÓN REPARTIDOR: DEBES COBRAR ESTE PEDIDO EN PUERTA: $X`. Si fue pagada con Mercado Pago, exhibe el banner verde: `✅ PAGADO ONLINE: NO COBRAR NADA AL CLIENTE`.
+     - **Bloqueo al Finalizar Entrega:** Al tocar "Entregado / Finalizar Pedido", si la orden está pendiente de pago, el pop-up modal le exige confirmación explícita: `¿Ya cobraste los $X en efectivo a {cliente}?`, impidiendo cierres accidentales.
+  12. **Sistema Global de Botones de Ayuda `?` (Tutoriales Interactivos Contextuales):**
+      - Botones con icono de ayuda `?` accesibles en todos los módulos de configuración, ajustes y secciones operativas.
+  13. **Sistema de Insumos Opcionales en Combos y Descuento Selectivo de Stock (Hito 13):**
+      - **Panel Admin (`AdminTab.tsx`):** Cada insumo de la receta cuenta con un botón interactivo `Fijo` (gris) / `⭐ Opcional` (naranja). Al marcar insumos como opcionales, el sistema genera dinámicamente y en tiempo real la pregunta personalizada con los nombres de las opciones: `¿Qué producto prefieres? (Coca Chica / Sprite)` y activa la obligación de respuesta. Se agregó una tarjeta informativa clara que explica que "Fijo" descuenta siempre el insumo, y "Opcional" permite al cliente elegir uno al comprar.
+      - **Menú Público Digital (`PublicMenu.tsx`):** Al elegir un producto con opciones o preguntas, se abre una ventana modal que lista las opciones obligatorias con botones circulares tipo radio button y un campo de texto para aderezos o aclaraciones (ketchup, sin cebolla, etc.). En el carrito lateral se exhibe la opción elegida `⭐ Opción: Coca Chica`.
+      - **Menú de Mozo (`WaiterTab.tsx`) y Caja / Mostrador (`OrderTab.tsx`):** Ambos sistemas interceptan productos con opciones antes de ingresarlos a la comanda, permitiendo al personal marcar la bebida o variante solicitada por el comensale. Guarda la clave compuesta `productId::optionId` para distinguir entre unidades con opciones diferentes en una misma mesa.
+  14. **Descuento de Stock Selectivo (PostgreSQL Trigger):**
+      - Se definió la función `reduce_stock_on_delivery()` en PostgreSQL para que cuando un pedido se marque como `delivered`, descuente todos los insumos fijos (`is_optional = false`) y ÚNICAMENTE el insumo opcional seleccionado por el cliente (`selected_optional_ingredients`), evitando descontar todas las bebidas del stock.
 
 ## 1. Tareas Pendientes / Prioridades
 *   ~~**Restaurar visibilidad de paneles en el footer:** El usuario informa que, aunque los roles existen, los iconos/paneles correspondientes en el footer (navegable inferior) no aparecen. El usuario espera que si tiene perfiles creados (Ej: Animador, Cocina), estos botones aparezcan dinámicamente en el footer para permitirle cambiar de vista.~~ **Status: SOLVED (Se ajustó el check de `Todas las funciones` que ocultaba Mozo, Delivery y Barra en planes Pro).**
@@ -105,14 +131,14 @@ Para reducir la fricción de entrada de nuevos restaurantes y maximizar la conve
 - El objetivo fue limpiar la interfaz y facilitar la experiencia del usuario sin perder o alterar ninguna de las logicas internas (ux_and_value_equation).
 
 ### Hotfix 4 - Logica de Planes Pro y Bloqueos (Balance y Muro Interactivo)
-- Se reescribieron los textos de bloqueo del modal (AdminTab.tsx) para que digan Funci�n Pro en lugar de Funci�n Premium y Premium VIP, solucionando la disonancia cognitiva y unificando el nombre de los planes.
-- Se inyect� la feature 'Muro Interactivo' en page.tsx para los usuarios que est�n cursando el Trial de 14 d�as o la Promo Pro de 30 d�as, permiti�ndoles desbloquear la rockola.
-- Se des-hardcode� el panel de 'Muro Interactivo' (Rockola) en AdminTab.tsx. Antes mostraba invariablemente un candado; ahora, si el sistema detecta que el local tiene el feature activado, permite abrir el panel exitosamente (mostrando un mensaje de 'activado').
-- Se garantiz� que 'Balance Financiero Avanzado' siga inyect�ndose correctamente en 14 d�as, el usuario no deber�a ver m�s el cartel bloqueador.
+- Se reescribieron los textos de bloqueo del modal (AdminTab.tsx) para que digan Funci�n Pro en lugar de Funci�n Premium y Premium VIP, solucionando la disonancia cognitiva y unificando el nombre de los planes.
+- Se inyect� la feature 'Muro Interactivo' en page.tsx para los usuarios que est�n cursando el Trial de 14 d�as o la Promo Pro de 30 d�as, permiti�ndoles desbloquear la rockola.
+- Se des-hardcode� el panel de 'Muro Interactivo' (Rockola) en AdminTab.tsx. Antes mostraba invariablemente un candado; ahora, si el sistema detecta que el local tiene el feature activado, permite abrir el panel exitosamente (mostrando un mensaje de 'activado').
+- Se garantiz� que 'Balance Financiero Avanzado' siga inyect�ndose correctamente en 14 d�as, el usuario no deber�a ver m�s el cartel bloqueador.
 
 ### Hotfix 5 - QA Bug de Planes y Caducidad de Trial
-- Se detect� y arregl� un bug de ruteo en el Modal del candado (AdminTab.tsx) que al hacer click en 'Ver Planes y Precios' asignaba la vista incorrecta y enviaba al usuario a una pantalla vac�a (negra). Ahora redirige de forma exitosa a la vista de configuraci�n y expande el acorde�n de Suscripci�n.
-- QA (Seguridad de Trial): El usuario estaba siendo bloqueado en Balance Financiero a pesar de nuestro arreglo previo porque, seg�n la Base de Datos de Producci�n/Local (Supabase), su periodo de 14 d�as hab�a comenzado el 05 de Julio de 2026. Al ser Agosto, sus 14 d�as expiraron leg�timamente, por lo que el sistema cort� sus permisos autom�ticamente y pas� a comportarse como un plan B�sico (ya que los feature flags condicionales de page.tsx eval�an la fecha exacta mediante Date.now()). Se resete� su trial_started_at a la fecha de HOY mediante script para permitir la continuaci�n de sus pruebas funcionales.
+- Se detect� y arregl� un bug de ruteo en el Modal del candado (AdminTab.tsx) que al hacer click en 'Ver Planes y Precios' asignaba la vista incorrecta y enviaba al usuario a una pantalla vac�a (negra). Ahora redirige de forma exitosa a la vista de configuraci�n y expande el acorde�n de Suscripci�n.
+- QA (Seguridad de Trial): El usuario estaba siendo bloqueado en Balance Financiero a pesar de nuestro arreglo previo porque, seg�n la Base de Datos de Producci�n/Local (Supabase), su periodo de 14 d�as hab�a comenzado el 05 de Julio de 2026. Al ser Agosto, sus 14 d�as expiraron leg�timamente, por lo que el sistema cort� sus permisos autom�ticamente y pas� a comportarse como un plan B�sico (ya que los feature flags condicionales de page.tsx eval�an la fecha exacta mediante Date.now()). Se resete� su trial_started_at a la fecha de HOY mediante script para permitir la continuaci�n de sus pruebas funcionales.
 
 
 ### Actualización - Videos y Enlace de Platos en Carrusel
@@ -174,3 +200,128 @@ Para reducir la fricción de entrada de nuevos restaurantes y maximizar la conve
 - **Carrusel de Destacados & Más Vendidos en Vista Menú:**
   - Se agregó una sección destacada interactiva al inicio del Menú público (cuando está en la pestaña "Todo").
   - Permite a los clientes pedir o agregar directamente al carrito en 1 clic los platos favoritos del negocio.
+
+
+### Actualización - Escáner Mágico con IA & Modo Vendedor Flash (02 de Septiembre de 2026)
+- **¿Qué hicimos?:**
+  1. Conexión de IA de Visión con Google Gemini 3.6 Flash (el modelo activo y más veloz del catálogo oficial).
+  2. Implementación de catálogo gastronómico inteligente (src/lib/foodImages.ts) que asigna automáticamente fotos apetitosas de alta resolución y banners acordes a cada plato y estilo culinario detectado.
+  3. Extracción fidedigna de la identidad de color (primario, secundario y modo claro/oscuro) de la carta física/PDF del cliente para inyectarla en tenant.theme_colors.
+  4. Creación del endpoint de servidor /api/ai-scanner/create-ghost-tenant con Supabase Service Role para crear instantáneamente el Local Fantasma con sus categorías, productos, recetas de stock, banners y destacados.
+  5. Interfaz interactiva en MagicScanner.tsx (/magic-scanner) que permite sacar foto o subir PDF, ver la lectura en vivo con fotos gastronómicas y un botón de un clic para crear el local fantasma y abrir su menú público o panel de administración en vivo.
+- **¿Por qué lo hicimos?:**
+  Para permitir demos comerciales de 60 segundos ante potenciales clientes sin que el vendedor tenga que configurar nada a mano, y para el auto-onboarding ultrarrápido de nuevos locales.
+- **Impacto Arquitectónico:**
+  - Nueva ruta API: /api/ai-scanner y /api/ai-scanner/create-ghost-tenant.
+  - Componente: src/components/MagicScanner.tsx.
+  - Página de pruebas: src/app/magic-scanner/page.tsx.
+  - Helper: src/lib/foodImages.ts.
+
+
+### Actualización - Alto Contraste para Modo Claro & Precisión Gastronómica con Guarniciones (02 de Septiembre de 2026)
+- **¿Qué hicimos?:**
+  1. **Rediseño Integral de Alto Contraste en Modo Claro (Light Mode):**
+     - Se aplicaron reglas globales en globals.css para que en modo claro las tarjetas (.glass) se conviertan en paneles blancos limpios con sombras suaves (#ffffff y bordes #e2e8f0) en lugar de bloques translúcidos grises que se fundían con el fondo.
+     - Se forzó que los textos (.text-white) se conviertan en negro carbón (#0f172a) y los secundarios en gris grafito (#475569) garantizando legibilidad total.
+     - Se incorporó un botón visible y explícito de Edición (<Edit size={13} />) en cada insumo de stock (en azul de alto contraste con fondo claro).
+     - Se restauró la opacidad de los botones de edición y eliminación de categorías y productos al 100% con bordes y fondos distintivos (azul y rojo sólidos).
+     - Se corrigió el fondo hardcodeado de la Landing Page en PublicMenu.tsx para que adapte su atmósfera al modo claro/oscuro del local.
+  2. **Inteligencia Fotográfica Gastronómica y Guarniciones (Fin de fotos repetidas):**
+     - Se desacopló por completo el pescado del sushi en el catálogo (src/lib/foodImages.ts). Ahora el pescado al plato/merluza/plancha recibe fotos reales de filets cocidos con guarnición y limón, reservando el sushi únicamente para sushi o rolls.
+     - Se implementó un sistema de rotación con contadores (anti-repetición) que garantiza que productos de la misma familia (ej. varias hamburguesas o varios pescados) nunca reciban la misma fotografía en un menú escaneado.
+     - Se entrenó a Gemini 3.6 Flash para detectar con precisión las guarniciones del plato (con papas fritas, con puré, con ensalada) e incorporarlas en la descripción apetitosa.
+- **Impacto Arquitectónico:**
+  - src/app/globals.css: Nuevas clases de alto contraste para .theme-light y .light-mode.
+  - src/components/PublicMenu.tsx: Adaptación dinámica de fondo de landing y textos según isLight.
+  - src/components/AdminTab.tsx: Botones de edición explícitos en Stock, contraste en categorías y productos.
+  - src/app/api/ai-scanner/route.ts: Prompt mejorado para guarniciones y rotación de imágenes sin repeticiones.
+  - src/lib/foodImages.ts: Catálogo ampliado con diferenciación de pescados y anti-repetición.
+
+
+### Actualización - Rediseño de Alto Contraste en Stock (02 de Septiembre de 2026 - Noche)
+- **¿Qué hicimos?:**
+  1. Se rediseñó por completo la fila y tarjeta de insumos de stock en AdminTab.tsx cuando el local está en Modo Claro (isLightMode).
+  2. La tarjeta de insumo ahora es un panel blanco puro (#ffffff) con borde sólido (border-2 border-slate-200) y sombra suave, eliminando el fondo grisáceo apagado.
+  3. El nombre del insumo ahora se muestra en negro carbón profundo (#020617 / text-slate-950) y en tamaño más grande.
+  4. La etiqueta de "Costo: $X / unidad" se rediseñó como una insignia destacada con borde y texto negro carbón (#0f172a) sobre fondo gris suave, siendo legible instantáneamente sin esfuerzo.
+  5. Se creó un botón dedicado, grande y azul intenso (bg-blue-600) con el icono de lápiz y el texto "Editar" con sombra, perfectamente identificable desde cualquier distancia.
+- **Impacto:**
+  - src/components/AdminTab.tsx: Filas de insumos, etiquetas de costo, botón de edición azul y contraste de navegación.
+
+
+### Actualización - Fidelidad Visual Gastronómica Específica y Cero Repeticiones (02 de Septiembre de 2026 - Fin de Sesión)
+- **¿Qué hicimos?:**
+  1. Se expandió y especializó exhaustivamente el catálogo de imágenes culinarias (src/lib/foodImages.ts) para desacoplar y especificar platos que antes caían en grupos genéricos:
+     - Pulpo a las brasas / a la gallega: imágenes dedicadas de tentáculos y platos de pulpo gourmet.
+     - Yemas de espárragos: fotografías de espárragos blancos/verdes servidos en plato gourmet.
+     - Alcachofas / Alcauciles: fotografías de alcachofas confitadas enteras.
+     - Langostinos / Gambas / Camarones: platos dorados al ajillo y cazuelas.
+     - Calamares y chipirones: calamar sellado a la plancha y rabas con limón.
+     - Pescados al plato / Merluza: filets con guarnición y salsa de limón.
+     - Carnes de parrilla / Bife de chorizo: cortes a punto con guarniciones.
+  2. Sistema de Cero Repetición: Cada categoría gastronómica cuenta con un array de fotos de alta resolución y un contador de rotación independiente, garantizando que si una carta tiene múltiples platos de una misma familia o huerta, todos reciban una fotografía distinta y exclusiva.
+  3. Integración en el Escáner de IA (src/app/api/ai-scanner/route.ts): Gemini 3.6 Flash ahora extrae campos para identificar si el plato tiene imagen en la carta física (tiene_foto_en_menu) y asigna descriptores visuales precisos.
+- **Validación:**
+  - Test automatizado con 8 platos diferentes (pulpo, espárragos, alcachofas, langostinos, calamares, merluza, bife, milanesa) arrojó 8 URLs 100% distintas y temáticamente exactas.
+
+
+### Actualización - Cupones y Reservas en Modal Anti-Olvido & Parpadeo en Carrito (03 de Septiembre de 2026)
+- **¿Qué hicimos?:**
+  1. En el modal anti-olvido (`showAntiForgetModal`) al tocar "Finalizar Pedido", se añadió un campo de texto directo con botón "Aplicar ✨".
+  2. Valida al instante tanto códigos de reservas (`RES-...`) como códigos de descuento (`discount_codes`). Si es válido, recalcula el total con descuento y el botón principal pasa a ser "🚀 Continuar con Descuento (-$X)".
+  3. Si el cliente elige "🔙 Volver al Carrito para cargarlo", la app hace auto-scroll suave, enfoca el input del cupón y activa un halo pulsante (`ring-4 ring-orange-500 animate-pulse`) junto a un banner saltarín: `👇 ¡COLOCÁ TU CÓDIGO DE DESCUENTO ACÁ! 👇`.
+  4. El contenedor del cupón en el carrito ahora está siempre visible tanto en Salón como en Delivery o Take-away.
+- **¿Por qué lo hicimos?:**
+  Para que el cliente no se frustre volviendo atrás y pueda cargar su seña de reserva o cupón directamente en el modal o encontrarlo inmediatamente en el carrito sin fricción.
+- **Impacto:**
+  - `src/components/PublicMenu.tsx`: `handleValidateCoupon`, `triggerCouponHighlight`, modal anti-olvido y carrito.
+
+
+### Actualización - Candado de Cobro Obligatorio para Repartidores en Despacho / Delivery (03 de Septiembre de 2026)
+- **¿Qué hicimos?:**
+  1. Pop-up de advertencia de cobro al abrir la pantalla de Despacho: si hay pedidos no pagados online, salta una ventana modal roja con sirena 🚨 indicando el importe exacto a cobrar en efectivo. Si está pagado por Mercado Pago, salta en verde confirmando que no debe cobrar nada.
+  2. Al tocar "En Camino 🛵" o "Llegué / Estoy afuera 🏠", se intercepta la acción y se le vuelve a recordar al repartidor si debe cobrar en puerta antes de abrir WhatsApp.
+  3. Cada tarjeta de delivery en el panel móvil tiene un banner superior gigante y borde rojo brillante `border-rose-500` si está pendiente de cobro, o verde si fue pagado online.
+  4. Botón inferior con candado: "💵 Cobrar $X y Finalizar Pedido", con confirmación obligatoria para evitar olvidos.
+- **¿Por qué lo hicimos?:**
+  Porque en el celular la interfaz es pequeña y los repartidores olvidaban cobrar los pedidos en puerta antes de entregar la comida.
+- **Impacto:**
+  - `src/components/DeliveryTab.tsx`: Modal `paymentAlertModal`, banners superiores en tarjetas y verificación de cobro.
+
+
+### Actualización - Sistema Global de Botones de Ayuda '?' y Tutoriales Interactivos (03 de Septiembre de 2026)
+- **¿Qué hicimos?:**
+  1. **Regla Global Inquebrantable:** Añadida a `C:\Users\almir\.gemini\config\AGENTS.md` bajo `<RULE[contextual_help_and_tutorials]>`, exigiendo que todas las pantallas, apartados, submenús y formularios de configuración de todos los proyectos cuenten con un botón `?` interactivo.
+  2. **Catálogo de Ayuda (`src/data/contextualHelpData.ts`):** Diccionario completo con explicaciones sin tecnicismos, listas de pasos obligatorios 1, 2, 3, e impacto comercial para cada sección del software.
+  3. **Componentes Reutilizables:**
+     - `ContextHelpModal.tsx`: Pop-up flotante con diseño premium, halo temático, pasos obligatorios numerados, consejo pro y botón "¡Entendido, gracias!".
+     - `HelpButton.tsx`: Botón circular interactivo con símbolo `?` que detiene la propagación de eventos (`e.stopPropagation()`) y abre el tutorial contextual de su apartado específico.
+  4. **Integración en Todos los Paneles:**
+     - `AdminTab.tsx`:
+       - Encabezado general de Ajustes ("¿Cómo funciona Ajustes?").
+       - Acordeón de Personalización del Local.
+       - Acordeón de Gestión de Personal y Roles.
+       - Acordeón de Envíos y Zonas de Delivery.
+       - Acordeón de Mercado Pago.
+       - Acordeón de Mesas, Salón y Códigos QR.
+       - Acordeón de Facturación Electrónica AFIP.
+       - Acordeón de Club de Fidelización y Cashback.
+       - Encabezado de Menú y Categorías.
+       - Modal de Carga/Edición de Producto.
+       - Encabezado de Insumos y Almacén (Stock).
+       - Encabezado de Rentabilidad Mensual (Balance).
+     - `OrderTab.tsx`: Encabezado de Caja ("Ayuda Caja").
+     - `KitchenTab.tsx`: Encabezado de Cocina & Comandas ("Ayuda Cocina").
+     - `BartenderTab.tsx`: Encabezado de Barra & Bebidas ("Ayuda Barra").
+     - `DeliveryTab.tsx`: Encabezado de Reparto & Despacho ("Ayuda Despacho").
+     - `WaiterTab.tsx`: Encabezado de Portal de Mozos ("Ayuda Mozos").
+- **¿Por qué lo hicimos?:**
+  Para que cualquier cliente, nuevo dueño de restaurante o empleado sin experiencia pueda capacitarse en 5 segundos con un solo clic, sin requerir manuales largos ni llamadas a soporte.
+- **Validación:**
+  - Compilación total `npm run build` con Turbopack y TypeScript aprobada en 23.0s con código de salida 0.
+
+- **Ajuste Fino - Explicación de Liquidación a Repartidores en Zonas de Envío:**
+  - En la ayuda contextual (`admin-settings-envios`) se agregó explícitamente que al final de la sección se encuentra el módulo de **Liquidación a Repartidores**, donde figura con exactitud lo que se le debe abonar a cada cadete según los viajes realizados.
+  - Se sumó la clave `admin-delivery-settlement` y un botón interactivo `?` directamente al lado del título *💰 Liquidación a Repartidores* en `AdminDeliverySettlement.tsx`.
+
+

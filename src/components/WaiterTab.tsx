@@ -2821,16 +2821,25 @@ export default function WaiterTab({
                                                     
                                                     {/* Listado en miniatura del carrito con inputs de Notas */}
                                                     <div className="max-h-[16vh] overflow-y-auto pr-1 space-y-2 custom-scrollbar">
-                                                        {cartItems.map(([pid, qty]) => {
+                                                        {cartItems.map(([cartKey, qty]) => {
+                                                            const [pid, optId] = cartKey.split("::");
                                                             const prod = products.find(p => p.id === pid);
                                                             if (!prod) return null;
+                                                            const optIng = optId ? ingredients.find(i => i.id === optId) : null;
 
                                                             return (
-                                                                <div key={pid} className={`border rounded-2xl p-2.5 flex flex-col gap-2 ${isLight ? 'bg-slate-50/50 border-slate-200/80' : 'bg-slate-900/30 border-white/5'}`}>
+                                                                <div key={cartKey} className={`border rounded-2xl p-2.5 flex flex-col gap-2 ${isLight ? 'bg-slate-50/50 border-slate-200/80' : 'bg-slate-900/30 border-white/5'}`}>
                                                                     <div className="flex justify-between items-center">
-                                                                        <span className={`text-[11px] font-black truncate max-w-[170px] uppercase tracking-wide ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
-                                                                            {qty}x {prod.name}
-                                                                        </span>
+                                                                        <div className="flex flex-col">
+                                                                            <span className={`text-[11px] font-black truncate max-w-[170px] uppercase tracking-wide ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
+                                                                                {qty}x {prod.name}
+                                                                            </span>
+                                                                            {optIng && (
+                                                                                <span className="text-[10px] font-bold text-orange-400">
+                                                                                    ⭐ Opción: {optIng.name}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
                                                                         <div className="flex items-center gap-2">
                                                                             <span className={`text-[10px] font-extrabold ${isLight ? 'text-slate-600 font-extrabold' : 'text-slate-400'}`}>
                                                                                 ${(prod.price * qty).toLocaleString('es-AR')}
@@ -2839,12 +2848,12 @@ export default function WaiterTab({
                                                                                 onClick={() => {
                                                                                     setCart(prev => {
                                                                                         const next = { ...prev };
-                                                                                        delete next[pid];
+                                                                                        delete next[cartKey];
                                                                                         return next;
                                                                                     });
                                                                                     setCartNotes(prev => {
                                                                                         const next = { ...prev };
-                                                                                        delete next[pid];
+                                                                                        delete next[cartKey];
                                                                                         return next;
                                                                                     });
                                                                                 }}
@@ -2861,8 +2870,8 @@ export default function WaiterTab({
                                                                         <input
                                                                             type="text"
                                                                             placeholder="Aclaración (ej: sin cebolla, muy caliente)..."
-                                                                            value={cartNotes[pid] || ''}
-                                                                            onChange={(e) => setCartNotes(prev => ({ ...prev, [pid]: e.target.value }))}
+                                                                            value={cartNotes[cartKey] || ''}
+                                                                            onChange={(e) => setCartNotes(prev => ({ ...prev, [cartKey]: e.target.value }))}
                                                                             className={`w-full pl-7 pr-3 py-1.5 rounded-xl font-medium text-[10px] focus:outline-none focus:border-orange-500/30 transition-colors border ${isLight ? 'bg-white border-slate-200 text-slate-950 placeholder-slate-400' : 'bg-slate-950/80 border-slate-900 text-white placeholder-slate-750'}`}
                                                                         />
                                                                     </div>
