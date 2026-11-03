@@ -41,14 +41,22 @@ export default function HelpButton({
 
   return (
     <>
-      <button
-        type="button"
+      <span
+        role="button"
+        tabIndex={0}
         onClick={(e) => {
           e.stopPropagation();
           setIsOpen(true);
         }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.stopPropagation();
+            e.preventDefault();
+            setIsOpen(true);
+          }
+        }}
         title="¿Cómo funciona este apartado? Presioná para ver el tutorial"
-        className={`inline-flex items-center justify-center gap-1.5 rounded-full font-black transition-all active:scale-90 border shadow-sm group ${
+        className={`inline-flex items-center justify-center gap-1.5 rounded-full font-black transition-all active:scale-90 border shadow-sm group cursor-pointer select-none ${
           label 
             ? 'px-3 py-1.5 rounded-2xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border-white/10 hover:border-orange-500/40' 
             : `${sizeClasses[size]} bg-slate-900/90 hover:bg-orange-500/20 text-slate-400 hover:text-white border-white/10 hover:border-orange-500/50`
@@ -64,7 +72,7 @@ export default function HelpButton({
             {label}
           </span>
         )}
-      </button>
+      </span>
 
       <ContextHelpModal
         isOpen={isOpen}

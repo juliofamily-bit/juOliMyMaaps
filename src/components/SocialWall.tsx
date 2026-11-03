@@ -68,6 +68,15 @@ export const SocialWall: React.FC<SocialWallProps> = ({ tenantId, primaryColor, 
       if (!error && data) {
         setMessages(data);
       }
+
+      // Auto-limpieza silenciosa de interacciones del muro de más de 24 horas
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      supabase
+        .from('social_interactions')
+        .delete()
+        .eq('tenant_id', tenantId)
+        .lt('created_at', oneDayAgo)
+        .then();
     };
 
     fetchMessages();
@@ -295,7 +304,7 @@ export const SocialWall: React.FC<SocialWallProps> = ({ tenantId, primaryColor, 
                 type="button"
                 onClick={() => {
                   if (!hasPremiumVIP) {
-                    alert('⚠️ El local no cuenta con el plan Premium VIP para habilitar la subida de contenido multimedia.');
+                    alert('⚠️ La subida de fotos instantáneas y notas de voz en vivo está disponible de forma exclusiva en el Plan Pro ($150.000 ARS/mes). El local cuenta con el Muro Interactivo Base (mensajes de texto, rockola y regalos entre mesas).');
                     return;
                   }
                   setType('media');

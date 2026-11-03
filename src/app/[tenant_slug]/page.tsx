@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useRef, use, useCallback } from 'react';
-import { supabase, supabaseAnon, setSupabaseTenant } from '@/lib/supabase';
+import { supabase, supabaseAnon, setSupabaseTenant, subscribeToTenantBroadcast } from '@/lib/supabase';
 import { useNotifications } from '@/lib/store';
 import { useRealtimeData } from '@/hooks/useRealtimeData';
 import { useOfflineStore } from '@/lib/offlineStore';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { UserRole, Profile } from '@/types/database';
-import { Bell, ShoppingBag, ChefHat, Settings, LogOut, Wifi, WifiOff, X, AlertCircle, CheckCircle, CheckCircle2, Trash2, Shield, Lock, MapPin, Loader2, ArrowLeft, Navigation, GlassWater, Clock, Check, RefreshCw, ShieldAlert } from 'lucide-react';
+import { Bell, ShoppingBag, ChefHat, Settings, LogOut, Wifi, WifiOff, X, AlertCircle, CheckCircle, CheckCircle2, Trash2, Shield, Lock, MapPin, Loader2, ArrowLeft, Navigation, GlassWater, Clock, Check, RefreshCw, ShieldAlert, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { MaxesLogo, MaxesWatermark, MaxesCornerFrame } from '@/components/MaxesLogo';
 
@@ -27,9 +27,20 @@ export default function TenantApp({ params }: TenantPageProps) {
   const { tenant_slug } = use(params);
 
   // Tenant State
-  const [tenant, setTenant] = useState<any | null>(null);
+  const [tenant, setTenant] = useState<any | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem(`cache_tenant_info_${tenant_slug}`);
+        if (cached) return JSON.parse(cached);
+      } catch(e) {}
+    }
+    return null;
+  });
   const [loadingTenant, setLoadingTenant] = useState(true);
   const [tenantError, setTenantError] = useState('');
+  const [unlockCode, setUnlockCode] = useState('');
+  const [unlockLoading, setUnlockLoading] = useState(false);
+  const [unlockError, setUnlockError] = useState('');
   const [planFeatures, setPlanFeatures] = useState<string[]>([]);
   const [subscriptionData, setSubscriptionData] = useState<any>(null);
 
@@ -53,7 +64,9 @@ export default function TenantApp({ params }: TenantPageProps) {
 
   // Fetch data only if tenant is loaded and user is logged in
   const { categories, products, ingredients, orders, expenses, productIngredients, notifications, ingredientBatches, productOffers, refetch } = useRealtimeData(
-    profile ? tenant?.id : null
+    profile ? tenant?.id : null,
+    false,
+    profile?.role
   );
 
   const handleManualRefresh = async () => {
@@ -109,7 +122,25 @@ export default function TenantApp({ params }: TenantPageProps) {
   // Load Tenant info
   const loadTenant = useCallback(async (isSilent: boolean = false) => {
     try {
-      if (!isSilent) setLoadingTenant(true);
+      // 0. Carga instantánea Local-First (0ms): si existe en caché, pintar pantalla de inmediato
+      if (typeof window !== 'undefined') {
+        try {
+          const cachedStr = localStorage.getItem(`cache_tenant_info_${tenant_slug}`);
+          if (cachedStr) {
+            const cachedObj = JSON.parse(cachedStr);
+            if (cachedObj && cachedObj.id) {
+              setTenant(cachedObj);
+              setSupabaseTenant(cachedObj.id);
+              if (cachedObj.name) {
+                document.title = `${cachedObj.name} | Mmm TodoLoQueQuiero Comer`;
+              }
+              if (!isSilent) setLoadingTenant(false);
+            }
+          }
+        } catch(e) {}
+      }
+
+      if (!isSilent && !tenant) setLoadingTenant(true);
       
       // Intentar consulta con todas las columnas (incluyendo las nuevas de Envíos y Mercado Pago)
       let { data, error } = await supabaseAnon
@@ -139,12 +170,34 @@ export default function TenantApp({ params }: TenantPageProps) {
       }
 
       if (error || !data) {
+        // Fallback resiliente a caché local persistente si la base de datos está pausada o con timeout
+        if (typeof window !== 'undefined') {
+          try {
+            const cachedStr = localStorage.getItem(`cache_tenant_info_${tenant_slug}`);
+            if (cachedStr) {
+              const cachedObj = JSON.parse(cachedStr);
+              if (cachedObj && cachedObj.id) {
+                console.warn("⚠️ Servidor temporalmente inaccesible. Restaurando local desde caché persistente.", error?.message);
+                data = cachedObj;
+                error = null;
+              }
+            }
+          } catch(e) {}
+        }
+      }
+
+      if (error || !data) {
         if (!isSilent) {
           setTenantError(`El local que buscas no existe o está desactivado. (Detalle: ${error?.message || 'No encontrado'})`);
         }
       } else {
         setTenant(data);
         setSupabaseTenant(data.id);
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(`cache_tenant_info_${tenant_slug}`, JSON.stringify(data));
+          } catch(e) {}
+        }
         
         // Actualizar el título de la pestaña dinámicamente con el nombre del local
         if (data.name) {
@@ -153,14 +206,38 @@ export default function TenantApp({ params }: TenantPageProps) {
 
         // Usar supabase (con cabecera de tenant) en lugar de supabaseAnon para pasar la política RLS
                 // FETCH USING API ROUTE TO BYPASS RLS (Fixes race conditions and cached auth states forever)
+        // Con memoria caché persistente de 30 minutos para evitar consultas repetitivas
         let subData = null;
         try {
-            const res = await fetch(`/api/get-tenant-plan?tenant_id=${data.id}`, { cache: "no-store" });
-            if (res.ok) {
-                const json = await res.json();
-                subData = json.data;
+            const planCacheKey = `cache_tenant_plan_${data.id}`;
+            let cached = null;
+            if (typeof window !== 'undefined' && !isSilent) {
+                try {
+                    const raw = localStorage.getItem(planCacheKey);
+                    if (raw) {
+                        const parsed = JSON.parse(raw);
+                        if (Date.now() - (parsed.timestamp || 0) < 30 * 60 * 1000) {
+                            cached = parsed.data;
+                        }
+                    }
+                } catch(e) {}
+            }
+
+            if (cached) {
+                subData = cached;
             } else {
-                console.warn('Failed to fetch subscription via API', await res.text());
+                const res = await fetch(`/api/get-tenant-plan?tenant_id=${data.id}`);
+                if (res.ok) {
+                    const json = await res.json();
+                    subData = json.data;
+                    if (typeof window !== 'undefined' && subData) {
+                        try {
+                            localStorage.setItem(planCacheKey, JSON.stringify({ data: subData, timestamp: Date.now() }));
+                        } catch(e) {}
+                    }
+                } else {
+                    console.warn('Failed to fetch subscription via API', await res.text());
+                }
             }
         } catch (err) {
             console.error('API fetch error', err);
@@ -220,8 +297,8 @@ export default function TenantApp({ params }: TenantPageProps) {
   }, [loadTenant]);
 
   useEffect(() => {
-    if (!tenant?.id) return;
-    const channel = supabaseAnon.channel('saas_subscriptions_changes')
+    if (!tenant?.id || profile?.role !== 'admin') return;
+    const channel = supabaseAnon.channel(`saas_subscriptions_${tenant.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'saas_subscriptions', filter: `tenant_id=eq.${tenant.id}` }, () => {
           loadTenant(true);
       })
@@ -229,7 +306,7 @@ export default function TenantApp({ params }: TenantPageProps) {
     return () => {
       supabaseAnon.removeChannel(channel);
     };
-  }, [tenant?.id, loadTenant]);
+  }, [tenant?.id, profile?.role, loadTenant]);
 
   // Pre-seleccionar rol en la carga inicial y recuperar sesión
   useEffect(() => {
@@ -300,22 +377,15 @@ export default function TenantApp({ params }: TenantPageProps) {
   useEffect(() => {
     if (!tenant?.id) return;
 
-    const handleBroadcast = (payload: any) => {
-      console.log('[BROADCAST TENANT] Recibido evento de recarga, actualizando información del local...');
-      loadTenant(true);
-    };
-
-    const broadcastChannel = supabase
-      .channel(`tenant-room-${tenant.id}`, {
-        config: {
-          broadcast: { self: false }
-        }
-      })
-      .on('broadcast', { event: 'schema-update' }, handleBroadcast)
-      .subscribe();
+    const unsubscribe = subscribeToTenantBroadcast(tenant.id, (data: any) => {
+      if (data?.event === 'schema-update') {
+        console.log('[BROADCAST TENANT] Recibido evento de recarga, actualizando información del local...');
+        loadTenant(true);
+      }
+    });
 
     return () => {
-      supabase.removeChannel(broadcastChannel);
+      unsubscribe();
     };
   }, [tenant?.id, loadTenant]);
 
@@ -324,9 +394,9 @@ export default function TenantApp({ params }: TenantPageProps) {
     if (!tenant?.id) return;
 
     const interval = setInterval(() => {
-      console.log('[POLLING TENANT] Sincronizando información del local...');
+      if (typeof document !== 'undefined' && document.hidden) return;
       loadTenant(true);
-    }, 5000);
+    }, 60000);
 
     return () => {
       clearInterval(interval);
@@ -563,16 +633,18 @@ export default function TenantApp({ params }: TenantPageProps) {
     let wakeLock: any = null;
     const requestWakeLock = async () => {
       try {
-        if ('wakeLock' in navigator) {
+        if ('wakeLock' in navigator && typeof document !== 'undefined' && document.visibilityState === 'visible') {
           wakeLock = await (navigator as any).wakeLock.request('screen');
           console.log('Wake Lock Activo: Pantalla no se apagará');
         }
       } catch (err: any) {
-        console.error('Wake Lock falló:', err.message);
+        // En segundo plano o si el navegador lo bloquea, silenciar advertencia
       }
     };
 
-    requestWakeLock();
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      requestWakeLock();
+    }
 
     const handleVisibilityChange = () => {
       if (wakeLock !== null && document.visibilityState === 'visible') {
@@ -856,6 +928,110 @@ export default function TenantApp({ params }: TenantPageProps) {
             <h1 className="text-2xl font-black text-white uppercase tracking-widest">Acceso Restringido</h1>
             <p className="text-slate-400 text-sm font-bold">El servicio de este local se encuentra temporalmente suspendido por falta de pago o revisión técnica.</p>
             <p className="text-xs text-slate-500 italic mt-4">Comunícate con el soporte técnico de MAXES Clan.</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Pantalla de Lista de Espera Exclusiva (Cupos Llenos en la Ciudad)
+    if (tenant?.access_status === 'waitlist') {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-slate-950 text-white text-center relative overflow-hidden">
+          <MaxesWatermark />
+          <div className="glass p-10 rounded-[2.5rem] w-full max-w-md flex flex-col items-center space-y-6 shadow-2xl border border-purple-500/20 relative z-10 overflow-hidden">
+            <MaxesCornerFrame color="gold" opacity="opacity-50" />
+            <div className="bg-purple-500/10 p-4 rounded-3xl text-purple-400 border border-purple-500/30">
+              <Lock size={44} />
+            </div>
+            <h1 className="text-xl font-black text-white italic">Cupos Agotados para {tenant.city || 'tu Ciudad'}</h1>
+            <p className="text-slate-400 text-xs leading-relaxed">
+              Este local (<strong className="text-white">{tenant.name}</strong>) se encuentra en <strong>Lista de Espera Prioritaria</strong> para preservar la exclusividad territorial de los 5 locales activos en {tenant.city || 'la zona'}.
+            </p>
+            <div className="w-full bg-slate-900/60 p-4 rounded-2xl border border-white/5 text-center">
+              <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Estado Territorial</p>
+              <p className="text-sm font-bold text-amber-400 mt-1">Postulación Registrada</p>
+              <p className="text-[10px] text-slate-500 mt-1">Te contactaremos cuando se libere una plaza.</p>
+            </div>
+            <Link href="/" className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 border border-white/10 text-white text-xs font-black rounded-xl uppercase tracking-wider transition-colors">
+              Volver al Inicio
+            </Link>
+          </div>
+        </div>
+      );
+    }
+
+    // Pantalla de Activación por Código (Cupo Reservado)
+    if (tenant?.access_status === 'pending_activation') {
+      const handleDirectUnlock = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!unlockCode.trim()) return;
+        setUnlockLoading(true);
+        setUnlockError('');
+        try {
+          const res = await fetch('/api/access/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tenantId: tenant.id, code: unlockCode.trim() }),
+          });
+          const d = await res.json();
+          if (res.ok && d.success) {
+            setTenant({ ...tenant, access_status: 'approved' });
+          } else {
+            setUnlockError(d.error || 'Código incorrecto. Revisa tu correo.');
+          }
+        } catch(err: any) {
+          setUnlockError('Fallo de conexión al validar código');
+        } finally {
+          setUnlockLoading(false);
+        }
+      };
+
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-slate-950 text-white text-center relative overflow-hidden">
+          <MaxesWatermark />
+          <div className="glass p-8 sm:p-10 rounded-[2.5rem] w-full max-w-md flex flex-col items-center space-y-6 shadow-2xl border border-amber-500/25 relative z-10 overflow-hidden">
+            <MaxesCornerFrame color="gold" opacity="opacity-50" />
+            <div className="bg-amber-500/10 p-4 rounded-3xl text-amber-400 border border-amber-500/30">
+              <Sparkles size={40} />
+            </div>
+            <div className="text-center space-y-1">
+              <span className="text-[9px] font-black uppercase text-amber-400 tracking-[0.2em]">1 de los 5 Cupos Reservado</span>
+              <h1 className="text-xl font-black text-white italic">Activa tu Local con el Código</h1>
+              <p className="text-slate-400 text-xs leading-relaxed mt-1">
+                Ingresa el código de 6 caracteres que enviamos a <strong className="text-white">{tenant.email}</strong> para comenzar a operar.
+              </p>
+            </div>
+
+            <form onSubmit={handleDirectUnlock} className="w-full space-y-4">
+              <input
+                type="text"
+                maxLength={6}
+                required
+                placeholder="Ej: A7X92K"
+                value={unlockCode}
+                onChange={(e) => setUnlockCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                className="w-full bg-slate-900 border-2 border-amber-500/40 focus:border-amber-500 rounded-2xl py-3.5 text-center text-2xl font-mono font-black text-amber-400 tracking-[0.3em] uppercase outline-none"
+              />
+
+              {unlockError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-center">
+                  <p className="text-red-400 text-[10px] font-bold">{unlockError}</p>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={unlockLoading || unlockCode.length < 6}
+                className="w-full py-4 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-black rounded-2xl shadow-xl shadow-orange-500/20 uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all"
+              >
+                {unlockLoading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                Activar Local y Entrar 🚀
+              </button>
+
+              <Link href="/" className="text-[10px] text-slate-500 hover:text-white uppercase font-bold tracking-wider block mt-2">
+                Volver al Inicio
+              </Link>
+            </form>
           </div>
         </div>
       );

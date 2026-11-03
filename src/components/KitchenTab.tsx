@@ -55,7 +55,7 @@ export default function KitchenTab({ orders, products, tenant, refetchData }: Ki
     const { addNotification } = useNotifications();
     const [updatingItems, setUpdatingItems] = useState<Record<string, 'pending' | 'delivered'>>({});
 
-    const pendingOrders = orders.filter(o => o.status === 'pending');
+    const pendingOrders = orders.filter(o => !o.is_archived && o.status !== 'completed' && o.status !== 'delivered');
 
 
     const getTimeAgo = (timestamp: string) => {

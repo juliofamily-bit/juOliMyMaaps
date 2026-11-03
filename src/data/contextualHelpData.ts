@@ -42,6 +42,34 @@ export const CONTEXTUAL_HELP_DATA: Record<string, HelpItem> = {
     tip: 'Las fotos luminosas y de platos reales aumentan las ventas hasta un 35% en comparación con imágenes genéricas.'
   },
 
+  'admin-settings-social-qr': {
+    id: 'admin-settings-social-qr',
+    title: 'Código QR General del Local y Menú Digital',
+    badge: 'QR Público & Redes',
+    whatIs: 'Este es el código QR y enlace web principal de tu restaurante. Es el que debés colocar en la bio de tu Instagram, estados de WhatsApp, flyers impresos, folletos y en la vidriera de tu negocio para que los clientes exploren tu carta desde cualquier lugar.',
+    mustDoSteps: [
+      { title: '1. Descargar o Compartir el QR', desc: 'Descargá la imagen PNG en alta calidad para imprimirla o copiá el enlace para pegarlo en tu Instagram y redes sociales.' },
+      { title: '2. Definir Pedidos desde Casa', desc: 'Activá el interruptor si ofrecés Delivery y Take Away. Si tu local atiende exclusivamente en salón, desactivalo para que los clientes puedan ver la carta y reservar mesa, pero no enviar comandas a distancia.' },
+      { title: '3. Completar Redes y Ubicación', desc: 'Cargá tu WhatsApp, Instagram y dirección con mapa para que los clientes te encuentren y se comuniquen con 1 solo toque.' }
+    ],
+    businessBenefit: 'Centraliza todos tus canales de venta digital en un único enlace profesional, aumentando tus pedidos directos sin pagar comisiones a apps de terceros.',
+    tip: 'Si solo atendés en salón, apagar los pedidos desde casa te permite exhibir tu carta con precios actualizados y recibir reservas online sin recibir pedidos delivery.'
+  },
+
+  'admin-settings-rockola': {
+    id: 'admin-settings-rockola',
+    title: 'Muro Interactivo y Rockola VIP',
+    badge: 'Entretenimiento en Salón',
+    whatIs: 'Convierte las pantallas o proyectores de tu salón en un centro de interacción social en vivo. Los clientes pueden chatear, pedir temas musicales a la Rockola, regalarse tragos entre mesas y proyectar fotos instantáneas en pantalla gigante.',
+    mustDoSteps: [
+      { title: '1. Activar Muro Interactivo Base', desc: 'Encendé el interruptor principal (incluido a partir del Plan Avanzado de $90.000 ARS) para permitir mensajes en vivo, pedidos de temas y envío de regalos entre mesas.' },
+      { title: '2. Multimedia VIP (Plan Pro)', desc: 'Si contás con el Plan Pro ($150.000 ARS), activá la subida de fotos instantáneas y notas de voz para que los clientes interactúen con su cámara en vivo.' },
+      { title: '3. Conectar a Pantallas o TV', desc: 'Hacé clic en "Abrir Modo Proyector TV" y abrí esa ventana en la computadora conectada por HDMI a los televisores de tu local en pantalla completa (F11).' }
+    ],
+    businessBenefit: 'Aumenta el ticket promedio hasta un 28% gracias a los regalos entre mesas (cervezas, tragos, postres) y crea un ambiente festivo y viral que los clientes comparten en sus redes sociales.',
+    tip: 'El modo proyector se actualiza en tiempo real de forma automática sin necesidad de recargar la página.'
+  },
+
   'admin-settings-personal': {
     id: 'admin-settings-personal',
     title: 'Gestión de Empleados y Roles',

@@ -55,7 +55,7 @@ export default function BartenderTab({ orders, products, tenant, refetchData }: 
     const { addNotification } = useNotifications();
     const [updatingItems, setUpdatingItems] = useState<Record<string, 'pending' | 'delivered'>>({});
 
-    const pendingOrders = orders.filter(o => o.status === 'pending');
+    const pendingOrders = orders.filter(o => !o.is_archived && o.status !== 'completed' && o.status !== 'delivered');
 
     const getTimeAgo = (timestamp: string) => {
         const diff = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000 / 60);

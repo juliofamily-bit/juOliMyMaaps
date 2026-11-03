@@ -949,6 +949,12 @@ export default function WaiterTab({
 
             // 2. Actualizar todas las órdenes de la mesa a completadas y pagadas
             const orderIds = activeOrdersOfTable.map(o => o.id);
+            // Blindar todos los ítems de las órdenes para evitar que queden en el limbo
+            await supabase
+                .from('order_items')
+                .update({ is_served: true, status: 'delivered' })
+                .in('order_id', orderIds);
+
             for (let i = 0; i < orderIds.length; i++) {
                 const orderId = orderIds[i];
                 const updatePayload: any = {
@@ -1491,13 +1497,13 @@ export default function WaiterTab({
         });
         
         if (itemToServe && itemToServe.status !== 'delivered') {
-            alert('No se puede entregar un producto que no ha sido preparado por cocina o barra.');
-            return;
+            const confirmForce = confirm('Este producto aún figura como pendiente de preparación en Cocina o Barra.\n\n¿Deseas marcarlo como listo y servirlo a la mesa de todos modos?');
+            if (!confirmForce) return;
         }
 
         const { error } = await supabase
             .from('order_items')
-            .update({ is_served: true })
+            .update({ is_served: true, status: 'delivered' })
             .eq('id', itemId);
 
         if (error) {
@@ -1537,12 +1543,12 @@ export default function WaiterTab({
     const handleServeAllInGroup = async (group: { orderId: string, items: OrderItem[] }) => {
         const notReadyItems = group.items.filter(i => i.status !== 'delivered' && !i.is_served);
         if (notReadyItems.length > 0) {
-            alert('No se pueden entregar productos que no han sido preparados por cocina o barra.');
-            return;
+            const confirmForce = confirm(`Hay ${notReadyItems.length} producto(s) aún sin marcar como preparados por Cocina/Barra.\n\n¿Deseas forzar la preparación y marcar TODO como entregado a la mesa?`);
+            if (!confirmForce) return;
         }
 
         const ids = group.items
-            .filter(i => i.status === 'delivered' && !i.is_served)
+            .filter(i => !i.is_served)
             .map(i => i.id);
             
         if (ids.length === 0) return;
@@ -1556,7 +1562,7 @@ export default function WaiterTab({
 
         const { error } = await supabase
             .from('order_items')
-            .update({ is_served: true })
+            .update({ is_served: true, status: 'delivered' })
             .in('id', ids);
 
         if (error) {

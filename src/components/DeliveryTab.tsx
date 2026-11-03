@@ -186,6 +186,12 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
     const newStatus = isAlreadyPaid ? 'completed' : 'delivered';
     const archive = isAlreadyPaid;
 
+    // Blindar todos los ítems de la orden para que no queden en el limbo
+    await supabase
+      .from('order_items')
+      .update({ status: 'delivered', is_served: true })
+      .eq('order_id', orderId);
+
     const { error } = await supabase
       .from('orders')
       .update({ status: newStatus, is_archived: archive })
@@ -321,7 +327,7 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
 
                 {/* 1. SECCIÓN DE ENVÍO DESTACADA: PRIMERO Y EN GRANDE */}
                 <div className="p-6 bg-slate-950/80 border-b border-white/5 space-y-4">
-                  <div className={isPreparing ? 'grayscale opacity-40 pointer-events-none space-y-4' : 'space-y-4'}>
+                  <div className={isPreparing ? 'opacity-90 space-y-4' : 'space-y-4'}>
                     <div className="flex justify-between items-start gap-4">
                       <div className="space-y-1">
                         <span className="text-[8px] font-black uppercase text-orange-500 tracking-widest block">📍 DIRECCIÓN DE ENTREGA</span>
@@ -526,7 +532,15 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
                         key="deliver-btn"
                         onClick={() => {
                           if (isPreparing) {
-                            alert("Todavía no está preparado. Tienes que esperar a que Cocina o Barra terminen de preparar el pedido para poder entregarlo.");
+                            if (confirm("Hay productos de este pedido aún no marcados como preparados por Cocina o Barra.\n\n¿Deseas marcar todo como preparado y entregar el pedido de todas formas?")) {
+                              if (order.payment_status !== 'pagado') {
+                                handleActionWithPaymentAlert(order, 'finalizar', () => {
+                                  handleDeliverOrder(order.id, order.client_name);
+                                });
+                                return;
+                              }
+                              handleDeliverOrder(order.id, order.client_name);
+                            }
                             return;
                           }
                           if (order.payment_status !== 'pagado') {
@@ -539,7 +553,7 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
                         }}
                         className={`w-full mt-2 text-white font-black py-4 rounded-2xl shadow-xl transition-all active:scale-95 text-xs uppercase tracking-widest flex items-center justify-center gap-2 border border-white/10 ${
                           isPreparing 
-                            ? 'bg-slate-800 text-slate-400 cursor-not-allowed' 
+                            ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-950/40 animate-pulse' 
                             : (order.payment_status === 'pagado'
                                 ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-950/40'
                                 : 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 shadow-rose-950/40 animate-pulse')
@@ -547,7 +561,9 @@ export default function DeliveryTab({ orders, products, tenantColors, tenant, cu
                       >
                         <Check size={14} className="stroke-[3]" />
                         {isPreparing 
-                          ? '⏳ Preparándose en Cocina / Barra' 
+                          ? (order.payment_status === 'pagado'
+                              ? '⚠️ Forzar Entrega (Cocina Pendiente)'
+                              : `⚠️ Forzar Entrega y Cobrar ${formatARS(order.total_price)}`)
                           : (order.payment_status === 'pagado' 
                               ? '✅ Entregado (Ya Pagado Online) / Finalizar' 
                               : `💵 Cobrar ${formatARS(order.total_price)} y Finalizar Pedido`)}

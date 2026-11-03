@@ -26,6 +26,8 @@ export const DEFAULT_LANDING_CONFIG = {
     enabled: true,
     hero_style: 'modern',
     interactive_wall_enabled: true,
+    interactive_wall_multimedia_enabled: false,
+    allow_home_orders: true,
     featured_products_enabled: true,
     featured_product_ids: [] as string[],
     hero_video_url: '',

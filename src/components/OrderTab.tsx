@@ -1332,7 +1332,8 @@ export default function OrderTab({ products, ingredients, categories: initialCat
             
             // Refrescar en tiempo real
             if (tenant?.id) {
-                broadcastTenantChange(tenant.id);
+                broadcastTenantChange(tenant.id, 'order:new', { order: { ...order, items: orderItemsToInsert } });
+                broadcastTenantChange(tenant.id, 'schema-update');
             }
 
             // Llamar al refetch local de inmediato para emular el click en el botón de refrescar
@@ -2884,29 +2885,51 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                                                         isLight ? 'bg-slate-50 border-slate-200/60' : 'bg-slate-950/40 border-white/5'
                                                     }`}>
                                                         {isDeliveryType && !isExternalApp && order.status !== 'delivered' ? (
-                                                            /* Regla: Si es Delivery local, solo el repartidor finaliza el flujo desde su terminal */
-                                                            <div className="w-full py-3.5 bg-purple-500/10 border border-purple-500/20 text-purple-400 font-black rounded-xl text-[9px] uppercase tracking-wider flex items-center justify-center gap-1.5 select-none animate-pulse">
-                                                                💡 En reparto - Cierre a cargo del Repartidor
-                                                            </div>
-                                                        ) : !allItemsPrepared ? (
-                                                            /* Regla: Bloqueado hasta que Cocina/Barra den el OK de listo */
+                                                            /* Regla: Si es Delivery local, se puede forzar el cierre desde Caja con confirmación */
                                                             <button
-                                                                disabled
-                                                                className={`w-full py-3.5 font-black rounded-xl text-[9px] uppercase tracking-wider flex items-center justify-center gap-1.5 select-none cursor-not-allowed border ${
-                                                                    isLight ? 'bg-slate-200 border-slate-300 text-slate-500' : 'bg-slate-800 border-white/5 text-slate-500'
+                                                                onClick={() => {
+                                                                    if (confirm(`El pedido de delivery #${order.order_number || order.id.slice(0, 4)} está en reparto.\n\n¿Deseas FORZAR el cierre y archivarlo desde Caja?`)) {
+                                                                        handleCloseAndArchiveOrder(order);
+                                                                    }
+                                                                }}
+                                                                className="w-full py-3.5 bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 font-black rounded-xl text-[9px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                                                                title="Haz clic para forzar el cierre desde Caja"
+                                                            >
+                                                                🛵 En Reparto (Clic para Forzar Cierre en Caja)
+                                                            </button>
+                                                        ) : !allItemsPrepared ? (
+                                                            /* Regla: Cocina/Barra pendiente pero con botón interactivo para forzar despacho si ya se entregó */
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (confirm(`Hay productos aún marcados como pendientes en Cocina/Barra para el pedido #${order.order_number || order.id.slice(0, 4)}.\n\n¿Deseas FORZAR la preparación de todos los ítems y despachar/archivar el pedido?`)) {
+                                                                        handleCloseAndArchiveOrder(order);
+                                                                    }
+                                                                }}
+                                                                title="Haz clic para forzar despacho si Cocina/Barra ya lo entregaron en mano"
+                                                                className={`w-full py-3.5 font-black rounded-xl text-[9px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all active:scale-95 border cursor-pointer ${
+                                                                    isLight 
+                                                                        ? 'bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-800 shadow-sm' 
+                                                                        : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/30 text-amber-300 shadow-sm animate-pulse'
                                                                 }`}
                                                             >
-                                                                ⏳ Esperando Cocina / Barra
+                                                                ⏳ Esperando Cocina / Barra (Clic para Forzar)
                                                             </button>
                                                         ) : hasMesaType && !allItemsServed ? (
-                                                            /* Regla: Bloqueado hasta que el Mozo entregue físicamente en mesa */
+                                                            /* Regla: Esperando mozo pero con opción de forzar cierre */
                                                             <button
-                                                                disabled
-                                                                className={`w-full py-3.5 font-black rounded-xl text-[9px] uppercase tracking-wider flex items-center justify-center gap-1.5 select-none cursor-not-allowed border ${
-                                                                    isLight ? 'bg-slate-200 border-slate-300 text-slate-500' : 'bg-slate-800 border-white/5 text-slate-500'
+                                                                onClick={() => {
+                                                                    if (confirm(`El mozo aún no marcó la entrega en mesa del pedido #${order.order_number || order.id.slice(0, 4)}.\n\n¿Deseas FORZAR la entrega y cerrar la comanda?`)) {
+                                                                        handleCloseAndArchiveOrder(order);
+                                                                    }
+                                                                }}
+                                                                title="Haz clic para forzar cierre si los clientes ya fueron servidos"
+                                                                className={`w-full py-3.5 font-black rounded-xl text-[9px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all active:scale-95 border cursor-pointer ${
+                                                                    isLight 
+                                                                        ? 'bg-indigo-100 hover:bg-indigo-200 border-indigo-300 text-indigo-800 shadow-sm' 
+                                                                        : 'bg-indigo-500/15 hover:bg-indigo-500/25 border-indigo-500/30 text-indigo-300 shadow-sm'
                                                                 }`}
                                                             >
-                                                                ⏳ Esperando Mozo (Entrega en Mesa)
+                                                                ⏳ Esperando Mozo (Clic para Forzar Cierre)
                                                             </button>
                                                         ) : !allItemsServed ? (
                                                             /* Regla: Take Away/Caja/Apps habilitado para entregar y despachar todo en lote */

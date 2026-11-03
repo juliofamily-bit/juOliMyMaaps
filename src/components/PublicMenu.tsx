@@ -20,6 +20,8 @@ const triggerTrialStart = (tenantId: string) => {
 
 const formatPrice = (p: number) => '$' + Number(p || 0).toLocaleString('es-AR');
 
+const salesRankingCache: Record<string, { data: Record<string, number>, timestamp: number }> = {};
+
 interface FlyingProduct {
   id: string;
   startX: number;
@@ -281,41 +283,42 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     if (!tenant?.id) return;
     const fetchSalesRanking = async () => {
       try {
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        // 0. Caché Local-First (6 horas) para evitar lecturas de disco innecesarias en la carta pública
+        const cacheKey = `cache_sales_rank_${tenant.id}`;
+        if (typeof window !== 'undefined') {
+          try {
+            const localCachedStr = localStorage.getItem(cacheKey);
+            if (localCachedStr) {
+              const parsed = JSON.parse(localCachedStr);
+              if (Date.now() - (parsed.timestamp || 0) < 6 * 60 * 60 * 1000) {
+                setProductSalesCount(parsed.data || {});
+                return;
+              }
+            }
+          } catch (e) {}
+        }
 
-        // 1. Intentamos consultar los ítems vendidos en el mes calendario actual
-        const { data, error } = await supabase
+        // 1. Muestreo quirúrgico ultra-ligero: solo los últimos 50 platos pedidos (evita escanear miles de filas en disco)
+        const { data: recentItems, error } = await supabase
           .from('order_items')
-          .select('product_id, quantity, created_at')
+          .select('product_id, quantity')
           .eq('tenant_id', tenant.id)
-          .gte('created_at', startOfMonth);
+          .order('created_at', { ascending: false })
+          .limit(50);
 
-        if (!error && data && data.length > 0) {
+        if (!error && recentItems && recentItems.length > 0) {
           const counts: Record<string, number> = {};
-          data.forEach((it: any) => {
+          recentItems.forEach((it: any) => {
             if (it.product_id) {
               counts[it.product_id] = (counts[it.product_id] || 0) + (Number(it.quantity) || 1);
             }
           });
-          setProductSalesCount(counts);
-        } else {
-          // Fallback a ventas históricas si el mes actual aún no tiene pedidos
-          const { data: allData, error: allError } = await supabase
-            .from('order_items')
-            .select('product_id, quantity')
-            .eq('tenant_id', tenant.id)
-            .limit(1000);
-
-          if (!allError && allData) {
-            const counts: Record<string, number> = {};
-            allData.forEach((it: any) => {
-              if (it.product_id) {
-                counts[it.product_id] = (counts[it.product_id] || 0) + (Number(it.quantity) || 1);
-              }
-            });
-            setProductSalesCount(counts);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify({ data: counts, timestamp: Date.now() }));
+            } catch (e) {}
           }
+          setProductSalesCount(counts);
         }
       } catch (err) {
         console.error("Error al cargar ranking de ventas:", err);
@@ -602,50 +605,43 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
     const timer = setTimeout(async () => {
       try {
+        const cleanDigits = cleanPhone.slice(-8);
         const { data: list, error } = await supabase
           .from('loyalty_accounts')
           .select('*')
-          .eq('tenant_id', tenant.id);
+          .eq('tenant_id', tenant.id)
+          .ilike('phone_number', `%${cleanDigits}%`)
+          .limit(1);
 
-        let data = null;
-        if (!error && list && list.length > 0) {
-          data = list.find((a: any) => isSamePhone(a.phone_number, cleanPhone)) || null;
-        }
+        const data = (!error && list && list.length > 0) ? list[0] : null;
 
         if (data) {
           setLoyaltyAccount(data);
 
-          // Consultar pedidos de hoy para este teléfono para bloquear saldo generado hoy (Regla: Canje a partir de la próxima visita / día siguiente)
+          // Consultar pedidos de hoy exclusivamente para este cliente (máx 10 pedidos recientes en vez de escanear la tabla)
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           const rawDigits = deliveryPhone.trim().replace(/\D/g, '').slice(-8);
 
-          const { data: todayOrders } = await supabase
+          const { data: clientTodayOrders } = await supabase
             .from('orders')
             .select('id, total_price, created_at, status')
             .eq('tenant_id', tenant.id)
             .gte('created_at', today.toISOString())
-            .neq('status', 'cancelled');
+            .ilike('phone_number', `%${rawDigits}%`)
+            .neq('status', 'cancelled')
+            .limit(10);
 
-          if (todayOrders && todayOrders.length > 0) {
-            const clientTodayOrders = todayOrders.filter((o: any) => {
-              const oDigits = (o.phone_number || '').replace(/\D/g, '');
-              return oDigits.includes(rawDigits);
-            });
+          if (clientTodayOrders && clientTodayOrders.length > 0) {
+            const config = tenant.loyalty_config || {};
+            const tiers = config.tiers || [];
+            let currentTier = data.tier || 'bronce';
+            let cashbackPct = config.cashback_pct || 5;
+            const foundTier = tiers.find((t: any) => t.name === currentTier);
+            if (foundTier) cashbackPct = foundTier.cashback_pct || cashbackPct;
 
-            if (clientTodayOrders.length > 0) {
-              const config = tenant.loyalty_config || {};
-              const tiers = config.tiers || [];
-              let currentTier = data.tier || 'bronce';
-              let cashbackPct = config.cashback_pct || 5;
-              const foundTier = tiers.find((t: any) => t.name === currentTier);
-              if (foundTier) cashbackPct = foundTier.cashback_pct || cashbackPct;
-
-              const todayEarned = Math.round(clientTodayOrders.reduce((sum: number, o: any) => sum + ((Number(o.total_price) || 0) * (cashbackPct / 100)), 0));
-              setLoyaltyTodayEarned(todayEarned);
-            } else {
-              setLoyaltyTodayEarned(0);
-            }
+            const todayEarned = Math.round(clientTodayOrders.reduce((sum: number, o: any) => sum + ((Number(o.total_price) || 0) * (cashbackPct / 100)), 0));
+            setLoyaltyTodayEarned(todayEarned);
           } else {
             setLoyaltyTodayEarned(0);
           }
@@ -671,6 +667,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   const [isCallingWaiter, setIsCallingWaiter] = useState(false);
   const [waiterCallCooldown, setWaiterCallCooldown] = useState(0);
   const [isSessionExpired, setIsSessionExpired] = useState(false);
+  const [isDineInOnlyModalOpen, setIsDineInOnlyModalOpen] = useState(false);
 
   // Estados y referencias para el botón flotante arrastrable (Premium Glassmorphic)
   const [dragPosition, setDragPosition] = useState({ x: 24, y: 120 });
@@ -912,32 +909,6 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     };
 
     fetchReviews();
-
-    const channel = supabase
-      .channel(`public:reviews:tenant:${tenant.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'reviews',
-          filter: `tenant_id=eq.${tenant.id}`
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setReviews(prev => [payload.new, ...prev]);
-          } else if (payload.eventType === 'UPDATE') {
-            setReviews(prev => prev.map(r => r.id === payload.new.id ? payload.new : r));
-          } else if (payload.eventType === 'DELETE') {
-            setReviews(prev => prev.filter(r => r.id !== payload.old.id));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [tenant?.id]);
 
   // Cálculo de promedio de calificaciones
@@ -1061,22 +1032,6 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     };
     
     fetchTodayReservations();
-    
-    // Subscribe to changes in reservations for this tenant to keep count updated
-    const channel = supabase.channel(`public_menu_reservations_${tenant?.id}`)
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'reservations',
-        filter: `tenant_id=eq.${tenant?.id}`
-      }, () => {
-        fetchTodayReservations();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [tenant?.id]);
 
   const freeTablesCount = useMemo(() => {
@@ -1596,7 +1551,16 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
     }, 420);
   };
 
+  const isCustomerAtTable = Boolean(tableParamId || (tableName && tableName !== 'Salón' && tableName !== 'Mesa Local'));
+  const isHomeOrdersAllowed = tenant?.landing_config?.allow_home_orders !== false;
+  const isHomeVisitDineInOnly = !isCustomerAtTable && !isHomeOrdersAllowed;
+
   const performAddToCart = (product: Product, answerNote: string = '', optionalIds: string[] = []) => {
+    if (isHomeVisitDineInOnly) {
+      setIsDineInOnlyModalOpen(true);
+      return;
+    }
+
     const availableNow = getAvailableStockForProduct(product.id);
     
     if (availableNow <= 0) {
@@ -1625,6 +1589,11 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   };
 
   const addToCart = (product: Product, event?: React.MouseEvent) => {
+    if (isHomeVisitDineInOnly) {
+      setIsDineInOnlyModalOpen(true);
+      return;
+    }
+
     if (event) {
       const targetEl = event.currentTarget as HTMLElement | null;
       const rect = targetEl?.getBoundingClientRect?.();
@@ -2233,7 +2202,8 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
           }).catch(err => console.error('Error enviando push menu público:', err));
         });
 
-        broadcastTenantChange(tenant.id);
+        broadcastTenantChange(tenant.id, 'order:new', { order: { ...createdOrder, items: orderItemsToInsert } });
+        broadcastTenantChange(tenant.id, 'schema-update');
       }
 
       // Notificación Pública de Regalo (Social Dining)
@@ -2299,13 +2269,16 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                   })
                   .eq('id', loyaltyAccount.id);
               } else if (cleanPhone && cleanPhone.length >= 6) {
-                // Verificar si ya existe una cuenta con este mismo teléfono para evitar duplicados
+                // Verificar si ya existe una cuenta con este mismo teléfono de forma quirúrgica
+                const cleanDigits = cleanPhone.slice(-8);
                 const { data: existingList } = await supabase
                   .from('loyalty_accounts')
                   .select('*')
-                  .eq('tenant_id', tenant.id);
+                  .eq('tenant_id', tenant.id)
+                  .ilike('phone_number', `%${cleanDigits}%`)
+                  .limit(1);
 
-                const existing = existingList?.find((a: any) => isSamePhone(a.phone_number, cleanPhone));
+                const existing = (!existingList || existingList.length === 0) ? null : existingList[0];
                 if (existing) {
                   const newBal = (existing.balance || 0) + calculatedEarnedCashback;
                   const newSpent = (parseFloat(existing.total_spent) || 0) + finalTotal;
@@ -2454,6 +2427,11 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
   const handleCheckout = async () => {
     if (isSubmitting) return; // Protección absoluta contra doble click
+
+    if (isHomeVisitDineInOnly) {
+      setIsDineInOnlyModalOpen(true);
+      return;
+    }
 
     if (cart.length === 0) return;
     
@@ -2859,8 +2837,48 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
               </div>
             </div>
 
+            {/* AVISO DE ATENCIÓN EXCLUSIVA EN SALÓN (PEDIDOS DESDE CASA DESACTIVADOS) */}
+            {isHomeVisitDineInOnly && (
+              <div className={`flex flex-col sm:flex-row items-center justify-between gap-3 p-4 mt-4 border rounded-3xl backdrop-blur-sm transition-all duration-500 shadow-md ${
+                isLight ? 'bg-amber-500/10 border-amber-500/30 text-slate-900' : 'bg-amber-950/30 border-amber-500/40 text-amber-200'
+              }`}>
+                <div className="flex items-center gap-3 text-left">
+                  <span className="text-2xl">🍽️</span>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-black uppercase tracking-wider text-amber-400">
+                        Atención Exclusiva en Salón
+                      </span>
+                      <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        Solo Presencial
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                      Te invitamos a ver nuestra carta digital completa. Para degustar nuestros platos te esperamos en nuestro local. {reservationsEnabled ? '¡Podés reservar tu mesa online aquí!' : ''}
+                    </p>
+                  </div>
+                </div>
+                {reservationsEnabled && (
+                  <button
+                    onClick={() => {
+                      setIsReservationModalOpen(true);
+                      setReservationName('');
+                      setReservationPhone('');
+                      setReservationPhonePrefix('+54');
+                      setReservationDate('');
+                      setReservationTime('');
+                      setReservationPartySize(2);
+                    }}
+                    className="w-full sm:w-auto px-5 py-2.5 font-black text-xs uppercase tracking-wider rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 hover:scale-105 active:scale-95 transition-all shadow-lg text-center shrink-0"
+                  >
+                    📅 Reservar Mesa
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* INDICADOR DE MESAS LIBRES Y BOTÓN DE RESERVA */}
-            {reservationsEnabled && !tableParamId && (
+            {reservationsEnabled && !tableParamId && !isHomeVisitDineInOnly && (
               <div className={`flex flex-col sm:flex-row items-center justify-between gap-3 p-4 mt-4 border rounded-3xl backdrop-blur-sm transition-all duration-550 ${isLight ? 'bg-white border-slate-200/80 shadow-sm' : 'bg-neutral-900/30 border-neutral-900/60'}`}>
                 <div className="flex items-center gap-2">
                   <span className="relative flex h-2.5 w-2.5">
@@ -3698,7 +3716,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     tenantId={tenant?.id || ''} 
                     primaryColor={primaryColor} 
                     isLight={false}
-                    hasPremiumVIP={tenant?.hasPremiumVIP}
+                    hasPremiumVIP={Boolean(tenant?.hasPremiumVIP || tenant?.landing_config?.interactive_wall_multimedia_enabled)}
                     currentTable={tableName || tableParamId}
                     tables={tenant?.tables || []}
                     onStartGiftMode={(from, to, anon, hint) => {
@@ -3992,8 +4010,54 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         </div>
       )}
 
+      {/* FAB - Botón Flotante para Salón Exclusivo (Cuando pedidos desde casa están desactivados) */}
+      {isHomeVisitDineInOnly && (
+        <div className="fixed bottom-6 inset-x-0 flex justify-center z-40 px-4 animate-in slide-in-from-bottom-10 fade-in duration-300 pointer-events-none">
+          <button
+            onClick={() => {
+              if (reservationsEnabled) {
+                setIsReservationModalOpen(true);
+                setReservationName('');
+                setReservationPhone('');
+                setReservationPhonePrefix('+54');
+                setReservationDate('');
+                setReservationTime('');
+                setReservationPartySize(2);
+              } else {
+                const contactSec = document.getElementById('contact-section');
+                if (contactSec) {
+                  contactSec.scrollIntoView({ behavior: 'smooth' });
+                }
+              }
+            }}
+            className="w-full max-w-md flex items-center justify-between px-6 py-4 rounded-[1.75rem] shadow-2xl backdrop-blur-md transition-all duration-300 md:hover:scale-[1.02] active:scale-[0.98] pointer-events-auto border border-amber-400/40 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 font-black uppercase tracking-wider relative overflow-hidden"
+            style={{
+              boxShadow: '0 14px 40px -8px rgba(245, 158, 11, 0.5)'
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-black/20 flex items-center justify-center text-2xl">
+                🍽️
+              </div>
+              <div className="text-left">
+                <span className="block font-black text-sm text-slate-950 uppercase leading-tight">
+                  Atención en Salón
+                </span>
+                <span className="text-[10px] text-slate-950/80 font-bold uppercase">
+                  {reservationsEnabled ? '¡Reservá tu mesa online ahora!' : 'Conocé nuestra ubicación y horarios'}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 bg-slate-950 text-white px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider shadow-md shrink-0">
+              <span>📅</span>
+              <span>{reservationsEnabled ? 'Reservar' : 'Visitar'}</span>
+            </div>
+          </button>
+        </div>
+      )}
+
       {/* FAB - Botón de Carrito Flotante */}
-      {cartCount > 0 && (
+      {cartCount > 0 && !isHomeVisitDineInOnly && (
         <div 
           ref={cartButtonRef}
           className="fixed bottom-6 inset-x-0 flex justify-center z-40 px-4 animate-in slide-in-from-bottom-10 fade-in duration-300 pointer-events-none"
@@ -5853,6 +5917,75 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-650 hover:text-slate-900 shadow-sm' 
                     : 'bg-neutral-900 hover:bg-neutral-800 border-neutral-800 text-neutral-400 hover:text-white'
                 }`}
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Atención Exclusiva en Salón (Cuando pedidos desde casa están desactivados) */}
+      {isDineInOnlyModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="glass max-w-sm w-full rounded-[2.5rem] p-7 border border-amber-500/40 text-center space-y-5 shadow-2xl relative">
+            <button
+              onClick={() => setIsDineInOnlyModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-white p-2 bg-slate-900 rounded-full transition-all"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="w-16 h-16 rounded-3xl bg-amber-500/20 text-amber-400 mx-auto flex items-center justify-center text-3xl border border-amber-500/30 shadow-lg">
+              🍽️
+            </div>
+
+            <div>
+              <span className="text-[9px] font-black uppercase tracking-widest text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
+                Solo Atención Presencial
+              </span>
+              <h3 className="text-lg font-black uppercase text-white mt-3 tracking-wide">
+                Atención Exclusiva en Salón
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed font-medium mt-2">
+                Este local no toma pedidos a domicilio desde la web. Nuestra cocina te espera con gusto en el salón para que disfrutes de nuestros platos recién elaborados.
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              {reservationsEnabled && (
+                <button
+                  onClick={() => {
+                    setIsDineInOnlyModalOpen(false);
+                    setIsReservationModalOpen(true);
+                    setReservationName('');
+                    setReservationPhone('');
+                    setReservationPhonePrefix('+54');
+                    setReservationDate('');
+                    setReservationTime('');
+                    setReservationPartySize(2);
+                  }}
+                  className="w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl uppercase text-xs tracking-wider shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  <span>📅</span>
+                  <span>Reservar Mesa Online</span>
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setIsDineInOnlyModalOpen(false);
+                  const contactSec = document.getElementById('contact-section');
+                  if (contactSec) {
+                    contactSec.scrollIntoView({ behavior: 'smooth' });
+                  }
+                }}
+                className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold rounded-xl uppercase text-xs tracking-wider border border-white/10 active:scale-95 transition-all"
+              >
+                📍 Ver Horarios y Ubicación
+              </button>
+              <button
+                onClick={() => setIsDineInOnlyModalOpen(false)}
+                className="w-full py-2 text-slate-500 hover:text-slate-300 font-black rounded-xl uppercase text-[10px] tracking-wider transition-all"
               >
                 Entendido
               </button>

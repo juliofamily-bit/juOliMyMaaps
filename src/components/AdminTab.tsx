@@ -3,7 +3,7 @@ import { supabase as rawSupabase, broadcastTenantChange } from '@/lib/supabase';
 import { Product, Ingredient, Order, Expense, OrderStatus, Category, ProductIngredient, IngredientBatch, ProductOffer } from '@/types/database';
 import { PRESET_IMAGES, NEON_ICONS, DEFAULT_CAROUSEL_SLIDES, DEFAULT_LANDING_CONFIG } from '@/lib/constants';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, ReferenceLine } from 'recharts';
-import { Send, Copy, Sparkles, Megaphone, BellOff, ArrowLeft, ArrowRight, RotateCw, CheckCheck, CreditCard, BarChart2, QrCode, FileText, Plus, Trash2, Edit, TrendingUp, DollarSign, Package, Layers, History, ChevronRight, X, Save, Check, Upload, Image as ImageIcon, Wallet, Receipt, ArrowUpCircle, ArrowDownCircle, Calendar, FilterX, Star, StarOff, PieChart, Paintbrush, LayoutGrid, Sun, Moon, CheckCircle, AlertCircle, Loader2, Share2, AlertTriangle, CalendarRange, Trophy, Smartphone, Instagram, Facebook, Phone, Printer, Download, Award, Coins, Search, MessageCircle, Gift, RefreshCw, Settings, ChevronUp, ChevronDown, Users, Truck, Map as MapIcon, Utensils, Lock, Mic, MicOff, Video, Film, Link as LinkIcon, Info } from 'lucide-react';
+import { Send, Copy, Sparkles, Megaphone, BellOff, ArrowLeft, ArrowRight, RotateCw, CheckCheck, CreditCard, BarChart2, QrCode, FileText, Plus, Trash2, Edit, TrendingUp, DollarSign, Package, Layers, History, ChevronRight, X, Save, Check, Upload, Image as ImageIcon, Wallet, Receipt, ArrowUpCircle, ArrowDownCircle, Calendar, FilterX, Star, StarOff, PieChart, Paintbrush, LayoutGrid, Sun, Moon, CheckCircle, AlertCircle, Loader2, Share2, AlertTriangle, CalendarRange, Trophy, Smartphone, Instagram, Facebook, Phone, Printer, Download, Award, Coins, Search, MessageCircle, Gift, RefreshCw, Settings, ChevronUp, ChevronDown, Users, Truck, Map as MapIcon, Utensils, Lock, Mic, MicOff, Video, Film, Link as LinkIcon, Info, ExternalLink } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { PrintableQRPoster } from './PrintableQRPoster';
 import { AdminEmployeeTab } from './AdminEmployeeTab';
@@ -280,12 +280,33 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
     useEffect(() => {
         if (tenant?.id) {
-            fetch(`/api/get-tenant-plan?tenant_id=${tenant.id}`)
-                .then(res => res.json())
-                .then(json => {
-                    if (json.data) setSubscription(json.data);
-                })
-                .catch(err => console.error('Error fetching subscription in AdminTab:', err));
+            const planCacheKey = `cache_tenant_plan_${tenant.id}`;
+            let cached = null;
+            try {
+                const raw = localStorage.getItem(planCacheKey);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Date.now() - (parsed.timestamp || 0) < 30 * 60 * 1000) {
+                        cached = parsed.data;
+                    }
+                }
+            } catch(e) {}
+
+            if (cached) {
+                setSubscription(cached);
+            } else {
+                fetch(`/api/get-tenant-plan?tenant_id=${tenant.id}`)
+                    .then(res => res.json())
+                    .then(json => {
+                        if (json.data) {
+                            setSubscription(json.data);
+                            try {
+                                localStorage.setItem(planCacheKey, JSON.stringify({ data: json.data, timestamp: Date.now() }));
+                            } catch(e) {}
+                        }
+                    })
+                    .catch(err => console.error('Error fetching subscription in AdminTab:', err));
+            }
         }
     }, [tenant?.id]);
 
@@ -873,6 +894,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
     // Landing Config State
     const [cfgLandingConfig, setCfgLandingConfig] = useState<any>({ ...DEFAULT_LANDING_CONFIG });
+    const [isProUpgradeModalOpen, setIsProUpgradeModalOpen] = useState(false);
 
 
     // Product Offer Form State
@@ -1138,6 +1160,8 @@ const AdminTab: React.FC<AdminTabProps> = ({
                 enabled: loadedLanding.enabled || false,
                 hero_style: loadedLanding.hero_style || 'modern',
                 interactive_wall_enabled: loadedLanding.interactive_wall_enabled !== false,
+                interactive_wall_multimedia_enabled: loadedLanding.interactive_wall_multimedia_enabled === true,
+                allow_home_orders: loadedLanding.allow_home_orders !== false,
                 hero_video_url: loadedLanding.hero_video_url || '',
                 hero_image_url: loadedLanding.hero_image_url || '',
                 promos: loadedLanding.promos || [],
@@ -3836,7 +3860,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
 
                     {/* Rentabilidad Chart */}
                     <div className="glass p-4 rounded-[2.5rem] h-64 border border-white/5 relative group">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
                             <BarChart data={chartData} onClick={(e: any) => handleBarClick(e?.activePayload?.[0]?.payload)}>
                                 <defs>
                                     <linearGradient id="profitGradient" x1="0" y1="0" x2="0" y2="1">
@@ -5046,8 +5070,165 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 {expandedCustomizationSection === 'social' ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                             </button>
                             {expandedCustomizationSection === 'social' && (
-                                <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-5 animate-in slide-in-from-top-2">
-                        {/* 4. Perfil Público y Redes Sociales */}
+                                <div className="glass p-6 rounded-[2.5rem] border border-white/5 space-y-6 animate-in slide-in-from-top-2">
+                        {/* 1. CÓDIGO QR GENERAL DEL LOCAL (QR PÚBLICO / REDES SOCIALES Y CASA) */}
+                        {(() => {
+                            const publicMenuUrl = typeof window !== 'undefined' ? `${window.location.origin}/${tenant?.slug || 'local'}/menu` : '';
+                            const publicQrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(publicMenuUrl)}`;
+
+                            const handleDownloadQr = async () => {
+                                if (!publicMenuUrl) return;
+                                const hdQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${encodeURIComponent(publicMenuUrl)}`;
+                                try {
+                                    const res = await fetch(hdQrUrl);
+                                    const blob = await res.blob();
+                                    const blobUrl = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = blobUrl;
+                                    a.download = `QR_General_${tenant?.slug || 'local'}.png`;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    document.body.removeChild(a);
+                                    URL.revokeObjectURL(blobUrl);
+                                } catch (e) {
+                                    window.open(hdQrUrl, '_blank');
+                                }
+                            };
+
+                            return (
+                                <div className="bg-slate-950/70 border border-orange-500/40 rounded-3xl p-5 md:p-6 space-y-5 shadow-2xl relative overflow-hidden text-left">
+                                    <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+
+                                    {/* Header del QR */}
+                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/5 pb-4">
+                                        <div>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-xl">📲</span>
+                                                <h4 className="text-sm font-black uppercase tracking-wider text-white">
+                                                    Código QR General del Local
+                                                </h4>
+                                                <span className="text-[8px] font-black uppercase px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30 font-mono">
+                                                    QR Público & Redes
+                                                </span>
+                                                <HelpButton helpKey="admin-settings-social-qr" size="sm" primaryColor={tenant?.theme_colors?.primary} />
+                                            </div>
+                                            <p className="text-[10.5px] text-slate-400 mt-1 leading-relaxed">
+                                                Este es el código QR y enlace oficial de tu local. Imprimilo para tu vidriera, volantes, folletos y colocalo en la biografía de tu Instagram o estados de WhatsApp.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Previsualización del QR y Acciones Rápidas */}
+                                    <div className="flex flex-col sm:flex-row items-center gap-5 bg-slate-900/60 p-4 sm:p-5 rounded-2xl border border-white/5">
+                                        {/* Contenedor del QR */}
+                                        <div className="bg-white p-3.5 rounded-2xl shadow-xl shrink-0 flex flex-col items-center">
+                                            <img 
+                                                src={publicQrImgUrl} 
+                                                alt="QR General del Menú" 
+                                                className="w-32 h-32 md:w-36 md:h-36 object-contain"
+                                            />
+                                            <span className="text-[8px] font-black text-slate-800 tracking-wider uppercase mt-1">Escaneá para ver Menú</span>
+                                        </div>
+
+                                        {/* Enlace y Botones */}
+                                        <div className="flex-1 space-y-3 w-full text-left">
+                                            <div>
+                                                <label className="text-[8px] font-bold uppercase text-slate-500 block mb-1">
+                                                    Enlace Directo del Menú (Para Bio de Instagram y Redes Sociales)
+                                                </label>
+                                                <div className="flex items-center gap-2 bg-slate-950 border border-white/10 rounded-xl px-3 py-2">
+                                                    <span className="text-xs text-white font-mono truncate flex-1">{publicMenuUrl}</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleDownloadQr}
+                                                    className="py-2.5 px-3 text-white font-black text-[9px] uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5"
+                                                    style={{ backgroundColor: tenant?.theme_colors?.primary || '#f97316' }}
+                                                >
+                                                    <Download size={13} />
+                                                    Descargar QR (PNG)
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (navigator.clipboard) {
+                                                            navigator.clipboard.writeText(publicMenuUrl);
+                                                            alert('✅ ¡Enlace copiado al portapapeles! Pegalo en tu biografía de Instagram o estados de WhatsApp.');
+                                                        }
+                                                    }}
+                                                    className="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-black text-[9px] uppercase tracking-wider rounded-xl transition-all border border-white/10 active:scale-95 flex items-center justify-center gap-1.5"
+                                                >
+                                                    <Copy size={13} />
+                                                    Copiar Enlace
+                                                </button>
+
+                                                <a
+                                                    href={publicMenuUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white font-black text-[9px] uppercase tracking-wider rounded-xl transition-all border border-white/5 active:scale-95 flex items-center justify-center gap-1.5"
+                                                >
+                                                    <ExternalLink size={13} />
+                                                    Ver Menú
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* SWITCH MANDATORIO: PEDIDOS DESDE CASA (DELIVERY Y TAKE AWAY) */}
+                                    <div className={`p-4 rounded-2xl border transition-all ${
+                                        cfgLandingConfig.allow_home_orders !== false 
+                                            ? 'bg-emerald-950/40 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.08)]' 
+                                            : 'bg-amber-950/40 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.08)]'
+                                    }`}>
+                                        <div className="flex items-center justify-between gap-4">
+                                            <div className="space-y-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-base">{cfgLandingConfig.allow_home_orders !== false ? '🛵' : '🍽️'}</span>
+                                                    <span className="text-xs font-black uppercase tracking-wider text-white">
+                                                        Aceptar Pedidos desde el Menú de Casa (Delivery y Take Away)
+                                                    </span>
+                                                    <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                                        cfgLandingConfig.allow_home_orders !== false 
+                                                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                                                            : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                                    }`}>
+                                                        {cfgLandingConfig.allow_home_orders !== false ? '✅ Activado (Recomendado)' : '🔒 Exclusivo Salón'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[10.5px] text-slate-300 leading-relaxed">
+                                                    {cfgLandingConfig.allow_home_orders !== false ? (
+                                                        <>
+                                                            <strong className="text-emerald-400">MODO DELIVERY ACTIVO:</strong> Los clientes que ingresen desde sus casas o redes sociales pueden ver la carta y hacer pedidos a domicilio o para retirar en mostrador.
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <strong className="text-amber-400">MODO EXCLUSIVO SALÓN:</strong> Los clientes pueden ver la carta digital completa, fotos y precios desde sus casas o redes, pero <span className="underline font-bold">NO podrán enviar pedidos a distancia</span> (se los invita a reservar mesa o visitarnos). Los pedidos en las mesas del local (con QR de mesa) siguen funcionando con total normalidad.
+                                                        </>
+                                                    )}
+                                                </p>
+                                            </div>
+
+                                            <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={cfgLandingConfig.allow_home_orders !== false} 
+                                                    onChange={(e) => setCfgLandingConfig({ ...cfgLandingConfig, allow_home_orders: e.target.checked })}
+                                                    className="sr-only peer" 
+                                                />
+                                                <div className="w-12 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* 2. Perfil Público y Redes Sociales */}
                         <div className="space-y-4 pt-3 border-t border-white/5">
                             <label className="text-[10px] font-black uppercase text-orange-500 flex items-center gap-1.5" style={{ color: tenant?.theme_colors?.primary || '#f97316' }}>
                                 <Share2 size={12} /> Perfil Público y Redes Sociales
@@ -7490,18 +7671,160 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 </div>
                                 {expandedConfigSection === 'rockola_vip' ? <ChevronUp className="w-5 h-5 text-emerald-400" /> : <ChevronDown className="w-5 h-5 text-emerald-400" />}
                             </button>
-                            {expandedConfigSection === 'rockola_vip' && !isViewLocked('rockola') && (
-                                <div className="p-6 bg-slate-950/80 border border-purple-500/20 rounded-2xl animate-in slide-in-from-bottom-2 text-center space-y-4">
-                                    <div className="w-16 h-16 mx-auto bg-purple-500/10 text-purple-500 rounded-full flex items-center justify-center mb-2">
-                                        <Smartphone size={32} />
+                            {expandedConfigSection === 'rockola_vip' && !isViewLocked('rockola') && (() => {
+                                const isProPlan = Boolean(
+                                    planFeatures?.includes('Todas las funciones') ||
+                                    planFeatures?.includes('Plan Pro') ||
+                                    planFeatures?.includes('Multimedia y Regalos en Muro') ||
+                                    subscription?.saas_plans?.name === 'Plan Pro' ||
+                                    subscription?.saas_plans?.name?.toLowerCase()?.includes('pro') ||
+                                    (subscription?.promo_pro_ends_at && new Date(subscription.promo_pro_ends_at).getTime() > Date.now())
+                                );
+
+                                return (
+                                    <div className="p-6 bg-slate-950/80 border border-emerald-500/30 rounded-3xl animate-in slide-in-from-bottom-2 space-y-6 shadow-xl text-left relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+
+                                        {/* Header de Sección */}
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/5 pb-4">
+                                            <div>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="text-xl">🌟</span>
+                                                    <h3 className="text-base font-black uppercase text-emerald-400 tracking-wide">
+                                                        Muro Interactivo & Rockola VIP
+                                                    </h3>
+                                                    <span className="text-[8px] font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                                        Pantallas en Vivo
+                                                    </span>
+                                                    <HelpButton helpKey="admin-settings-rockola" size="sm" primaryColor="#10b981" />
+                                                </div>
+                                                <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                                                    Conectá las pantallas de tu local para que tus comensales envíen mensajes en vivo, soliciten temas musicales a la Rockola y se regalen tragos o platos entre mesas.
+                                                </p>
+                                            </div>
+
+                                            {/* Acceso directo a Modo Proyector TV */}
+                                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                                                <a
+                                                    href={`${window.location.origin}/${tenant?.slug}/menu#wall`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="py-2.5 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-1.5 w-full sm:w-auto"
+                                                >
+                                                    <span>📺</span>
+                                                    <span>Abrir Modo Proyector TV</span>
+                                                </a>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const wallUrl = `${window.location.origin}/${tenant?.slug}/menu#wall`;
+                                                        if (navigator.clipboard) {
+                                                            navigator.clipboard.writeText(wallUrl);
+                                                            alert('✅ Enlace del Proyector copiado al portapapeles. Abrilo en la Smart TV o PC conectada a los televisores de tu salón.');
+                                                        }
+                                                    }}
+                                                    className="p-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl border border-white/10 active:scale-95 transition-all"
+                                                    title="Copiar link del Proyector"
+                                                >
+                                                    <Copy size={14} />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* TIERS DE FUNCIONALIDADES SEGÚN PLAN */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {/* Tier 1: Muro Base (Plan Avanzado $90.000 y Pro $150.000) */}
+                                            <div className={`p-5 rounded-2xl border transition-all flex flex-col justify-between gap-4 ${
+                                                cfgLandingConfig.interactive_wall_enabled !== false
+                                                    ? 'bg-slate-900/90 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.1)]'
+                                                    : 'bg-slate-950/60 border-white/5 opacity-75'
+                                            }`}>
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-[8.5px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                                            ✅ Plan Avanzado ($90.000) & Pro
+                                                        </span>
+                                                        <label className="relative inline-flex items-center cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={cfgLandingConfig.interactive_wall_enabled !== false}
+                                                                onChange={(e) => setCfgLandingConfig({ ...cfgLandingConfig, interactive_wall_enabled: e.target.checked })}
+                                                                className="sr-only peer"
+                                                            />
+                                                            <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                                        </label>
+                                                    </div>
+                                                    <h4 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                                                        <span>💬</span> Muro Base & Rockola VIP
+                                                    </h4>
+                                                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                                                        Permite a los comensales enviar <strong>mensajes de texto en vivo</strong> a las pantallas, solicitar canciones a la Rockola del salón y <strong>enviarse regalos entre mesas</strong> (cervezas, tragos, postres).
+                                                    </p>
+                                                </div>
+                                                <div className="text-[10px] text-emerald-400 font-bold flex items-center gap-1.5 pt-2 border-t border-white/5">
+                                                    <CheckCircle size={12} /> Chat en vivo + Rockola + Regalos entre mesas activos
+                                                </div>
+                                            </div>
+
+                                            {/* Tier 2: Multimedia VIP (Exclusivo Plan Pro $150.000) */}
+                                            <div className={`p-5 rounded-2xl border transition-all flex flex-col justify-between gap-4 relative overflow-hidden ${
+                                                isProPlan
+                                                    ? (cfgLandingConfig.interactive_wall_multimedia_enabled
+                                                        ? 'bg-slate-900/90 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.15)]'
+                                                        : 'bg-slate-950/60 border-white/5')
+                                                    : 'bg-slate-950/90 border-amber-500/30'
+                                            }`}>
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-[8.5px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                                                            👑 Exclusivo Plan Pro ($150.000)
+                                                        </span>
+                                                        {isProPlan ? (
+                                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={Boolean(cfgLandingConfig.interactive_wall_multimedia_enabled)}
+                                                                    onChange={(e) => setCfgLandingConfig({ ...cfgLandingConfig, interactive_wall_multimedia_enabled: e.target.checked })}
+                                                                    className="sr-only peer"
+                                                                />
+                                                                <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-500"></div>
+                                                            </label>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setIsProUpgradeModalOpen(true)}
+                                                                className="text-[9px] font-black uppercase px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition-all flex items-center gap-1 active:scale-95"
+                                                            >
+                                                                <Lock size={10} /> Desbloquear
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <h4 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                                                        <span>📸</span> Multimedia VIP: Fotos y Audios
+                                                    </h4>
+                                                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                                                        Permite que tus clientes capturen <strong>fotos instantáneas</strong> con su celular y graben <strong>notas de voz</strong> en directo para proyectarlas al instante en las pantallas de tu salón.
+                                                    </p>
+                                                </div>
+
+                                                {isProPlan ? (
+                                                    <div className="text-[10px] text-purple-400 font-bold flex items-center gap-1.5 pt-2 border-t border-white/5">
+                                                        <Sparkles size={12} /> Fotos en vivo + Notas de voz instantáneas habilitadas
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsProUpgradeModalOpen(true)}
+                                                        className="w-full py-2.5 px-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                                                    >
+                                                        <span>⭐</span> Ver Beneficios de Plan Pro ($150.000 ARS)
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <h3 className="text-lg font-black uppercase text-purple-400">Muro Interactivo (Próximamente)</h3>
-                                    <p className="text-xs text-slate-400 font-medium">
-                                        ¡Esta funcionalidad ya está activada en tu Plan Pro!<br/>
-                                        Pronto podrás configurar las fotos, audios y videos en vivo para tu local.
-                                    </p>
-                                </div>
-                            )}
+                                );
+                            })()}
                         </div>
 
                         {/* Accordion: Suscripción y Planes */}
@@ -9458,7 +9781,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             {lockedFeatureModal === 'tables' && 'La Gestión Visual de Mesas y el Panel exclusivo de Mozos móvil está disponible a partir del Plan Avanzado.'}
                             {lockedFeatureModal === 'balance' && 'El Balance Financiero con contabilidad integrada, gráficos interactivos de pérdidas y ganancias y reportes de rentabilidad está disponible en el Plan Pro.'}
                             {lockedFeatureModal === 'reports' && 'La exportación avanzada de auditoría y reportes detallados en CSV está disponible en el Plan Pro.'}
-                            {lockedFeatureModal === 'rockola' && 'El Muro Interactivo, donde tus clientes pueden compartir fotos, audios y videos en vivo, está disponible exclusivamente en el Plan Pro.'}
+                            {lockedFeatureModal === 'rockola' && 'El Muro Interactivo con Chat de texto en vivo, Rockola de pedidos de canciones y envío de regalos entre mesas está disponible a partir del Plan Avanzado ($90.000 ARS). La función de fotos y notas de voz en vivo es exclusiva del Plan Pro ($150.000 ARS).'}
                         </p>
 
                         <div className="mt-8 flex flex-col gap-2">
@@ -9477,6 +9800,77 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                 className="w-full bg-white/5 hover:bg-white/10 active:scale-95 text-slate-400 font-bold uppercase tracking-wider py-3 rounded-xl transition-all"
                             >
                                 Volver
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal de Upgrade a Plan Pro para Multimedia VIP */}
+            {isProUpgradeModalOpen && (
+                <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="glass max-w-md w-full p-7 rounded-[2.5rem] border border-purple-500/40 text-center relative overflow-hidden shadow-2xl">
+                        <button
+                            type="button"
+                            onClick={() => setIsProUpgradeModalOpen(false)}
+                            className="absolute top-4 right-4 text-slate-500 hover:text-white p-2 bg-slate-900 rounded-full transition-all"
+                        >
+                            <X size={18} />
+                        </button>
+
+                        <div className="w-16 h-16 rounded-3xl bg-purple-500/20 text-purple-400 mx-auto flex items-center justify-center text-3xl border border-purple-500/30 shadow-lg mb-3">
+                            👑
+                        </div>
+
+                        <div>
+                            <span className="text-[9px] font-black uppercase tracking-widest text-purple-400 bg-purple-500/10 px-3 py-1 rounded-full border border-purple-500/20">
+                                Exclusivo Plan Pro ($150.000 ARS / mes)
+                            </span>
+                            <h3 className="text-xl font-black uppercase text-white mt-3 tracking-wide">
+                                Multimedia VIP en Pantallas
+                            </h3>
+                            <p className="text-xs text-slate-300 leading-relaxed font-medium mt-2">
+                                Para que tus comensales puedan tomar <strong>fotos instantáneas</strong> con su celular y enviar <strong>notas de voz en vivo</strong> que se proyecten en las pantallas del salón, necesitás el <strong>Plan Pro</strong>.
+                            </p>
+                        </div>
+
+                        <div className="bg-slate-950/60 p-4 rounded-2xl border border-white/5 text-left space-y-2 text-xs my-4">
+                            <div className="flex items-center gap-2 text-slate-300">
+                                <CheckCircle size={14} className="text-purple-400 shrink-0" />
+                                <span>Cámara instantánea para fotos y selfies en el salón</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-slate-300">
+                                <CheckCircle size={14} className="text-purple-400 shrink-0" />
+                                <span>Transmisión de notas de voz en vivo con reproductor</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-slate-300">
+                                <CheckCircle size={14} className="text-purple-400 shrink-0" />
+                                <span>Control y moderación de contenido en tiempo real</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-emerald-400 font-bold pt-2 border-t border-white/5 text-[11px]">
+                                <span>💡 Tu Plan Avanzado ($90.000) ya incluye: chat de texto, pedidos de música a la rockola y regalos entre mesas.</span>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsProUpgradeModalOpen(false);
+                                    setView('config');
+                                    setExpandedConfigSection('subscription');
+                                }}
+                                className="w-full py-3.5 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-black rounded-xl uppercase text-xs tracking-wider shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+                            >
+                                <Sparkles size={16} />
+                                Ver Planes y Activar Plan Pro
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setIsProUpgradeModalOpen(false)}
+                                className="w-full py-2.5 text-slate-400 hover:text-white font-bold rounded-xl uppercase text-[10px] tracking-wider transition-all"
+                            >
+                                Volver a Ajustes
                             </button>
                         </div>
                     </div>

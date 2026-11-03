@@ -9,13 +9,17 @@ let activeTenantId: string | null = null;
 function getClient(): SupabaseClient {
   const key = activeTenantId || 'default';
   if (!clientsCache[key]) {
-    clientsCache[key] = createClient(supabaseUrl, supabaseAnonKey, activeTenantId ? {
-      global: {
+    clientsCache[key] = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: !activeTenantId,
+        autoRefreshToken: !activeTenantId,
+      },
+      global: activeTenantId ? {
         headers: {
           'x-tenant-id': activeTenantId
         }
-      }
-    } : undefined);
+      } : undefined
+    });
   }
   return clientsCache[key];
 }
@@ -52,30 +56,69 @@ export function setSupabaseTenant(tenantId: string | null) {
 
 
 const broadcastChannelsCache: Record<string, any> = {};
+type BroadcastListener = (data: any) => void;
+const broadcastListeners: Record<string, Set<BroadcastListener>> = {};
 
-function getBroadcastChannel(tenantId: string) {
+export function getBroadcastChannel(tenantId: string) {
   const client = getClient();
   const channelName = `tenant-room-${tenantId}`;
-  if (!broadcastChannelsCache[channelName]) {
-    const chan = client.channel(channelName, {
+  let chan = broadcastChannelsCache[channelName];
+  if (!chan || chan.state === 'closed' || chan.state === 'errored') {
+    chan = client.channel(channelName, {
       config: {
         broadcast: { self: true }
       }
     });
-    chan.subscribe((status) => {
+    chan.subscribe((status: string) => {
       if (status === 'SUBSCRIBED') {
         console.log(`[BROADCAST HUB] Conectado permanentemente al canal ${channelName}`);
       }
     });
     broadcastChannelsCache[channelName] = chan;
   }
-  return broadcastChannelsCache[channelName];
+  return chan;
+}
+
+export function subscribeToTenantBroadcast(tenantId: string, listener: BroadcastListener) {
+  if (!tenantId) return () => {};
+
+  if (!broadcastListeners[tenantId]) {
+    broadcastListeners[tenantId] = new Set();
+  }
+  broadcastListeners[tenantId].add(listener);
+
+  const channel = getBroadcastChannel(tenantId);
+  if (!(channel as any).__antigravity_hub_init) {
+    (channel as any).__antigravity_hub_init = true;
+    const notifyAll = (event: string, payload: any) => {
+      broadcastListeners[tenantId]?.forEach(fn => {
+        try {
+          fn({ event, payload });
+        } catch (e) {
+          console.error('[BROADCAST HUB] Error en listener:', e);
+        }
+      });
+    };
+
+    channel
+      .on('broadcast', { event: 'schema-update' }, (d: any) => notifyAll('schema-update', d?.payload))
+      .on('broadcast', { event: 'order:new' }, (d: any) => notifyAll('order:new', d?.payload))
+      .on('broadcast', { event: 'order:item_status' }, (d: any) => notifyAll('order:item_status', d?.payload))
+      .on('broadcast', { event: 'order:status' }, (d: any) => notifyAll('order:status', d?.payload));
+  }
+
+  return () => {
+    broadcastListeners[tenantId]?.delete(listener);
+  };
 }
 
 export function broadcastTenantChange(tenantId: string | null, event: string = 'schema-update', payload: any = {}) {
   if (!tenantId) return;
   try {
     const channel = getBroadcastChannel(tenantId);
+    if (channel.state !== 'joined' && channel.state !== 'subscribing') {
+      channel.subscribe();
+    }
     channel.send({
       type: 'broadcast',
       event,
@@ -87,3 +130,4 @@ export function broadcastTenantChange(tenantId: string | null, event: string = '
     console.error('[BROADCAST HUB] Error fatal en difusión:', e);
   }
 }
+

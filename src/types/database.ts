@@ -189,10 +189,40 @@ export interface Tenant {
     created_at: string;
     franchise_id?: string;
     max_devices?: number;
-    landing_config?: any;
+    landing_config?: LandingConfig | any;
     tips_enabled?: boolean;
     table_charge_enabled?: boolean;
     table_charge_amount?: number;
+    hasPremiumVIP?: boolean;
+    // Campos de Exclusividad Territorial y Cupo de 5 Locales por Ciudad
+    country?: string;
+    province?: string;
+    city?: string;
+    zone?: string;
+    contact_phone?: string;
+    owner_name?: string;
+    acceptance_code?: string;
+    access_status?: 'pending_activation' | 'approved' | 'waitlist' | 'rejected';
+    detected_lat?: number;
+    detected_lng?: number;
+    gps_verified?: boolean;
+}
+
+export interface LandingConfig {
+    enabled?: boolean;
+    hero_style?: string;
+    interactive_wall_enabled?: boolean;
+    interactive_wall_multimedia_enabled?: boolean;
+    allow_home_orders?: boolean;
+    featured_products_enabled?: boolean;
+    featured_product_ids?: string[];
+    hero_video_url?: string;
+    hero_image_url?: string;
+    promos?: any[];
+    events?: any[];
+    about_text?: string;
+    hero_position?: string;
+    custom_carousel?: any[];
 }
 
 export interface SocialInteraction {

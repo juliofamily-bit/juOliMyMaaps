@@ -14,10 +14,27 @@ export const AdminSaasTab = ({ tenantId }: { tenantId: string }) => {
 
     const fetchSub = async () => {
         try {
+            const planCacheKey = `cache_tenant_plan_${tenantId}`;
+            try {
+                const raw = localStorage.getItem(planCacheKey);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Date.now() - (parsed.timestamp || 0) < 30 * 60 * 1000) {
+                        setSub(parsed.data);
+                        return;
+                    }
+                }
+            } catch(e) {}
+
             const res = await fetch(`/api/get-tenant-plan?tenant_id=${tenantId}`);
             if (res.ok) {
                 const json = await res.json();
-                if (json.data) setSub(json.data);
+                if (json.data) {
+                    setSub(json.data);
+                    try {
+                        localStorage.setItem(planCacheKey, JSON.stringify({ data: json.data, timestamp: Date.now() }));
+                    } catch(e) {}
+                }
             }
         } catch (err) {
             console.error('Error fetching sub in AdminSaasTab:', err);
