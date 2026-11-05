@@ -23,9 +23,14 @@ El sistema opera sobre tres (3) menús claramente diferenciados por su rol, cana
      a) **Locales sin mesas:** Negocios de comida rápida, al paso, rotiserías o ventanilla donde el pedido se toma y se cobra directamente en el mostrador.
      b) **Respaldo y Contingencia en locales con mesas:** Si un comensal no tiene celular con cámara, se quedó sin batería, o en situaciones donde se corte la conexión a internet en el local, el personal utiliza este menú para ingresar y cobrar la orden presencialmente.
 
-## Estado Actual (Última actualización: 31 de Octubre de 2026)
-- **Fase:** Blindaje de Presupuesto de E/S de Disco (Disk IOPS/Throughput) y Alta Disponibilidad en Producción.
-- **Hito Reciente (Hito 30):**
+## Estado Actual (Última actualización: 5 de Noviembre de 2026)
+- **Fase:** Corrección de Búsqueda de Locales en Dispositivos Nuevos y Sincronización de Esquema Territorial.
+- **Hito Reciente (Hito 31):**
+  - **Diagnóstico y Corrección de Búsqueda de Locales ("No se pudieron buscar los locales"):**
+    1. **Causa Raíz:** En la pantalla principal (`src/app/page.tsx`), la función `handleSearch` intentaba seleccionar explícitamente `access_status` sobre la tabla `tenants`. Dado que la migración de cupos territoriales no se había corrido en Supabase, la consulta fallaba con el error `42703: column tenants.access_status does not exist`. En dispositivos previamente logueados no se notaba porque la app lee los locales desde `localStorage` (`recent_tenants`), pero en un dispositivo nuevo o de incógnito la búsqueda fallaba de inmediato impidiendo ingresar al local.
+    2. **Solución en Código:** Se desacopló la consulta de búsqueda en `src/app/page.tsx` para no depender de `access_status` y se amplió el filtro para buscar indistintamente por nombre, slug o correo (`name.ilike`, `slug.ilike`, `email.ilike`).
+    3. **Migración SQL Lista:** Se preparó el script `habilitar_cupos_y_locales.sql` para que el usuario agregue `access_status` con valor por defecto `'approved'`, garantizando que todos los locales existentes queden 100% operativos.
+- **Hito Previo (Hito 30):**
   - **Diagnóstico y Solución Definitiva de la Alerta de E/S de Disco en Supabase:**
     1. **Causa Raíz de la Alerta de Disco:** La advertencia de Supabase (*"Tu proyecto está a punto de agotar su presupuesto de E/S de disco... volverá a su valor base de 5 MB/s"*) surge cuando las consultas a la base de datos leen o escriben continuamente en el disco SSD por encima del límite base de la máquina (5 MB/s). Al auditar la base de datos en vivo, descubrimos:
        - `order_items` acumuló **14.839 filas**.
