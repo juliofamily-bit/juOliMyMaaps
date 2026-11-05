@@ -191,14 +191,16 @@ export default function WelcomePage() {
     setError('');
     
     try {
+      const trimmedQuery = searchQuery.trim();
       const { data, error: sbError } = await supabase
         .from('tenants')
-        .select('id, name, slug, theme_colors, enabled_roles, access_status')
-        .or(`name.ilike.%${searchQuery.trim()}%,email.ilike.%${searchQuery.trim()}%`)
+        .select('id, name, slug, theme_colors, enabled_roles')
+        .or(`name.ilike.%${trimmedQuery}%,slug.ilike.%${trimmedQuery}%,email.ilike.%${trimmedQuery}%`)
         .order('name', { ascending: true })
         .limit(5);
 
       if (sbError) {
+        console.error('Error buscando locales:', sbError);
         setError('No se pudieron buscar los locales.');
       } else if (!data || data.length === 0) {
         setError('No se encontró ningún local con ese nombre o correo.');
@@ -207,6 +209,7 @@ export default function WelcomePage() {
         setTenants(data);
       }
     } catch (err) {
+      console.error('Error general buscando locales:', err);
       setError('Error al conectar con la base de datos.');
     } finally {
       setLoading(false);
