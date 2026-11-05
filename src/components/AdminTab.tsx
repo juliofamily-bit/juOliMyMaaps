@@ -6,6 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Cartes
 import { Send, Copy, Sparkles, Megaphone, BellOff, ArrowLeft, ArrowRight, RotateCw, CheckCheck, CreditCard, BarChart2, QrCode, FileText, Plus, Trash2, Edit, TrendingUp, DollarSign, Package, Layers, History, ChevronRight, X, Save, Check, Upload, Image as ImageIcon, Wallet, Receipt, ArrowUpCircle, ArrowDownCircle, Calendar, FilterX, Star, StarOff, PieChart, Paintbrush, LayoutGrid, Sun, Moon, CheckCircle, AlertCircle, Loader2, Share2, AlertTriangle, CalendarRange, Trophy, Smartphone, Instagram, Facebook, Phone, Printer, Download, Award, Coins, Search, MessageCircle, Gift, RefreshCw, Settings, ChevronUp, ChevronDown, Users, Truck, Map as MapIcon, Utensils, Lock, Mic, MicOff, Video, Film, Link as LinkIcon, Info, ExternalLink } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { PrintableQRPoster } from './PrintableQRPoster';
+import { PrintableBatchTablesQR } from './PrintableBatchTablesQR';
 import { AdminEmployeeTab } from './AdminEmployeeTab';
 import { AdminSaasTab } from './AdminSaasTab';
 import { AdminSupportFloatingButton } from './AdminSupportFloatingButton';
@@ -844,6 +845,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
     const [newTableName, setNewTableName] = useState('');
     const [newTableCapacity, setNewTableCapacity] = useState<number>(4);
     const [selectedTableForQr, setSelectedTableForQr] = useState<any | null>(null);
+    const [showBatchTablesQrModal, setShowBatchTablesQrModal] = useState(false);
     const [isSavingTables, setIsSavingTables] = useState(false);
     const [isSavingConfig, setIsSavingConfig] = useState(false);
     const [configSuccess, setConfigSuccess] = useState(false);
@@ -6644,6 +6646,16 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             <h3 className="font-black uppercase italic text-sm">Gestión de Mesas y Códigos QR</h3>
                             <p className="text-slate-500 text-[10px] uppercase font-bold mt-1">Crea mesas físicas y genera códigos QR únicos para que tus clientes pidan desde su celular</p>
                         </div>
+                        {tablesList.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => setShowBatchTablesQrModal(true)}
+                                className="px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:scale-95 text-white font-black text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 transition-all cursor-pointer shrink-0"
+                            >
+                                <Printer size={15} />
+                                <span>Imprimir Todas en 1 Hoja (A4 Recortable)</span>
+                            </button>
+                        )}
                     </div>
 
                     {/* Formulario para agregar Mesa */}
@@ -6793,6 +6805,15 @@ const AdminTab: React.FC<AdminTabProps> = ({
                             </div>
                         );
                     })()}
+
+                    {/* Modal Premium para imprimir todas las mesas en 1 hoja recortable */}
+                    {showBatchTablesQrModal && (
+                        <PrintableBatchTablesQR
+                            tables={tablesList}
+                            tenant={tenant}
+                            onClose={() => setShowBatchTablesQrModal(false)}
+                        />
+                    )}
                 </div>
                             )}
                         </div>

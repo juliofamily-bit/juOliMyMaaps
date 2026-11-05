@@ -24,8 +24,15 @@ El sistema opera sobre tres (3) menús claramente diferenciados por su rol, cana
      b) **Respaldo y Contingencia en locales con mesas:** Si un comensal no tiene celular con cámara, se quedó sin batería, o en situaciones donde se corte la conexión a internet en el local, el personal utiliza este menú para ingresar y cobrar la orden presencialmente.
 
 ## Estado Actual (Última actualización: 5 de Noviembre de 2026)
-- **Fase:** Corrección de Búsqueda de Locales en Dispositivos Nuevos y Sincronización de Esquema Territorial.
-- **Hito Reciente (Hito 31):**
+- **Fase:** Blindaje del Buscador de Pedidos e Impresión Masiva de Mesas en Hoja A4.
+- **Hito Reciente (Hito 32):**
+  - **Blindaje Total contra Caídas en el Buscador de Pedidos (`OrderTab.tsx` y `PublicMenu.tsx`):**
+    1. **Causa Raíz:** Al ingresar cualquier término en el buscador de productos ("G", "combo hamburguesa", etc.), el filtro de React ejecutaba operaciones sobre propiedades potencialmente `null` o `undefined` (`formatARS`, `.toLowerCase()`, `.localeCompare()`, etc.), disparando una excepción no controlada que rompía la vista con el error *"No se pudo cargar esta página, recargue de nuevo o regresar"*, perdiendo el estado de pedidos en curso.
+    2. **Solución Aplicada:** Se protegieron de forma defensiva todas las funciones de formateo, filtrado y renderizado (`formatARS` con `Number(amount) || 0`, `parseDate` seguro, `(p.name || '').toLowerCase()`, `(p.description || '').toLowerCase()`, y fallbacks de precios de ofertas). Búsqueda instantánea y a prueba de errores.
+  - **Impresión Masiva de Códigos QR de Mesas en 1 Hoja A4 Recortable (`PrintableBatchTablesQR.tsx` y `AdminTab.tsx`):**
+    1. **Propósito (UX Hormozi):** Evitar imprimir mesa por mesa. En un solo clic, el dueño o encargado puede imprimir hasta 10 mesas juntas en una sola hoja estándar A4 para recortar y colocar en los portamenús o soportes de acrílico de las mesas.
+    2. **Componente e Integración:** Se desarrolló `PrintableBatchTablesQR.tsx` con una grilla de 2 columnas x 5 filas (10 mesas por hoja), con líneas punteadas de corte (`✂️ Recortar`), número gigante de mesa (`MESA 1`, `MESA 2`, etc.), logo/nombre del local, código QR vectorial nítido (`qrcode.react`) e instrucciones claras para el cliente (*"Escaneá y pedí desde tu celular"*). En `AdminTab.tsx` -> *Gestión de Mesas y Códigos QR*, se añadió el botón directo `🖨️ Imprimir Todas en 1 Hoja (A4 Recortable)` que abre el modal y permite imprimir o descargar a PDF en 1 solo clic.
+- **Hito Previo (Hito 31):**
   - **Diagnóstico y Corrección de Búsqueda de Locales ("No se pudieron buscar los locales"):**
     1. **Causa Raíz:** En la pantalla principal (`src/app/page.tsx`), la función `handleSearch` intentaba seleccionar explícitamente `access_status` sobre la tabla `tenants`. Dado que la migración de cupos territoriales no se había corrido en Supabase, la consulta fallaba con el error `42703: column tenants.access_status does not exist`. En dispositivos previamente logueados no se notaba porque la app lee los locales desde `localStorage` (`recent_tenants`), pero en un dispositivo nuevo o de incógnito la búsqueda fallaba de inmediato impidiendo ingresar al local.
     2. **Solución en Código:** Se desacopló la consulta de búsqueda en `src/app/page.tsx` para no depender de `access_status` y se amplió el filtro para buscar indistintamente por nombre, slug o correo (`name.ilike`, `slug.ilike`, `email.ilike`).

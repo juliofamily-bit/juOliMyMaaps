@@ -1682,23 +1682,23 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
       : false;
 
     const featuredIds: string[] = tenant?.landing_config?.featured_product_ids || [];
-    const q = searchQuery.trim().toLowerCase();
+    const q = (searchQuery || '').trim().toLowerCase();
 
     // 1. SI HAY TEXTO EN EL BUSCADOR: Búsqueda Global Instantánea y Prioritaria
     if (q) {
-      const matches = products.filter(p => {
-        if (p.is_active === false) return false;
-        const categoryExists = categories.some(c => c.id === p.category_id);
+      const matches = (products || []).filter(p => {
+        if (!p || p.is_active === false) return false;
+        const categoryExists = (categories || []).some(c => c && c.id === p.category_id);
         if (!categoryExists) return false;
 
-        const nameLower = p.name.toLowerCase();
-        const descLower = p.description?.toLowerCase() || '';
+        const nameLower = (p.name || '').toLowerCase();
+        const descLower = (p.description || '').toLowerCase();
         return nameLower.includes(q) || descLower.includes(q);
       });
 
       return matches.sort((a, b) => {
-        const aName = a.name.toLowerCase();
-        const bName = b.name.toLowerCase();
+        const aName = (a?.name || '').toLowerCase();
+        const bName = (b?.name || '').toLowerCase();
 
         // Prioridad 1: Los que EMPIEZAN exactamente con las letras ingresadas (ej: "ha" -> "Hamburguesa")
         const aStarts = aName.startsWith(q);
@@ -1713,27 +1713,25 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
         if (!aWordStarts && bWordStarts) return 1;
 
         // Prioridad 3: Más vendidos del mes primero (Top Ventas)
-        const salesA = productSalesCount[a.id] || 0;
-        const salesB = productSalesCount[b.id] || 0;
+        const salesA = (productSalesCount && a?.id ? productSalesCount[a.id] : 0) || 0;
+        const salesB = (productSalesCount && b?.id ? productSalesCount[b.id] : 0) || 0;
         if (salesB !== salesA) return salesB - salesA;
 
         // Prioridad 4: Destacados primero
-        const aFeat = featuredIds.includes(a.id) || a.is_featured ? 1 : 0;
-        const bFeat = featuredIds.includes(b.id) || b.is_featured ? 1 : 0;
+        const aFeat = (a?.id && featuredIds.includes(a.id)) || a?.is_featured ? 1 : 0;
+        const bFeat = (b?.id && featuredIds.includes(b.id)) || b?.is_featured ? 1 : 0;
         if (bFeat !== aFeat) return bFeat - aFeat;
 
-        // Prioridad 5: Alfabético
-        return a.name.localeCompare(b.name);
+        // Prioridad 5: Alfabético seguro
+        return (a?.name || '').localeCompare(b?.name || '');
       });
     }
 
     // 2. SIN TEXTO ESCRITO: Filtro por categoría u ofertas
-    const filtered = products.filter(p => {
-      // Desactivación lógica (Soft Delete): Ocultar productos inactivos del menú digital
-      if (p.is_active === false) return false;
+    const filtered = (products || []).filter(p => {
+      if (!p || p.is_active === false) return false;
 
-      // Filtro de Huérfanos: Solo mostrar productos cuya categoría EXISTA actualmente en la lista
-      const categoryExists = categories.some(c => c.id === p.category_id);
+      const categoryExists = (categories || []).some(c => c && c.id === p.category_id);
       if (!categoryExists) return false;
 
       if (isOfferCategory) {
@@ -1748,15 +1746,15 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
 
     // 3. ORDEN NATURAL: Más vendidos del mes (Top Ventas) primero, luego destacados, luego alfabético
     return filtered.sort((a, b) => {
-      const salesA = productSalesCount[a.id] || 0;
-      const salesB = productSalesCount[b.id] || 0;
+      const salesA = (productSalesCount && a?.id ? productSalesCount[a.id] : 0) || 0;
+      const salesB = (productSalesCount && b?.id ? productSalesCount[b.id] : 0) || 0;
       if (salesB !== salesA) return salesB - salesA;
 
-      const aFeat = featuredIds.includes(a.id) || a.is_featured ? 1 : 0;
-      const bFeat = featuredIds.includes(b.id) || b.is_featured ? 1 : 0;
+      const aFeat = (a?.id && featuredIds.includes(a.id)) || a?.is_featured ? 1 : 0;
+      const bFeat = (b?.id && featuredIds.includes(b.id)) || b?.is_featured ? 1 : 0;
       if (bFeat !== aFeat) return bFeat - aFeat;
 
-      return a.name.localeCompare(b.name);
+      return (a?.name || '').localeCompare(b?.name || '');
     });
   }, [products, categories, activeCategory, searchQuery, productOffers, productSalesCount, tenant?.landing_config?.featured_product_ids]);
 
@@ -3271,14 +3269,14 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                             </span>
                           </div>
                           <span className={`text-[10px] text-neutral-400 dark:  line-through font-bold ${isLight ? "text-slate-600" : "text-neutral-400"}`}>
-                            ${product.price.toLocaleString()}
+                            ${Number(product.price || 0).toLocaleString('es-AR')}
                           </span>
                         </div>
                       );
                     }
                     return (
                       <span className="font-bold text-lg" style={{ color: isSoldOut ? '#64748b' : (isLight ? '#0f172a' : primaryColor) }}>
-                        ${product.price.toLocaleString()}
+                        ${Number(product.price || 0).toLocaleString('es-AR')}
                       </span>
                     );
                   })()}

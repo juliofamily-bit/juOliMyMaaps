@@ -31,12 +31,17 @@ interface OrderTabProps {
     refetchData?: () => void;
 }
 
-const formatARS = (amount: number) => {
-    return new Intl.NumberFormat('es-AR', {
-        style: 'currency',
-        currency: 'ARS',
-        maximumFractionDigits: 0
-    }).format(amount);
+const formatARS = (amount: any) => {
+    const num = typeof amount === 'number' && !isNaN(amount) ? amount : (Number(amount) || 0);
+    try {
+        return new Intl.NumberFormat('es-AR', {
+            style: 'currency',
+            currency: 'ARS',
+            maximumFractionDigits: 0
+        }).format(num);
+    } catch {
+        return `$ ${num.toLocaleString('es-AR')}`;
+    }
 };
 
 const checkIsCurrentlyOpen = (cfg: any) => {
@@ -375,9 +380,11 @@ export default function OrderTab({ products, ingredients, categories: initialCat
             const today = new Date();
             today.setHours(0, 0, 0, 0);
 
-            const parseDate = (dStr: string) => {
-                const [y, m, d] = dStr.split('T')[0].split('-').map(Number);
-                return new Date(y, m - 1, d);
+            const parseDate = (dStr: any) => {
+                if (!dStr || typeof dStr !== 'string') return new Date();
+                const parts = dStr.split('T')[0].split('-').map(Number);
+                if (parts.length < 3 || isNaN(parts[0])) return new Date();
+                return new Date(parts[0], parts[1] - 1, parts[2]);
             };
 
             const start = parseDate(offer.start_date);
@@ -461,21 +468,21 @@ export default function OrderTab({ products, ingredients, categories: initialCat
 
     // Lista unificada de productos para Caja: Búsqueda Global Instantánea y Orden por Top Ventas
     const displayedProducts = useMemo(() => {
-        const q = searchQuery.trim().toLowerCase();
+        const q = (searchQuery || '').trim().toLowerCase();
 
         // 1. REGLA CLAVE DE BÚSQUEDA GLOBAL:
         // Si hay texto en el buscador, busca en TODO el catálogo de la tienda independientemente de la categoría previa
         if (q) {
-            const matches = products.filter(p => {
-                if (p.is_active === false) return false;
-                const nameLower = p.name.toLowerCase();
-                const descLower = p.description?.toLowerCase() || '';
+            const matches = (products || []).filter(p => {
+                if (!p || p.is_active === false) return false;
+                const nameLower = (p.name || '').toLowerCase();
+                const descLower = (p.description || '').toLowerCase();
                 return nameLower.includes(q) || descLower.includes(q);
             });
 
             return matches.sort((a, b) => {
-                const aName = a.name.toLowerCase();
-                const bName = b.name.toLowerCase();
+                const aName = (a?.name || '').toLowerCase();
+                const bName = (b?.name || '').toLowerCase();
 
                 // Prioridad 1: Los que EMPIEZAN exactamente con las letras ingresadas (ej: "ha" -> "Hamburguesa")
                 const aStarts = aName.startsWith(q);
@@ -490,31 +497,31 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                 if (!aWordStarts && bWordStarts) return 1;
 
                 // Prioridad 3: Más vendidos primero (Top Ventas)
-                const salesA = productSalesMap[a.id] || 0;
-                const salesB = productSalesMap[b.id] || 0;
+                const salesA = (productSalesMap && a?.id ? productSalesMap[a.id] : 0) || 0;
+                const salesB = (productSalesMap && b?.id ? productSalesMap[b.id] : 0) || 0;
                 if (salesB !== salesA) return salesB - salesA;
 
                 // Prioridad 4: Destacados primero
-                if ((b.is_featured ? 1 : 0) !== (a.is_featured ? 1 : 0)) {
-                    return (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0);
-                }
+                const aFeat = a?.is_featured ? 1 : 0;
+                const bFeat = b?.is_featured ? 1 : 0;
+                if (bFeat !== aFeat) return bFeat - aFeat;
 
-                // Prioridad 5: Alfabético
-                return a.name.localeCompare(b.name);
+                // Prioridad 5: Alfabético seguro
+                return (a?.name || '').localeCompare(b?.name || '');
             });
         }
 
         // 2. SIN TEXTO ESCRITO:
         // Si se borra la búsqueda o está vacío, filtra por categoría si está seleccionada, o muestra todo el menú
-        let filtered = products.filter(p => p.is_active !== false);
+        let filtered = (products || []).filter(p => p && p.is_active !== false);
 
         if (selectedCategoryId === 'offers') {
-            const offerCat = categories.find(c => c.is_offer === true || /oferta|oportunidad|descuento/i.test(c.name));
+            const offerCat = (categories || []).find(c => c && (c.is_offer === true || /oferta|oportunidad|descuento/i.test(c.name || '')));
             filtered = filtered.filter(p => !!getActiveOfferForProduct(p.id) || (offerCat && p.category_id === offerCat.id));
         } else if (selectedCategoryId && selectedCategoryId !== 'all') {
-            const selectedCat = categories.find(c => c.id === selectedCategoryId);
+            const selectedCat = (categories || []).find(c => c && c.id === selectedCategoryId);
             const isOfferCat = selectedCat 
-                ? (selectedCat.is_offer === true || /oferta|oportunidad|descuento/i.test(selectedCat.name))
+                ? (selectedCat.is_offer === true || /oferta|oportunidad|descuento/i.test(selectedCat.name || ''))
                 : false;
 
             if (isOfferCat) {
@@ -526,15 +533,15 @@ export default function OrderTab({ products, ingredients, categories: initialCat
 
         // 3. ORDEN NATURAL: Más vendidos (Top Ventas) primero, luego destacados, luego alfabético
         return filtered.sort((a, b) => {
-            const salesA = productSalesMap[a.id] || 0;
-            const salesB = productSalesMap[b.id] || 0;
+            const salesA = (productSalesMap && a?.id ? productSalesMap[a.id] : 0) || 0;
+            const salesB = (productSalesMap && b?.id ? productSalesMap[b.id] : 0) || 0;
             if (salesB !== salesA) return salesB - salesA;
 
-            if ((b.is_featured ? 1 : 0) !== (a.is_featured ? 1 : 0)) {
-                return (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0);
-            }
+            const aFeat = a?.is_featured ? 1 : 0;
+            const bFeat = b?.is_featured ? 1 : 0;
+            if (bFeat !== aFeat) return bFeat - aFeat;
 
-            return a.name.localeCompare(b.name);
+            return (a?.name || '').localeCompare(b?.name || '');
         });
     }, [products, searchQuery, selectedCategoryId, categories, productSalesMap, productOffers, orders]);
 
@@ -2051,13 +2058,15 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                     {/* GRILLA UNIFICADA DE PRODUCTOS (Estilo Menú del Cliente, Orden Top Ventas) */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 animate-in fade-in duration-300">
                         {displayedProducts.map(product => {
+                            if (!product || !product.id) return null;
                             const qty = getProductCartQty(product.id);
                             const activeOffer = getActiveOfferForProduct(product.id);
-                            const originalPrice = product.price;
+                            const originalPrice = Number(product.price) || 0;
+                            const discountPct = Number(activeOffer?.discount_percentage) || 0;
                             const finalPrice = activeOffer
-                                ? Math.round(originalPrice * (1 - activeOffer.discount_percentage / 100))
+                                ? Math.round(originalPrice * (1 - discountPct / 100))
                                 : originalPrice;
-                            const salesCount = productSalesMap[product.id] || 0;
+                            const salesCount = (productSalesMap && product.id ? productSalesMap[product.id] : 0) || 0;
 
                             return (
                                 <div
