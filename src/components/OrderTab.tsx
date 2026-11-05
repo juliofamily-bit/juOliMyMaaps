@@ -6,7 +6,7 @@ import { Minus, Plus, Sparkles, Smartphone, Check, ArrowLeft, ShoppingCart, Aler
 import { supabase, broadcastTenantChange } from '@/lib/supabase';
 import { useNotifications } from '@/lib/store';
 import { useOfflineStore } from '@/lib/offlineStore';
-import { cleanArgPhone, isSamePhone, mergeClientNames } from '@/lib/phoneUtils';
+import { cleanArgPhone, isSamePhone, mergeClientNames, extractNationalDigits, isCompletePhoneNumber } from '@/lib/phoneUtils';
 import { useReactToPrint } from 'react-to-print';
 import { PrintableTicket } from './PrintableTicket';
 
@@ -180,24 +180,29 @@ export default function OrderTab({ products, ingredients, categories: initialCat
     const [loyaltyTodayEarned, setLoyaltyTodayEarned] = useState<number>(0);
 
     React.useEffect(() => {
-        if (!tenant?.id || !phone.trim() || phone.trim().length < 6) {
+        // Si no hay teléfono o el número NO está completo (ej: 10 dígitos para AR), resetear inmediatamente
+        if (!tenant?.id || !phone.trim() || !isCompletePhoneNumber(phone.trim())) {
             setLoyaltyAccount(null);
             setUseLoyaltyDiscount(false);
             setLoyaltyTodayEarned(0);
             return;
         }
 
+        const nationalDigits = extractNationalDigits(phone.trim());
+
         const timer = setTimeout(async () => {
             try {
-                let account = null;
-                const { data: list } = await supabase
+                // Consultar candidatos en Supabase filtrando por los dígitos nacionales exactos
+                const { data: list, error } = await supabase
                     .from('loyalty_accounts')
                     .select('*')
-                    .eq('tenant_id', tenant.id);
+                    .eq('tenant_id', tenant.id)
+                    .ilike('phone_number', `%${nationalDigits}`)
+                    .limit(5);
 
-                if (list && list.length > 0) {
-                    account = list.find((a: any) => isSamePhone(a.phone_number, phone.trim())) || null;
-                }
+                const account = (!error && list && list.length > 0)
+                    ? list.find((a: any) => isSamePhone(a.phone_number, phone.trim())) || null
+                    : null;
 
                 if (account) {
                     setLoyaltyAccount(account);
@@ -205,7 +210,6 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                     // Consultar pedidos de hoy para este teléfono para bloquear saldo generado hoy (Regla: Canje a partir de la próxima visita / día siguiente)
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
-                    const rawDigits = phone.trim().replace(/\D/g, '').slice(-8);
 
                     let todayOrdersList: any[] = [];
                     if (orders && orders.length > 0) {
@@ -220,15 +224,14 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                             .select('id, total_price, created_at, status, phone_number')
                             .eq('tenant_id', tenant.id)
                             .gte('created_at', today.toISOString())
-                            .neq('status', 'cancelled');
+                            .ilike('phone_number', `%${nationalDigits}`)
+                            .neq('status', 'cancelled')
+                            .limit(10);
                         todayOrdersList = dbOrders || [];
                     }
 
                     if (todayOrdersList.length > 0) {
-                        const clientTodayOrders = todayOrdersList.filter((o: any) => {
-                            const oDigits = (o.phone_number || '').replace(/\D/g, '');
-                            return rawDigits.length >= 6 && (oDigits.includes(rawDigits) || rawDigits.includes(oDigits.slice(-8)));
-                        });
+                        const clientTodayOrders = todayOrdersList.filter((o: any) => isSamePhone(o.phone_number, phone.trim()));
 
                         if (clientTodayOrders.length > 0) {
                             const config = tenant?.loyalty_config || {};
@@ -248,13 +251,15 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                     }
                 } else {
                     setLoyaltyAccount(null);
+                    setUseLoyaltyDiscount(false);
                     setLoyaltyTodayEarned(0);
                 }
             } catch (e) {
                 setLoyaltyAccount(null);
+                setUseLoyaltyDiscount(false);
                 setLoyaltyTodayEarned(0);
             }
-        }, 500);
+        }, 400);
 
         return () => clearTimeout(timer);
     }, [phone, tenant?.id, orders]);
@@ -1223,12 +1228,15 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                                     client_name: mergedName
                                 })
                                 .eq('id', loyaltyAccount.id);
-                        } else if (cleanPhone && cleanPhone.length >= 6) {
+                        } else if (cleanPhone && isCompletePhoneNumber(cleanPhone)) {
                             // Verificar si ya existe una cuenta con este mismo teléfono para evitar duplicados
+                            const nationalDigits = extractNationalDigits(cleanPhone);
                             const { data: existingList } = await supabase
                                 .from('loyalty_accounts')
                                 .select('*')
-                                .eq('tenant_id', tenant.id);
+                                .eq('tenant_id', tenant.id)
+                                .ilike('phone_number', `%${nationalDigits}`)
+                                .limit(5);
 
                             const existing = existingList?.find((a: any) => isSamePhone(a.phone_number, cleanPhone));
                             if (existing) {
@@ -1261,7 +1269,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
                                     .from('loyalty_accounts')
                                     .insert({
                                         tenant_id: tenant.id,
-                                        phone_number: cleanPhone,
+                                        phone_number: cleanArgPhone(cleanPhone) || cleanPhone,
                                         client_name: clientNameClean || 'Cliente Frecuente',
                                         balance: earnedCashback,
                                         total_spent: finalTotal,

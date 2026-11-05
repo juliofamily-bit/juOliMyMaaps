@@ -595,44 +595,50 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   const [loyaltyTodayEarned, setLoyaltyTodayEarned] = useState<number>(0);
 
   useEffect(() => {
-    const cleanPhone = deliveryPhone ? `${phonePrefix} ${deliveryPhone.trim()}`.trim() : '';
-    if (!tenant?.id || !deliveryPhone.trim() || deliveryPhone.trim().length < 6) {
+    // Si no hay teléfono o el número NO está completo (ej: 10 dígitos para AR), resetear inmediatamente
+    if (!tenant?.id || !deliveryPhone.trim() || !isCompletePhoneNumber(deliveryPhone, phonePrefix)) {
       setLoyaltyAccount(null);
       setUseLoyaltyDiscount(false);
       setLoyaltyTodayEarned(0);
       return;
     }
 
+    const nationalDigits = extractNationalDigits(deliveryPhone);
+
     const timer = setTimeout(async () => {
       try {
-        const cleanDigits = cleanPhone.slice(-8);
+        // Consultar candidatos en Supabase acotando al número exacto nacional (evita matches parciales o de otras ciudades)
         const { data: list, error } = await supabase
           .from('loyalty_accounts')
           .select('*')
           .eq('tenant_id', tenant.id)
-          .ilike('phone_number', `%${cleanDigits}%`)
-          .limit(1);
+          .ilike('phone_number', `%${nationalDigits}`)
+          .limit(5);
 
-        const data = (!error && list && list.length > 0) ? list[0] : null;
+        // Validación estricta con isSamePhone para asegurar que el número coincida al 100%
+        const data = (!error && list && list.length > 0)
+          ? list.find((a: any) => isSamePhone(a.phone_number, deliveryPhone)) || null
+          : null;
 
         if (data) {
           setLoyaltyAccount(data);
 
-          // Consultar pedidos de hoy exclusivamente para este cliente (máx 10 pedidos recientes en vez de escanear la tabla)
+          // Consultar pedidos de hoy exclusivamente para este cliente exacto
           const today = new Date();
           today.setHours(0, 0, 0, 0);
-          const rawDigits = deliveryPhone.trim().replace(/\D/g, '').slice(-8);
 
           const { data: clientTodayOrders } = await supabase
             .from('orders')
-            .select('id, total_price, created_at, status')
+            .select('id, total_price, created_at, status, phone_number')
             .eq('tenant_id', tenant.id)
             .gte('created_at', today.toISOString())
-            .ilike('phone_number', `%${rawDigits}%`)
+            .ilike('phone_number', `%${nationalDigits}`)
             .neq('status', 'cancelled')
             .limit(10);
 
-          if (clientTodayOrders && clientTodayOrders.length > 0) {
+          const exactTodayOrders = (clientTodayOrders || []).filter((o: any) => isSamePhone(o.phone_number, deliveryPhone));
+
+          if (exactTodayOrders && exactTodayOrders.length > 0) {
             const config = tenant.loyalty_config || {};
             const tiers = config.tiers || [];
             let currentTier = data.tier || 'bronce';
@@ -640,20 +646,22 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
             const foundTier = tiers.find((t: any) => t.name === currentTier);
             if (foundTier) cashbackPct = foundTier.cashback_pct || cashbackPct;
 
-            const todayEarned = Math.round(clientTodayOrders.reduce((sum: number, o: any) => sum + ((Number(o.total_price) || 0) * (cashbackPct / 100)), 0));
+            const todayEarned = Math.round(exactTodayOrders.reduce((sum: number, o: any) => sum + ((Number(o.total_price) || 0) * (cashbackPct / 100)), 0));
             setLoyaltyTodayEarned(todayEarned);
           } else {
             setLoyaltyTodayEarned(0);
           }
         } else {
           setLoyaltyAccount(null);
+          setUseLoyaltyDiscount(false);
           setLoyaltyTodayEarned(0);
         }
       } catch (e) {
         setLoyaltyAccount(null);
+        setUseLoyaltyDiscount(false);
         setLoyaltyTodayEarned(0);
       }
-    }, 600); // 600ms de debounce para no saturar la API al escribir
+    }, 400); // 400ms de debounce
 
     return () => clearTimeout(timer);
   }, [deliveryPhone, phonePrefix, tenant?.id]);
@@ -2266,17 +2274,19 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     client_name: mergedName
                   })
                   .eq('id', loyaltyAccount.id);
-              } else if (cleanPhone && cleanPhone.length >= 6) {
+              } else if (cleanPhone && isCompletePhoneNumber(cleanPhone, phonePrefix)) {
                 // Verificar si ya existe una cuenta con este mismo teléfono de forma quirúrgica
-                const cleanDigits = cleanPhone.slice(-8);
+                const nationalDigits = extractNationalDigits(cleanPhone);
                 const { data: existingList } = await supabase
                   .from('loyalty_accounts')
                   .select('*')
                   .eq('tenant_id', tenant.id)
-                  .ilike('phone_number', `%${cleanDigits}%`)
-                  .limit(1);
+                  .ilike('phone_number', `%${nationalDigits}`)
+                  .limit(5);
 
-                const existing = (!existingList || existingList.length === 0) ? null : existingList[0];
+                const existing = (!existingList || existingList.length === 0)
+                  ? null
+                  : (existingList.find((a: any) => isSamePhone(a.phone_number, cleanPhone)) || null);
                 if (existing) {
                   const newBal = (existing.balance || 0) + calculatedEarnedCashback;
                   const newSpent = (parseFloat(existing.total_spent) || 0) + finalTotal;
@@ -2307,7 +2317,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                     .from('loyalty_accounts')
                     .insert({
                       tenant_id: tenant.id,
-                      phone_number: cleanPhone,
+                      phone_number: cleanArgPhone(cleanPhone) || cleanPhone,
                       client_name: clientNameClean || 'Cliente Frecuente',
                       balance: calculatedEarnedCashback,
                       total_spent: finalTotal,

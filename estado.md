@@ -24,8 +24,15 @@ El sistema opera sobre tres (3) menús claramente diferenciados por su rol, cana
      b) **Respaldo y Contingencia en locales con mesas:** Si un comensal no tiene celular con cámara, se quedó sin batería, o en situaciones donde se corte la conexión a internet en el local, el personal utiliza este menú para ingresar y cobrar la orden presencialmente.
 
 ## Estado Actual (Última actualización: 5 de Noviembre de 2026)
-- **Fase:** Blindaje del Buscador de Pedidos e Impresión Masiva de Mesas en Hoja A4.
-- **Hito Reciente (Hito 32):**
+- **Fase:** Blindaje Estricto de Búsqueda de Teléfonos en Fidelización y Prevención de Descuentos Prematuros.
+- **Hito Reciente (Hito 33):**
+  - **Blindaje Total de Teléfonos y Monedero Club Clientes (`phoneUtils.ts`, `PublicMenu.tsx`, `OrderTab.tsx`):**
+    1. **Causa Raíz:** En `PublicMenu.tsx` y `OrderTab.tsx`, la búsqueda de cuentas de fidelización se disparaba con apenas 6 caracteres (`length >= 6`) y ejecutaba una coincidencia por subcadena abierta en Supabase (`.ilike('phone_number', '%digits%')`). Si el usuario ingresaba el código de área (ej. `299`) y los primeros 3 números de su teléfono (ej. `453`), la longitud superaba 6 caracteres y el comodín `%299453%` capturaba inmediatamente la cuenta de fidelización de la base de datos (o la de cualquier otra persona cuyo teléfono comenzara o contuviera esa secuencia), ofreciendo el descuento antes de terminar de escribir el número.
+    2. **Solución Implementada:**
+       - **Validación Estricta de Número Completo (`isCompletePhoneNumber`):** Para Argentina (+54), un número celular completo consta obligatoriamente de **exactamente 10 dígitos nacionales** (área sin 0 + abonado sin 15). Si el usuario tipea 3, 4, 6 u 8 dígitos, el número se considera **incompleto**; el sistema resetea sincrónicamente `useLoyaltyDiscount: false`, `loyaltyAccount: null` y bloquea cualquier consulta a la base de datos.
+       - **Búsqueda Exacta sin Subcadenas:** Se acotó la consulta en Supabase a `.ilike('phone_number', `%${nationalDigits}`)` (terminación exacta de los 10 dígitos) y se filtra en memoria con `isSamePhone`, garantizando que ambos números coincidan al 100% en sus 10 dígitos nacionales (área y abonado). Se erradicaron las colisiones entre ciudades distintas con los mismos últimos dígitos.
+       - **Normalización Canónica en Inserción:** Al registrar nuevos clientes, se guarda el teléfono formateado con `cleanArgPhone` para mantener la base de datos limpia y homogénea.
+- **Hito Previo (Hito 32):**
   - **Blindaje Total contra Caídas en el Buscador de Pedidos (`OrderTab.tsx` y `PublicMenu.tsx`):**
     1. **Causa Raíz:** Al ingresar cualquier término en el buscador de productos ("G", "combo hamburguesa", etc.), el filtro de React ejecutaba operaciones sobre propiedades potencialmente `null` o `undefined` (`formatARS`, `.toLowerCase()`, `.localeCompare()`, etc.), disparando una excepción no controlada que rompía la vista con el error *"No se pudo cargar esta página, recargue de nuevo o regresar"*, perdiendo el estado de pedidos en curso.
     2. **Solución Aplicada:** Se protegieron de forma defensiva todas las funciones de formateo, filtrado y renderizado (`formatARS` con `Number(amount) || 0`, `parseDate` seguro, `(p.name || '').toLowerCase()`, `(p.description || '').toLowerCase()`, y fallbacks de precios de ofertas). Búsqueda instantánea y a prueba de errores.
