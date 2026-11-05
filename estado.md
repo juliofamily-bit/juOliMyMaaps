@@ -24,8 +24,32 @@ El sistema opera sobre tres (3) menús claramente diferenciados por su rol, cana
      b) **Respaldo y Contingencia en locales con mesas:** Si un comensal no tiene celular con cámara, se quedó sin batería, o en situaciones donde se corte la conexión a internet en el local, el personal utiliza este menú para ingresar y cobrar la orden presencialmente.
 
 ## Estado Actual (Última actualización: 5 de Noviembre de 2026)
-- **Fase:** Blindaje Estricto de Búsqueda de Teléfonos en Fidelización y Prevención de Descuentos Prematuros.
-- **Hito Reciente (Hito 33):**
+- **Fase:** Autenticación Inteligente Universal y Desbloqueo de Acceso a Locales en Ventanas Incógnito / Dispositivos Nuevos.
+- **Hito Reciente (Hito 35):**
+  - **Autenticación Inteligente Universal y Rol Administrador por Defecto (`[tenant_slug]/page.tsx`):**
+    1. **Causa Raíz:** Al abrir una ventana de incógnito o un dispositivo nuevo, la app no cuenta con sesión previa en `localStorage`. Por defecto, la pantalla de inicio de sesión seleccionaba el rol `'staff'` (Caja), el cual exigía seleccionar un empleado de una lista desplegable e introducir un PIN de 4 dígitos. Si el dueño del local introducía su contraseña maestra de administrador (`admin_password`) mientras estaba en la pestaña de Caja (o en locales sin empleados creados como *Marian* donde la lista estaba vacía), el sistema bloqueaba el acceso arrojando *"PIN incorrecto"* o *"Selecciona tu nombre de la lista"*.
+    2. **Solución Implementada:**
+       - **Rol Administrador por Defecto:** Al abrir el login, el sistema selecciona automáticamente la pestaña **Admin**, mostrando directamente el campo *"Contraseña Maestra de Administrador"* sin listas de empleados confusas.
+       - **Detección Maestra Omnipresente:** Si el usuario ingresa la contraseña maestra del local (`admin_password` o PIN del admin), el sistema lo autentica inmediatamente como Administrador **sin importar en qué pestaña estuviera parado** (Caja, Mozo, Cocina, etc.).
+       - **Tolerancia a Mayúsculas y Espacios de Celulares:** Se agregó `.trim()` y comparación `toLowerCase()` para evitar que el autocorrector del teclado móvil rechace contraseñas válidas.
+  - **Búsqueda de Locales por Contraseña en Pantalla de Inicio (`src/app/page.tsx`):**
+    - Se amplió `handleSearch` en *"Mis Locales"* para permitir buscar no solo por nombre o correo, sino también por contraseña de administrador (`admin_password.ilike`), garantizando que si el usuario tipea su clave en el buscador de la bienvenida, sus locales aparezcan de inmediato.
+  - **Visibilidad Clara de la Contraseña Maestra (`AdminEmployeeTab.tsx`):**
+    - Se incorporó en la pestaña *Personal* una tarjeta destacada con la **Contraseña Maestra de Administrador** (con botón de ojo para ver/ocultar), permitiendo al dueño consultar en cualquier momento su clave exacta sin confundirse con los códigos PIN secundarios de sus empleados.
+
+- **Hito Previo (Hito 34):**
+  - **Planilla A4 Exacta de 6 Mesas por Hoja (`PrintableBatchTablesQR.tsx`):**
+    1. **Especificación del Usuario:** Por cada hoja física A4 deben entrar exactamente **hasta 6 mesas** (grilla de 2 columnas x 3 filas). Si un local tiene 4 mesas, entran todas en 1 sola hoja A4; si tiene 10 mesas, 6 van en la hoja 1 y 4 en la hoja 2.
+    2. **Solución Implementada:** Se refactorizó `PrintableBatchTablesQR.tsx` dividiendo el array de mesas en fragmentos (*chunks*) de 6 elementos. Cada hoja cuenta con reglas `@media print` estrictas con tamaño `A4 portrait`, `height: 280mm`, saltos forzados de página (`page-break-after: always; break-after: page;`) y tarjetas con altura fija de `86mm` con líneas punteadas y tijeras de recorte.
+    3. **Previsualización Real en Pantalla:** En dispositivos móviles y computadoras se muestra cada hoja A4 renderizada con fondo blanco, bordes y numeración de página (*"Hoja A4 Nº 1 de 2"*), para que el usuario aprecie exactamente cómo quedará el papel impreso antes de enviarlo a la impresora o guardarlo en PDF.
+  - **Blindaje Total de Buscadores contra Errores Nulos (`AdminTab.tsx`, `OrderTab.tsx`, `PublicMenu.tsx`):**
+    1. **Causa Raíz:** Al ingresar cualquier letra en los buscadores de productos o ingredientes, existían accesos directos como `cat.name.toLowerCase()` o `p.name.toLowerCase()` en `AdminTab.tsx` (líneas 1673, 3375, 3639, 3684 y 9482) y `/oferta/i.test(cat.name)` en `OrderTab.tsx` que, ante cualquier categoría o producto con nombre nulo o malformado, disparaban un error fatal de JavaScript rompiendo la aplicación con el cartel *"No se pudo cargar esta página"*.
+    2. **Solución:** Se blindaron todos los accesos con fallback seguro `(cat?.name || '').toLowerCase()`, `(p?.name || '').toLowerCase()` y `(inv?.name || '').toLowerCase()`.
+  - **Sincronización Git y Despliegue en Producción:**
+    - Se ejecutó `npm run build` con 35/35 rutas compiladas con éxito (0 errores de TypeScript).
+    - Commit `29e1d11` subido exitosamente a la rama `main` en GitHub (`juliofamily-bit/juOliMyMaaps.git`), disparando el despliegue automático en Vercel.
+
+- **Hito Previo (Hito 33):**
   - **Blindaje Total de Teléfonos y Monedero Club Clientes (`phoneUtils.ts`, `PublicMenu.tsx`, `OrderTab.tsx`):**
     1. **Causa Raíz:** En `PublicMenu.tsx` y `OrderTab.tsx`, la búsqueda de cuentas de fidelización se disparaba con apenas 6 caracteres (`length >= 6`) y ejecutaba una coincidencia por subcadena abierta en Supabase (`.ilike('phone_number', '%digits%')`). Si el usuario ingresaba el código de área (ej. `299`) y los primeros 3 números de su teléfono (ej. `453`), la longitud superaba 6 caracteres y el comodín `%299453%` capturaba inmediatamente la cuenta de fidelización de la base de datos (o la de cualquier otra persona cuyo teléfono comenzara o contuviera esa secuencia), ofreciendo el descuento antes de terminar de escribir el número.
     2. **Solución Implementada:**

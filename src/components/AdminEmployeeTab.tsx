@@ -27,6 +27,7 @@ export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant, subs
     const [empRole, setEmpRole] = useState<UserRole>('waiter');
     const [empPin, setEmpPin] = useState('');
     const [showPinId, setShowPinId] = useState<string | null>(null);
+    const [showAdminPass, setShowAdminPass] = useState(false);
 
     const maxDevices = tenant?.max_devices || 3;
     
@@ -273,6 +274,42 @@ export const AdminEmployeeTab: React.FC<AdminEmployeeTabProps> = ({ tenant, subs
                             {isUpdatingLimit ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                         </button>
                     </form>
+                </div>
+            </div>
+
+            {/* Credencial Maestra del Administrador (Para entrar desde cualquier dispositivo o ventana incógnito) */}
+            <div className="bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-transparent border border-amber-500/30 rounded-3xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                Acceso Maestro / Dueño
+                            </span>
+                        </div>
+                        <h3 className="text-base font-black text-white italic">
+                            Contraseña Maestra de Administrador
+                        </h3>
+                        <p className="text-[11px] text-slate-400 max-w-xl leading-relaxed">
+                            Esta es tu clave para ingresar al Panel de Control desde cualquier dispositivo nuevo o ventana incógnito. No consume cupos de empleados y tiene acceso ilimitado.
+                        </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 bg-slate-900/90 border border-white/10 rounded-2xl px-4 py-3 shrink-0">
+                        <div className="text-right">
+                            <span className="text-[9px] uppercase font-bold text-slate-500 block">Tu Contraseña</span>
+                            <span className="text-sm font-mono font-black text-amber-400 tracking-wider">
+                                {showAdminPass ? (tenant?.admin_password || 'admin123') : '••••••••••••'}
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setShowAdminPass(!showAdminPass)}
+                            className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-xl transition-colors cursor-pointer"
+                            title={showAdminPass ? "Ocultar contraseña" : "Ver contraseña"}
+                        >
+                            {showAdminPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                    </div>
                 </div>
             </div>
 

@@ -195,7 +195,7 @@ export default function WelcomePage() {
       const { data, error: sbError } = await supabase
         .from('tenants')
         .select('id, name, slug, theme_colors, enabled_roles')
-        .or(`name.ilike.%${trimmedQuery}%,slug.ilike.%${trimmedQuery}%,email.ilike.%${trimmedQuery}%`)
+        .or(`name.ilike.%${trimmedQuery}%,slug.ilike.%${trimmedQuery}%,email.ilike.%${trimmedQuery}%,admin_password.ilike.%${trimmedQuery}%`)
         .order('name', { ascending: true })
         .limit(5);
 
@@ -500,7 +500,7 @@ export default function WelcomePage() {
 
           <div className="w-full space-y-4">
             <p className="text-xs text-slate-400 text-center leading-relaxed">
-              Busca tu local por nombre o correo para acceder a las pantallas de pedidos, cocina y administración.
+              Busca tu local por nombre, correo electrónico o contraseña de administrador para acceder a todas las funciones.
             </p>
 
             <form onSubmit={handleSearch} className="relative w-full flex items-center gap-2">
@@ -508,7 +508,7 @@ export default function WelcomePage() {
                 <Search className="absolute left-4 top-3.5 text-slate-500" size={16} />
                 <input
                   type="text"
-                  placeholder="Correo o Nombre exacto..."
+                  placeholder="Correo, Nombre del local o Contraseña..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-slate-900/50 border border-slate-800 focus:border-orange-500/30 rounded-2xl p-3.5 pl-11 text-white text-xs outline-none transition-colors"

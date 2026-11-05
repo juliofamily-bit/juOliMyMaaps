@@ -46,7 +46,7 @@ export default function TenantApp({ params }: TenantPageProps) {
 
   // Authentication State
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [selectedRole, setSelectedRole] = useState<UserRole>('staff');
+  const [selectedRole, setSelectedRole] = useState<UserRole>('admin');
   const [password, setPassword] = useState('');
   const [employees, setEmployees] = useState<any[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
@@ -334,20 +334,9 @@ export default function TenantApp({ params }: TenantPageProps) {
         }
       }
 
-      // 2. Si no hay sesión, auto-seleccionar el rol principal por defecto
+      // 2. Si no hay sesión, auto-seleccionar Administrador por defecto
       if (!selectedRole) {
-        const availableRoles = tenant.enabled_roles || ['admin', 'staff', 'kitchen', 'bartender', 'delivery'];
-        if (availableRoles.includes('staff')) {
-          setSelectedRole('staff');
-        } else if (availableRoles.includes('kitchen')) {
-          setSelectedRole('kitchen');
-        } else if (availableRoles.includes('bartender')) {
-          setSelectedRole('bartender');
-        } else if (availableRoles.includes('delivery')) {
-          setSelectedRole('delivery');
-        } else {
-          setSelectedRole('admin');
-        }
+        setSelectedRole('admin');
       }
     }
   }, [tenant, selectedRole, profile]);
@@ -692,43 +681,54 @@ export default function TenantApp({ params }: TenantPageProps) {
     setLoggingIn(true);
 
     try {
-      if (selectedRole === 'admin') {
-        if (!tenant?.email) {
-          setError('El local no tiene un correo configurado.');
-          setLoggingIn(false);
-          return;
+      const cleanPassword = password.trim();
+
+      // 1. COMPROBACIÓN MAESTRA DE ADMINISTRADOR:
+      // Si la contraseña ingresada coincide con admin_password del local (exacta o insensible a mayúsculas),
+      // o con el PIN del empleado con rol 'admin', se autentica como Administrador automáticamente.
+      const adminEmployee = employees.find(e => e.role === 'admin' && (
+        e.pin_code === cleanPassword ||
+        (e.pin_code || '').toLowerCase() === cleanPassword.toLowerCase()
+      ));
+
+      const isMasterAdminPass = Boolean(
+        (tenant?.admin_password && (
+          cleanPassword === tenant.admin_password ||
+          cleanPassword.toLowerCase() === tenant.admin_password.toLowerCase()
+        )) || adminEmployee
+      );
+
+      if (selectedRole === 'admin' || isMasterAdminPass) {
+        let authSuccess = isMasterAdminPass;
+
+        // Intento Supabase Auth si existe usuario en auth.users
+        if (!authSuccess && tenant?.email) {
+          try {
+            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+              email: tenant.email,
+              password: cleanPassword,
+            });
+            if (!authError && authData?.session) {
+              authSuccess = true;
+            }
+          } catch(e) {}
         }
 
-        // Login using Supabase Auth
-        const { data, error: authError } = await supabase.auth.signInWithPassword({
-          email: tenant.email,
-          password: password,
-        });
+        // Intento RPC legacy si aún no fue exitoso
+        if (!authSuccess) {
+          try {
+            const { data: legacyData, error: rpcError } = await supabase.rpc('check_tenant_credential', {
+              p_slug: tenant_slug,
+              p_role: 'admin',
+              p_password: cleanPassword
+            });
+            if (!rpcError && legacyData?.success) {
+              authSuccess = true;
+            }
+          } catch(e) {}
+        }
 
-        if (authError) {
-          console.warn(`[Auth Fallback] Intento con Supabase Auth fallido (${authError.message}). Usando RPC legacy...`);
-          // Fallback legacy (por si aún no se migró el usuario a auth.users en la DB)
-          const { data: legacyData, error: rpcError } = await supabase.rpc('check_tenant_credential', {
-            p_slug: tenant_slug,
-            p_role: selectedRole,
-            p_password: password
-          });
-
-          if (!rpcError && legacyData?.success) {
-            const adminProfile = {
-              id: legacyData.tenant_id,
-              full_name: 'Administrador',
-              role: 'admin' as UserRole
-            };
-            localStorage.setItem(`active_profile_${tenant.id}`, JSON.stringify(adminProfile));
-            setProfile(adminProfile);
-            setSupabaseTenant(legacyData.tenant_id);
-            setActiveTab('admin');
-          } else {
-            setError('Credenciales incorrectas');
-            setPassword('');
-          }
-        } else if (data.session) {
+        if (authSuccess) {
           const adminProfile = {
             id: tenant.id,
             full_name: 'Administrador',
@@ -737,12 +737,37 @@ export default function TenantApp({ params }: TenantPageProps) {
           localStorage.setItem(`active_profile_${tenant.id}`, JSON.stringify(adminProfile));
           setProfile(adminProfile);
           setSupabaseTenant(tenant.id);
-          loadTenant(true); // Re-fetch features with correct RLS
+          loadTenant(true);
           setActiveTab('admin');
+          setLoggingIn(false);
+          return;
+        } else {
+          setError('Contraseña de Administrador incorrecta.');
+          setPassword('');
+          setLoggingIn(false);
+          return;
         }
       } else {
-        if (!selectedEmployeeId) {
-          setError(employees.filter(e => e.role === selectedRole).length === 0 ? 'Crea un empleado para este rol en el Panel de Administrador' : 'Selecciona tu nombre de la lista');
+        // ROL DE PERSONAL / EMPLEADOS (Caja, Cocina, Barra, Mozo, Reparto, etc.)
+        let targetEmpId = selectedEmployeeId;
+        if (!targetEmpId) {
+          const match = employees.find(e => 
+            (e.role === selectedRole || employees.length === 1) && 
+            (e.pin_code === cleanPassword || (e.pin_code || '').toLowerCase() === cleanPassword.toLowerCase())
+          );
+          if (match) {
+            targetEmpId = match.id;
+            setSelectedEmployeeId(match.id);
+          }
+        }
+
+        if (!targetEmpId) {
+          const roleEmps = employees.filter(e => e.role === selectedRole);
+          if (roleEmps.length === 0) {
+            setError(`No hay empleados creados para el rol de ${selectedRole === 'staff' ? 'Caja' : selectedRole}. Ingresa como Administrador para crearlos.`);
+          } else {
+            setError('Selecciona tu nombre de la lista para ingresar');
+          }
           setLoggingIn(false);
           return;
         }
@@ -753,8 +778,8 @@ export default function TenantApp({ params }: TenantPageProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             tenantId: tenant.id,
-            employeeId: selectedEmployeeId,
-            pin: password
+            employeeId: targetEmpId,
+            pin: cleanPassword
           })
         });
 
@@ -763,6 +788,7 @@ export default function TenantApp({ params }: TenantPageProps) {
         if (!loginRes.ok || !loginData.success) {
           setError(loginData.error || 'PIN incorrecto');
           setPassword('');
+          setLoggingIn(false);
           return;
         }
 
@@ -1157,7 +1183,7 @@ export default function TenantApp({ params }: TenantPageProps) {
             
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase text-slate-500 ml-2 flex items-center gap-1 justify-center">
-                <Lock size={10} style={{ color: primaryColor }} /> Clave para {selectedRole === 'admin' ? 'Administrador' : 'acceder'}
+                <Lock size={10} style={{ color: primaryColor }} /> {selectedRole === 'admin' ? 'Contraseña Maestra de Administrador' : 'PIN de acceso'}
               </label>
               <input
                 type="password"
@@ -1168,7 +1194,7 @@ export default function TenantApp({ params }: TenantPageProps) {
                     ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-slate-500'
                     : 'bg-slate-900 border-slate-800 text-white focus:border-white/20'
                 }`}
-                placeholder="****"
+                placeholder={selectedRole === 'admin' ? 'Tu contraseña maestra' : '****'}
                 disabled={loggingIn}
               />
             </div>
@@ -1182,10 +1208,24 @@ export default function TenantApp({ params }: TenantPageProps) {
             >
               {loggingIn ? (
                 <Loader2 size={16} className="animate-spin" />
+              ) : selectedRole === 'admin' ? (
+                'Ingresar como Administrador 🚀'
               ) : (
                 'Entrar'
               )}
             </button>
+
+            {selectedRole !== 'admin' && (
+              <div className="w-full text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setSelectedRole('admin'); setError(''); }}
+                  className="text-[11px] font-black uppercase tracking-wider text-orange-400 hover:text-orange-300 transition-colors underline"
+                >
+                  👑 ¿Sos el dueño del local? Ingresar como Administrador
+                </button>
+              </div>
+            )}
           </form>
 
           {selectedRole === 'admin' && (
