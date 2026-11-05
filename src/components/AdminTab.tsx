@@ -1670,9 +1670,9 @@ const AdminTab: React.FC<AdminTabProps> = ({
             // Verificar si ya existe una categoría de ofertas o una marcada como oferta
             const hasOfferCategory = (categories || []).some(cat => 
                 cat.is_offer === true || 
-                cat.name.toLowerCase().includes('oferta') || 
-                cat.name.toLowerCase().includes('descuento') || 
-                cat.name.toLowerCase().includes('oportunidad')
+                (cat?.name || '').toLowerCase().includes('oferta') || 
+                (cat?.name || '').toLowerCase().includes('descuento') || 
+                (cat?.name || '').toLowerCase().includes('oportunidad')
             );
 
             if (!hasOfferCategory) {
@@ -3372,7 +3372,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                     </div>
 
                     <div className="space-y-3">
-                        {ingredients.filter(item => !stockSearchTerm || item.name.toLowerCase().includes(stockSearchTerm.toLowerCase())).map(item => {
+                        {ingredients.filter(item => !stockSearchTerm || (item?.name || '').toLowerCase().includes((stockSearchTerm || '').toLowerCase())).map(item => {
                             // Buscar los lotes cargados de este ingrediente
                             const lotesDeEsteIngrediente = (ingredientBatches || []).filter(b => b.ingredient_id === item.id);
                             
@@ -3636,7 +3636,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                         let catActiveProducts = products.filter(p => p.category_id === cat.id && p.is_active !== false);
                         if (menuSearchTerm) {
                             const term = menuSearchTerm.toLowerCase();
-                            catActiveProducts = catActiveProducts.filter(p => p.name.toLowerCase().includes(term));
+                            catActiveProducts = catActiveProducts.filter(p => (p?.name || '').toLowerCase().includes(term));
                         }
 
                         if (menuSearchTerm && catActiveProducts.length === 0) return null;
@@ -3681,7 +3681,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                         }} className="text-red-500 bg-red-500/10 hover:bg-red-500 hover:text-white p-2 rounded-xl border border-red-500/20 transition-all shadow-sm" title="Eliminar Categoría"><Trash2 size={14} /></button>
                                     </div>
                                 </div>
-                                {products.filter(p => p.category_id === cat.id && (!menuSearchTerm || p.name.toLowerCase().includes(menuSearchTerm.toLowerCase()))).map(prod => {
+                                {products.filter(p => p.category_id === cat.id && (!menuSearchTerm || (p?.name || '').toLowerCase().includes((menuSearchTerm || '').toLowerCase()))).map(prod => {
                                 // Calcular costo de receta para este producto
                                 const recipeIngredients = productIngredients.filter(pi => pi.product_id === prod.id);
                                 const costTotal = recipeIngredients.reduce((sum, pi) => {
@@ -9479,7 +9479,7 @@ const AdminTab: React.FC<AdminTabProps> = ({
                                     </div>
 
                                     <div className="max-h-48 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                                        {ingredients.filter(inv => !prodIngredientSearchTerm || inv.name.toLowerCase().includes(prodIngredientSearchTerm.toLowerCase())).map(inv => {
+                                        {ingredients.filter(inv => !prodIngredientSearchTerm || (inv?.name || '').toLowerCase().includes((prodIngredientSearchTerm || '').toLowerCase())).map(inv => {
                                             const selected = prodIngredients.find(i => i.ingredient_id === inv.id);
                                             return (
                                                 <div key={inv.id} className={`p-3 rounded-2xl border transition-all flex items-center justify-between ${selected ? 'bg-orange-500/10 border-orange-500/50' : 'bg-slate-900/50 border-slate-800'}`}>

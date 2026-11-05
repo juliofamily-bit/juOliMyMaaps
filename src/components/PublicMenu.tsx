@@ -1686,7 +1686,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
   const filteredProducts = useMemo(() => {
     const activeCatObj = categories.find(c => c.id === activeCategory);
     const isOfferCategory = activeCatObj
-      ? (activeCatObj.is_offer === true || /oferta|oportunidad|descuento/i.test(activeCatObj.name))
+      ? (activeCatObj.is_offer === true || /oferta|oportunidad|descuento/i.test(activeCatObj.name || ''))
       : false;
 
     const featuredIds: string[] = tenant?.landing_config?.featured_product_ids || [];
@@ -2999,7 +2999,7 @@ export default function PublicMenu({ tenant }: PublicMenuProps) {
                 Todo
               </button>
               {sortedCategories.map(cat => {
-                const isOfferCat = cat.is_offer === true || /oferta|oportunidad|descuento/i.test(cat.name);
+                const isOfferCat = cat && (cat.is_offer === true || /oferta|oportunidad|descuento/i.test(cat.name || ''));
 
                 if (isOfferCat) {
                   return (

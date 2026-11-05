@@ -467,8 +467,8 @@ export default function OrderTab({ products, ingredients, categories: initialCat
 
     // Conteo de ofertas activas en tiempo real
     const activeOffersCount = useMemo(() => {
-        const offerCat = categories.find(c => c.is_offer === true || /oferta|oportunidad|descuento/i.test(c.name));
-        return products.filter(p => p.is_active !== false && (!!getActiveOfferForProduct(p.id) || (offerCat && p.category_id === offerCat.id))).length;
+        const offerCat = (categories || []).find(c => c && (c.is_offer === true || /oferta|oportunidad|descuento/i.test(c.name || '')));
+        return (products || []).filter(p => p && p.is_active !== false && (!!getActiveOfferForProduct(p.id) || (offerCat && p.category_id === offerCat.id))).length;
     }, [products, productOffers, orders, categories]);
 
     // Lista unificada de productos para Caja: Búsqueda Global Instantánea y Orden por Top Ventas
@@ -1992,7 +1992,7 @@ export default function OrderTab({ products, ingredients, categories: initialCat
 
                             {/* Categorías registradas (excluyendo ofertas especiales ya mostradas en el botón superior) */}
                             {categories
-                                .filter(cat => !(cat.is_offer === true || /oferta|oportunidad|descuento/i.test(cat.name)))
+                                .filter(cat => cat && !(cat.is_offer === true || /oferta|oportunidad|descuento/i.test(cat.name || '')))
                                 .map(cat => {
                                     const isSelected = selectedCategoryId === cat.id && !searchQuery;
                                     return (
