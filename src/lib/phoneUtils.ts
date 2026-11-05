@@ -74,41 +74,110 @@ export const cleanArgPhone = (phone: string): string => {
 };
 
 /**
+ * Extrae los dígitos nacionales de un número telefónico (área + abonado local),
+ * eliminando códigos de país (+54, 549, 54), el cero (0) de larga distancia
+ * y el prefijo de celular (15) en Argentina.
+ */
+export const extractNationalDigits = (phone?: string | null): string => {
+  if (!phone) return '';
+  const digits = phone.replace(/\D/g, '');
+  if (!digits) return '';
+
+  let national = digits;
+  if (digits.startsWith('549')) {
+    national = digits.substring(3);
+  } else if (digits.startsWith('54')) {
+    national = digits.substring(2);
+  }
+
+  if (national.startsWith('0')) {
+    national = national.substring(1);
+  }
+
+  // Manejo del prefijo 15 de celulares en Argentina
+  if (national.length === 12 && national.substring(3, 5) === '15') {
+    national = national.substring(0, 3) + national.substring(5);
+  } else if (national.length === 12 && national.substring(2, 4) === '15') {
+    national = national.substring(0, 2) + national.substring(4);
+  } else if (national.length === 12 && national.substring(4, 6) === '15') {
+    national = national.substring(0, 4) + national.substring(6);
+  } else if (national.length === 11 && national.startsWith('15')) {
+    national = national.substring(2);
+  }
+
+  return national;
+};
+
+/**
+ * Determina de forma estricta si un número telefónico ingresado está COMPLETO.
+ * Para Argentina (+54), un número celular completo consta obligatoriamente
+ * de exactamente 10 dígitos nacionales (código de área + número de abonado).
+ * Si tiene 3, 4, 6 u 8 dígitos, el número está INCOMPLETO y bajo ninguna
+ * circunstancia debe consultar bases de datos ni activar descuentos.
+ */
+export const isCompletePhoneNumber = (phone?: string | null, prefix: string = '+54'): boolean => {
+  if (!phone || typeof phone !== 'string') return false;
+  const rawDigits = phone.replace(/\D/g, '');
+  if (!rawDigits) return false;
+
+  const isArgentina = prefix.includes('54') || phone.startsWith('+54') || phone.startsWith('54');
+
+  if (isArgentina) {
+    const national = extractNationalDigits(phone);
+    return national.length === 10;
+  }
+
+  // Otros países
+  if (prefix.includes('56') || prefix.includes('595') || prefix.includes('51')) {
+    return rawDigits.length >= 9;
+  }
+  if (prefix.includes('598') || prefix.includes('591')) {
+    return rawDigits.length >= 8;
+  }
+  if (prefix.includes('55')) {
+    return rawDigits.length >= 10;
+  }
+
+  return rawDigits.length >= 8;
+};
+
+/**
  * Extrae los dígitos significativos finales para comparar si dos números
  * pertenecen a la misma persona en Argentina (área + abonado).
  */
 export const getPhoneMatchKey = (phone?: string | null): string => {
   if (!phone) return '';
-  const digits = phone.replace(/\D/g, '');
-  if (!digits) return '';
-  // En Argentina los números celulares tienen 10 dígitos (ej: 11 2345-6789 o 299 412-3456).
-  // Tomar los últimos 8 dígitos garantiza coincidencia exacta ignorando prefijos 0, 15, 54, 549, etc.
-  if (digits.length >= 8) {
-    return digits.slice(-8);
+  const national = extractNationalDigits(phone);
+  if (national && national.length === 10) {
+    return national;
   }
-  return digits;
+  const digits = phone.replace(/\D/g, '');
+  return digits.length >= 8 ? digits.slice(-8) : digits;
 };
 
 /**
- * Comprueba si dos teléfonos corresponden a la misma persona física.
+ * Comprueba si dos teléfonos corresponden a la misma persona física de forma exacta.
+ * Exige que ambos números estén completos y coincidan en sus 10 dígitos nacionales
+ * (área + abonado), evitando falsas coincidencias entre ciudades o números parciales.
  */
 export const isSamePhone = (phoneA?: string | null, phoneB?: string | null): boolean => {
   if (!phoneA || !phoneB) return false;
+  const natA = extractNationalDigits(phoneA);
+  const natB = extractNationalDigits(phoneB);
+
+  // Si alguno está incompleto (< 8 dígitos), no pueden coincidir
+  if (natA.length < 8 || natB.length < 8) return false;
+
+  // Si ambos tienen 10 dígitos (estándar argentino completo), deben ser idénticos
+  if (natA.length === 10 && natB.length === 10) {
+    return natA === natB;
+  }
+
   const cleanA = cleanArgPhone(phoneA);
   const cleanB = cleanArgPhone(phoneB);
   if (cleanA && cleanB && cleanA === cleanB) return true;
 
-  const keyA = getPhoneMatchKey(phoneA);
-  const keyB = getPhoneMatchKey(phoneB);
-  if (keyA && keyB && keyA.length >= 7 && keyA === keyB) return true;
-
-  const digitsA = phoneA.replace(/\D/g, '');
-  const digitsB = phoneB.replace(/\D/g, '');
-  if (digitsA.length >= 8 && digitsB.length >= 8) {
-    return digitsA.slice(-8) === digitsB.slice(-8);
-  }
-
-  return false;
+  return natA === natB;
 };
 
 /**
@@ -148,4 +217,3 @@ export const mergeClientNames = (...names: (string | null | undefined)[]): strin
 
   return uniqueParts.length > 0 ? uniqueParts.join(' / ') : 'Cliente Frecuente';
 };
-

@@ -8,7 +8,7 @@ import { useRealtimeData } from '@/hooks/useRealtimeData';
 import { supabase, broadcastTenantChange } from '@/lib/supabase';
 import { SocialWall } from '@/components/SocialWall';
 import { DEFAULT_CAROUSEL_SLIDES } from '@/lib/constants';
-import { cleanArgPhone, isSamePhone, mergeClientNames } from '@/lib/phoneUtils';
+import { cleanArgPhone, isSamePhone, mergeClientNames, extractNationalDigits, isCompletePhoneNumber } from '@/lib/phoneUtils';
 
 const triggerTrialStart = (tenantId: string) => {
   fetch('/api/trial/start', {
